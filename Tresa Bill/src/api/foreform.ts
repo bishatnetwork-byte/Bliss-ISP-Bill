@@ -200,6 +200,15 @@ export interface RouterSecureSetupResponse {
   warning: string;
 }
 
+export interface RouterPublishScriptResponse {
+  router_id: string;
+  router_name: string;
+  script_url: string;
+  mikrotik_v7_command: string;
+  mikrotik_v6_command: string;
+  expires_note: string;
+}
+
 export interface RouterStatusResponse {
   connected: boolean;
   router_id: string;
@@ -897,6 +906,11 @@ export const renultApi = {
     secureSetup: (routerId: string) =>
       apiRequest<RouterSecureSetupResponse>(`/routers/${routerId}/secure-setup`, {
         query: { api_base_url: API_BASE_URL },
+      }),
+    publishSetupScript: (routerId: string) =>
+      apiRequest<RouterPublishScriptResponse>(`/routers/${routerId}/publish-setup-script`, {
+        method: "POST",
+        body: JSON.stringify({ api_base_url: API_BASE_URL, include_walled_garden: true }),
       }),
     ping: (routerId: string, payload: RouterPingRequest) =>
       apiRequest<RouterPingResponse>(`/routers/${routerId}/ping`, { method: "POST", body: JSON.stringify(payload) }),

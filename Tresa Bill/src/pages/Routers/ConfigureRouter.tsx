@@ -17,10 +17,11 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { HotspotCommandResult, RouterHardwareResponse } from "@/api/foreform";
+import { HotspotCommandResult, RouterHardwareResponse, RouterPublishScriptResponse } from "@/api/foreform";
 import {
   useCreateRouter,
   useDetectRouterHardware,
+  usePublishSetupScript,
   useProvisionHotspot,
   useRouters,
   useRouterSecureSetup,
@@ -34,9 +35,11 @@ import {
   Clipboard,
   Cpu,
   Download,
+  ExternalLink,
   Loader2,
   Network,
   Play,
+  Rocket,
   Router,
   Save,
   Server,
@@ -73,6 +76,7 @@ export default function ConfigureRouter() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [tunnelScript, setTunnelScript] = useState("");
+  const [publishedScript, setPublishedScript] = useState<RouterPublishScriptResponse | null>(null);
   const [plaintextLogin, setPlaintextLogin] = useState(true);
   const [description, setDescription] = useState("Auto-registered through the Tresa CHR concentrator");
   const [selectedRouterId, setSelectedRouterId] = useState("");
@@ -100,6 +104,7 @@ export default function ConfigureRouter() {
   const testConnection = useTestRouterConnection();
   const createRouter = useCreateRouter(branchId);
   const secureSetup = useRouterSecureSetup();
+  const publishSetupScript = usePublishSetupScript();
   const detectHardware = useDetectRouterHardware();
   const provisionHotspot = useProvisionHotspot();
 
@@ -128,13 +133,13 @@ export default function ConfigureRouter() {
     const provisioned = commands.length > 0 && commandStats.failed === 0;
     const failedProvision = commands.length > 0 && commandStats.failed > 0;
     return [
-      { label: "Register", detail: tunnelScript ? "Customer script ready" : "Create a pending router slot", state: tunnelScript ? "done" : secureSetup.isPending ? "active" : "idle" as TimelineState },
-      { label: "CHR NAT", detail: port ? `${host || "23.92.30.38"}:${port}` : "Allocated automatically", state: portError ? "error" : apiConnected ? "done" : testConnection.isPending ? "active" : "idle" as TimelineState },
       { label: "Save Router", detail: savedRouterId ? "Saved in workspace" : "Create or select target", state: activeRouterId ? "done" : createRouter.isPending ? "active" : "idle" as TimelineState },
+      { label: "Publish Script", detail: publishedScript ? "Hosted on Cloudflare R2" : tunnelScript ? "Script generated" : "Generate registration script", state: publishedScript ? "done" : (secureSetup.isPending || publishSetupScript.isPending) ? "active" : "idle" as TimelineState },
+      { label: "CHR NAT", detail: port ? `${host || "23.92.30.38"}:${port}` : "Allocated automatically", state: portError ? "error" : apiConnected ? "done" : testConnection.isPending ? "active" : "idle" as TimelineState },
       { label: "Detect Ports", detail: hasHardware ? `${hardware?.port_count} ether ports` : "Read RouterOS interfaces", state: hasHardware ? "done" : detectHardware.isPending ? "active" : hardware?.error ? "error" : "idle" as TimelineState },
       { label: "Provision Hotspot", detail: provisioned ? `${commands.length} commands applied` : "Bridge, PPPoE, NAT, DNS", state: failedProvision ? "error" : provisioned ? "done" : provisionHotspot.isPending ? "active" : "idle" as TimelineState },
     ];
-  }, [activeRouterId, apiConnected, commandStats.failed, commands.length, createRouter.isPending, detectHardware.isPending, hardware, host, port, portError, provisionHotspot.isPending, savedRouterId, secureSetup.isPending, testConnection.isPending, tunnelScript]);
+  }, [activeRouterId, apiConnected, commandStats.failed, commands.length, createRouter.isPending, detectHardware.isPending, hardware, host, port, portError, provisionHotspot.isPending, publishedScript, publishSetupScript.isPending, savedRouterId, secureSetup.isPending, testConnection.isPending, tunnelScript]);
 
   const handleCopyScript = async () => {
     if (!tunnelScript) {
@@ -196,7 +201,9 @@ export default function ConfigureRouter() {
         setUsername(setup.api_username);
         setPassword(setup.api_password);
         setTunnelScript(setup.script);
-        toast.success("Auto-registration script refreshed.");
+        const published = await publishSetupScript.mutateAsync(savedRouterId);
+        setPublishedScript(published);
+        toast.success("Setup command refreshed and re-published.");
       } catch (error: unknown) {
         toast.error(getErrorMessage(error, "Failed to generate secure setup script."));
       }
@@ -222,10 +229,18 @@ export default function ConfigureRouter() {
       setUsername(setup.api_username);
       setPassword(setup.api_password);
       setTunnelScript(setup.script);
-      toast.success("Router slot created and auto-registration script generated.");
+      const published = await publishSetupScript.mutateAsync(router.id);
+      setPublishedScript(published);
+      toast.success("Router created. Give the customer the setup command below.");
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, "Failed to save router."));
     }
+  };
+
+  const handleCopyText = async (text: string, message: string) => {
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    toast.success(message);
   };
 
   const handleDetectHardware = async () => {
@@ -314,7 +329,7 @@ export default function ConfigureRouter() {
             </Button>
             <div>
               <h1 className="text-xl font-bold text-foreground">Connect & Provision Router</h1>
-              <p className="text-xs text-muted-foreground">Generate one script; the router registers, opens L2TP, and receives a unique CHR NAT port.</p>
+              <p className="text-xs text-muted-foreground">Save the router, then hand the customer a single command — it registers, opens the CHR tunnel, and configures itself with no further changes on your end.</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -363,6 +378,87 @@ export default function ConfigureRouter() {
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(420px,0.85fr)]">
           <div className="space-y-5">
+            <Card className="rounded border-primary/40 shadow-none">
+              <CardHeader className="border-b border-border/50 pb-3">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Rocket className="h-4 w-4 text-primary" />
+                  Customer Setup Command
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 p-4">
+                {publishedScript ? (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">RouterOS v7 — single command (recommended)</Label>
+                      <div className="flex items-start gap-2">
+                        <pre className="min-w-0 flex-1 overflow-x-auto rounded bg-slate-950 p-3 text-[11px] leading-5 text-emerald-300">
+                          <code>{publishedScript.mikrotik_v7_command}</code>
+                        </pre>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          onClick={() => handleCopyText(publishedScript.mikrotik_v7_command, "v7 command copied. Paste it into the router's terminal.")}
+                        >
+                          <Clipboard className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">RouterOS v6.45+ — fallback (two lines)</Label>
+                      <div className="flex items-start gap-2">
+                        <pre className="min-w-0 flex-1 overflow-x-auto rounded bg-slate-950 p-3 text-[11px] leading-5 text-slate-100">
+                          <code>{publishedScript.mikrotik_v6_command}</code>
+                        </pre>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          onClick={() => handleCopyText(publishedScript.mikrotik_v6_command, "v6 commands copied. Paste both lines into the router's terminal.")}
+                        >
+                          <Clipboard className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2 rounded border border-border/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold">Hosted script URL</p>
+                        <p className="truncate font-mono text-[11px] text-muted-foreground">{publishedScript.script_url}</p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => handleCopyText(publishedScript.script_url, "Script URL copied.")}>
+                          <Clipboard className="h-3.5 w-3.5" />
+                          Copy URL
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" asChild>
+                          <a href={publishedScript.script_url} target="_blank" rel="noreferrer">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            Open
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
+
+                    <Alert className="rounded">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle className="text-sm">Give this to the customer</AlertTitle>
+                      <AlertDescription className="text-xs">
+                        Send the single command above. They paste it once into their MikroTik terminal (Winbox or SSH) — the
+                        router registers itself with Renult, opens the CHR tunnel, and is ready in the dashboard.
+                        No access to your CHR is required. {publishedScript.expires_note}
+                      </AlertDescription>
+                    </Alert>
+                  </>
+                ) : (
+                  <div className="rounded border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+                    Save the router below to generate its one-line setup command and hosted script URL.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <Card className="rounded border-border/60 shadow-none">
               <CardHeader className="flex flex-row items-center justify-between border-b border-border/50 pb-3">
                 <CardTitle className="flex items-center gap-2 text-sm">
@@ -435,9 +531,9 @@ export default function ConfigureRouter() {
                       {testConnection.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
                       Check Provisioned Port
                     </Button>
-                    <Button className="h-9 gap-1.5 text-xs font-semibold" onClick={handleSaveRouter} disabled={createRouter.isPending || secureSetup.isPending}>
-                      {createRouter.isPending || secureSetup.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                      {savedRouterId ? "Refresh Script" : "Generate Registration Script"}
+                    <Button className="h-9 gap-1.5 text-xs font-semibold" onClick={handleSaveRouter} disabled={createRouter.isPending || secureSetup.isPending || publishSetupScript.isPending}>
+                      {createRouter.isPending || secureSetup.isPending || publishSetupScript.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                      {savedRouterId ? "Refresh Setup Command" : "Generate Setup Command"}
                     </Button>
                   </div>
                 </div>

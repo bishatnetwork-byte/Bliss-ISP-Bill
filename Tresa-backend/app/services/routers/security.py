@@ -8,7 +8,6 @@ from sqlmodel import Session, select
 from app.models.router import Router
 from app.core.config import settings
 from app.services.routers.concentrator import registration_token
-from app.services.routers.credentials import decrypt_secret
 
 
 MIN_DYNAMIC_API_PORT = int(os.getenv("ROUTER_API_PORT_MIN", "49152"))
@@ -25,7 +24,6 @@ RESERVED_MANAGEMENT_PORTS = {
     80,
     443,
     8291,
-    8728,
     8729,
 }
 

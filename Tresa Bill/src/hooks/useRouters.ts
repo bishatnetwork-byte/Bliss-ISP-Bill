@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { renultApi, RouterCreate, RouterUpdate, RouterPingRequest, RouterTestConnectionRequest, HotspotProvisionConfig, RouterPackagePayload, VoucherBatchCreate } from "@/api/foreform";
+import { renultApi, RouterCreate, RouterUpdate, RouterPingRequest, RouterTestConnectionRequest, HotspotProvisionConfig, RouterPackagePayload, VoucherBatchCreate, RouterPublishScriptResponse } from "@/api/foreform";
 
 // ── Hook Implementations ─────────────────────────────────────────────
 // All hooks call the real API. On failure the query enters the standard
@@ -121,6 +121,12 @@ export function useRouterRemoteAccess(routerId: string) {
 export function useRouterSecureSetup() {
   return useMutation({
     mutationFn: (routerId: string) => renultApi.routers.secureSetup(routerId),
+  });
+}
+
+export function usePublishSetupScript() {
+  return useMutation<RouterPublishScriptResponse, Error, string>({
+    mutationFn: (routerId: string) => renultApi.routers.publishSetupScript(routerId),
   });
 }
 
