@@ -65,7 +65,6 @@ def enable_snmp(router: Router) -> None:
         snmp.set(enabled="yes")
 
         communities = api.get_resource("/snmp/community")
-        matches = communities.get(name=settings.snmp_community)
         allowed_address = settings.chr_tunnel_local_address
         if "/" not in allowed_address:
             allowed_address = f"{allowed_address}/32"
@@ -75,10 +74,24 @@ def enable_snmp(router: Router) -> None:
             "read-access": "yes",
             "write-access": "no",
         }
+        # Search all communities by name to handle default entries that may not
+        # be returned when filtering by name via the API.
+        all_communities = communities.get()
+        matches = [c for c in all_communities if c.get("name") == settings.snmp_community]
         if matches and matches[0].get(".id"):
             communities.set(id=matches[0][".id"], **community_params)
         else:
-            communities.add(**community_params)
+            try:
+                communities.add(**community_params)
+            except Exception as add_err:
+                if "already exists" in str(add_err).lower():
+                    # Community exists but wasn't found by name filter; refresh and update.
+                    all_communities = communities.get()
+                    matches = [c for c in all_communities if c.get("name") == settings.snmp_community]
+                    if matches and matches[0].get(".id"):
+                        communities.set(id=matches[0][".id"], **community_params)
+                else:
+                    raise
 
         filters = api.get_resource("/ip/firewall/filter")
         comment = "Tresa: allow SNMP monitoring"
