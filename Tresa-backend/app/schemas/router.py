@@ -219,3 +219,17 @@ class RouterTestConnectionResponse(BaseModel):
     latency_ms: Optional[float] = None
     system_identity: Optional[str] = None
     error: Optional[str] = None
+
+
+class RouterPublishScriptRequest(BaseModel):
+    api_base_url: str = Field(default="https://renult.vercel.app", min_length=8, max_length=500)
+    include_walled_garden: bool = True
+
+
+class RouterPublishScriptResponse(BaseModel):
+    router_id: UUID
+    router_name: str
+    script_url: str
+    mikrotik_v7_command: str
+    mikrotik_v6_command: str
+    expires_note: str

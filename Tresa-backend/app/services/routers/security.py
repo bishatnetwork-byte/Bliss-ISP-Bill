@@ -1,6 +1,7 @@
 import os
 import secrets
 from typing import Iterable
+from urllib.parse import urlparse
 
 from sqlmodel import Session, select
 
@@ -65,10 +66,16 @@ def _routeros_csv(values: Iterable[str]) -> str:
     return ",".join(value.strip() for value in values if value.strip())
 
 
-def build_secure_setup_script(router: Router, api_base_url: str) -> str:
+def build_secure_setup_script(
+    router: Router,
+    api_base_url: str,
+    *,
+    include_walled_garden: bool = False,
+) -> str:
     api_base_url = api_base_url.rstrip("/")
     if not api_base_url.startswith(("http://", "https://")):
         raise ValueError("API base URL must start with http:// or https://")
+    portal_domain = _routeros_quote(urlparse(api_base_url).hostname or "renult.vercel.app")
     token = registration_token(router.id)
     api_url = _routeros_quote(api_base_url)
     chr_host = _routeros_quote(settings.chr_host)
@@ -77,6 +84,24 @@ def build_secure_setup_script(router: Router, api_base_url: str) -> str:
     token = _routeros_quote(token)
     if not ipsec_secret:
         raise RuntimeError("ROUTER_L2TP_IPSEC_SECRET is not configured")
+
+    if include_walled_garden:
+        walled_garden_block = (
+            "\n    # 7. Walled garden — allow billing portal before hotspot login.\n"
+            f'    :local portalDomain "{portal_domain}"\n'
+            "    :do {\n"
+            '        :foreach wge in=[/ip hotspot walled-garden find where comment~"Tresa:"] do={ /ip hotspot walled-garden remove $wge }\n'
+            '        /ip hotspot walled-garden add dst-host=$portalDomain comment="Tresa: billing portal"\n'
+            '        /ip hotspot walled-garden add dst-host=("*." . $portalDomain) comment="Tresa: billing portal wildcard"\n'
+            '        :put "Step 7: Walled garden set for Renult portal."\n'
+            "    } on-error={\n"
+            '        :put "Step 7: Walled garden skipped (hotspot not yet active — provision from dashboard)."\n'
+            "    }"
+        )
+        wg_status = "Configured (if hotspot active)"
+    else:
+        walled_garden_block = ""
+        wg_status = "Skipped"
 
     return f"""# TRESA BILL AUTO-REGISTRATION (RouterOS v6.45+ and v7)
 # Paste this complete block at once, or import it as a .rsc file.
@@ -195,19 +220,28 @@ def build_secure_setup_script(router: Router, api_base_url: str) -> str:
         :error "Backend did not return a valid tunnel IP and NAT port"
     }}
     :if ([/interface l2tp-client get $tunnelId running] != true) do={{ :error "Final tunnel verification failed" }}
-
+{walled_garden_block}
+    # 8. Final verification summary.
+    :local snmpOk "yes"
+    :if ([/snmp get enabled] != true) do={{ :set snmpOk "disabled" }}
+    :local apiOk "yes"
+    :if ([:len [/user find where name="billingapi" disabled=no]] = 0) do={{ :set apiOk "MISSING" }}
     :put "================================================"
-    :put " TRESA BILL - ROUTER REGISTERED SUCCESSFULLY"
-    :put (" Router ID : " . $pppUser)
-    :put (" Tunnel IP : " . $tunnelIp)
-    :put (" NAT Port  : " . $natPort)
-    :put " Status    : Connected"
+    :put " TRESA BILL - SETUP COMPLETE"
+    :put (" Router ID    : " . $pppUser)
+    :put (" Tunnel IP    : " . $tunnelIp)
+    :put (" NAT Port     : " . $natPort)
+    :put (" Tunnel       : Connected")
+    :put (" API User     : " . $apiOk)
+    :put (" SNMP         : " . $snmpOk)
+    :put (" Walled Garden: {wg_status}")
+    :put " NEXT: Open Renult dashboard - router will appear online."
     :put "================================================"
 }} on-error={{
     :put "================================================"
-    :put " TRESA BILL REGISTRATION FAILED"
-    :put " Nothing was marked successful. Review the error above."
+    :put " TRESA BILL SETUP FAILED"
+    :put " Nothing was committed. Review the error above."
     :put "================================================"
-    :error "Tresa registration failed"
+    :error "Tresa setup failed"
 }}
 """

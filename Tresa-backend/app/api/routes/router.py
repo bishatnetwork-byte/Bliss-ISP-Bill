@@ -24,6 +24,8 @@ from app.schemas.router import (
     RouterFeaturesResponse,
     RouterPingRequest,
     RouterPingResponse,
+    RouterPublishScriptRequest,
+    RouterPublishScriptResponse,
     RouterRebootResponse,
     RouterRemoteAccessResponse,
     RouterSecureSetupResponse,
@@ -72,6 +74,7 @@ from app.services.routers.security import (
     generate_api_username,
     validate_api_port,
 )
+from app.services.storage import STORAGE_ERRORS, object_url, upload_bytes
 from app.services.routers.concentrator import (
     confirm_router,
     delete_router_from_chr,
@@ -467,6 +470,51 @@ def router_secure_setup(
         warning=(
             "Run this from a trusted local Winbox/terminal session. The script changes "
             "management services and disables the factory admin account."
+        ),
+    )
+
+
+@router.post("/routers/{router_id}/publish-setup-script", response_model=RouterPublishScriptResponse)
+def publish_router_setup_script(
+    router_id: UUID,
+    payload: RouterPublishScriptRequest,
+    user: CurrentUser,
+    session: SessionDep,
+    response: Response,
+) -> RouterPublishScriptResponse:
+    db_router = get_router_with_ownership(session, router_id, user.id)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        script = build_secure_setup_script(
+            db_router,
+            payload.api_base_url,
+            include_walled_garden=payload.include_walled_garden,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    script_key = f"router-scripts/{router_id}.rsc"
+    try:
+        upload_bytes(script_key, script.encode("utf-8"), content_type="text/plain; charset=utf-8")
+        url = object_url(script_key, expires_in=48 * 3600)
+    except STORAGE_ERRORS as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"R2 upload failed: {exc}",
+        ) from exc
+
+    return RouterPublishScriptResponse(
+        router_id=db_router.id,
+        router_name=db_router.name,
+        script_url=url,
+        mikrotik_v7_command=f'/import url="{url}"',
+        mikrotik_v6_command=(
+            f'/tool fetch url="{url}" dst-path=tresa-setup.rsc\n'
+            "/import file-name=tresa-setup.rsc"
+        ),
+        expires_note=(
+            "Script contains a 48-hour registration token. "
+            "Regenerate if the customer has not run it within that window."
         ),
     )
 

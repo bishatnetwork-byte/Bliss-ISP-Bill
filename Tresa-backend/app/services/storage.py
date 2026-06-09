@@ -43,13 +43,13 @@ def r2_client() -> Any:
     )
 
 
-def object_url(key: str) -> str:
+def object_url(key: str, expires_in: int = 3600) -> str:
     if settings.r2_public_base_url:
         return f"{settings.r2_public_base_url.rstrip('/')}/{quote(key, safe='/')}"
     return r2_client().generate_presigned_url(
         "get_object",
         Params={"Bucket": settings.r2_bucket_name, "Key": key},
-        ExpiresIn=3600,
+        ExpiresIn=expires_in,
     )
 
 
