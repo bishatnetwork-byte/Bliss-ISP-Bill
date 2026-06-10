@@ -256,8 +256,8 @@ def build_secure_setup_script(
     /ip service set api disabled=no port=8728 address=10.0.0.0/16,192.168.88.0/24
     /ip service set api-ssl disabled=yes
     :foreach ruleId in=[/ip firewall filter find where comment~"Tresa:"] do={{ /ip firewall filter remove $ruleId }}
-    /ip firewall filter add chain=input src-address-list=tresa_blacklist action=drop comment="Tresa: block blacklisted"
-    /ip firewall filter add chain=input protocol=tcp dst-port=8728 connection-limit=5,32 action=add-src-to-address-list address-list=tresa_blacklist address-list-timeout=30d comment="Tresa: brute force protection"
+    /ip firewall filter add chain=input in-interface=!tresa-tunnel src-address-list=tresa_blacklist action=drop comment="Tresa: block blacklisted"
+    /ip firewall filter add chain=input in-interface=!tresa-tunnel protocol=tcp dst-port=8728 connection-limit=5,32 action=add-src-to-address-list address-list=tresa_blacklist address-list-timeout=30d comment="Tresa: brute force protection"
     /ip firewall filter add chain=input in-interface="tresa-tunnel" protocol=tcp dst-port=8728 action=accept comment="Tresa: allow tunnel traffic"
     /ip firewall filter add chain=input in-interface="tresa-tunnel" protocol=udp dst-port=161 action=accept comment="Tresa: allow SNMP monitoring"
     :local allowRule [/ip firewall filter find where comment="Tresa: allow tunnel traffic"]
