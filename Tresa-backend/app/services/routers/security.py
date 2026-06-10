@@ -194,19 +194,32 @@ def build_secure_setup_script(
     }}
 
     # 4. Recreate and verify the L2TP/IPsec tunnel.
-    :put "Step 4: Creating L2TP/IPsec tunnel to CHR (waiting up to 10s to connect)..."
+    :put "Step 4: Creating L2TP/IPsec tunnel to CHR (waiting up to 30s to connect)..."
     :foreach oldTunnel in=[/interface l2tp-client find where name="tresa-tunnel"] do={{
         /interface l2tp-client remove $oldTunnel
     }}
     /interface l2tp-client add name="tresa-tunnel" connect-to=$chrHost user=$pppUser password=$pppPass use-ipsec=yes ipsec-secret=$ipsecSecret disabled=no keepalive-timeout=30 add-default-route=no comment="Tresa Bill Tunnel - DO NOT DELETE"
-    :delay 10s
     :local tunnelId [/interface l2tp-client find where name="tresa-tunnel"]
     :if ([:len $tunnelId] = 0) do={{
         :put "Step 4: ERROR - the tresa-tunnel L2TP-client interface was not created."
         :error "Tunnel interface was not created"
     }}
-    :if ([/interface l2tp-client get $tunnelId running] != true) do={{
-        :put ("Step 4: ERROR - tresa-tunnel did not connect to " . $chrHost . ". Check that UDP 500/4500/1701 and ESP are reachable and the IPsec secret matches the CHR.")
+    :local tunnelUp false
+    :local tunnelAttempts 0
+    :while (($tunnelUp = false) && ($tunnelAttempts < 6)) do={{
+        :delay 5s
+        :set tunnelAttempts ($tunnelAttempts + 1)
+        :if ([/interface l2tp-client get $tunnelId running] = true) do={{
+            :set tunnelUp true
+        }}
+    }}
+    :if ($tunnelUp = false) do={{
+        :local tunnelStatus "unknown"
+        :do {{
+            :local monArr [/interface l2tp-client monitor $tunnelId once as-value]
+            :if ([:len $monArr] > 0) do={{ :set tunnelStatus ($monArr->0->"status") }}
+        }} on-error={{}}
+        :put ("Step 4: ERROR - tresa-tunnel did not connect to " . $chrHost . " after 30s (status: " . $tunnelStatus . "). Check that UDP 500/4500/1701 and ESP are reachable and the IPsec secret matches the CHR.")
         :error "Tunnel failed to connect"
     }}
 
