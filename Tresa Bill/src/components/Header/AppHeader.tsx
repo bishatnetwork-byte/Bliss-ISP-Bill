@@ -301,13 +301,23 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-border/40 my-1" />
-                {user?.account_type !== "staff" && <DropdownMenuItem
-                  onClick={() => navigate("/settings")}
-                  className="rounded px-3 py-2 cursor-pointer focus:bg-primary/10 focus:text-primary transition-all gap-3"
-                >
-                  <User className="w-4 h-4" />
-                  <span className="font-semibold text-sm">View Profile</span>
-                </DropdownMenuItem>}
+                {user?.account_type !== "staff" ? (
+                  <DropdownMenuItem
+                    onClick={() => navigate("/settings")}
+                    className="rounded px-3 py-2 cursor-pointer focus:bg-primary/10 focus:text-primary transition-all gap-3"
+                  >
+                    <User className="w-4 h-4" />
+                    <span className="font-semibold text-sm">View Profile</span>
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={() => navigate("/profile")}
+                    className="rounded px-3 py-2 cursor-pointer focus:bg-primary/10 focus:text-primary transition-all gap-3"
+                  >
+                    <User className="w-4 h-4" />
+                    <span className="font-semibold text-sm">My Profile</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => {
                     logout();
