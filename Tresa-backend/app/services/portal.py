@@ -44,8 +44,38 @@ def normalize_phone(phone_number: str) -> str:
     return phone
 
 
+_PUBLIC_ID_SUFFIX_RE = re.compile(r"^[0-9A-Fa-f]{6}$")
+
+
+def router_public_id(router: Router) -> str:
+    """Stable, URL-safe identifier for a router's public portal/API calls.
+
+    Two routers can share the same display name, so the deployed captive
+    portal embeds this composite id (NAME-<6 hex chars of the router's UUID>)
+    instead of the bare name to keep package/voucher lookups unambiguous.
+    """
+    return f"{normalize_router_name(router.name)}-{router.id.hex[:6].upper()}"
+
+
 def find_router_by_name(session: Session, router_name: str) -> Router | None:
-    normalized = normalize_router_name(router_name)
+    raw = (router_name or "").strip()
+
+    if "-" in raw:
+        name_part, suffix = raw.rsplit("-", 1)
+        if _PUBLIC_ID_SUFFIX_RE.match(suffix):
+            suffix_lower = suffix.lower()
+            normalized_name = normalize_router_name(name_part)
+            candidates = session.exec(
+                select(Router).where(sa.func.upper(Router.name) == normalized_name)
+            ).all()
+            for candidate in candidates:
+                if candidate.id.hex.startswith(suffix_lower):
+                    return candidate
+            for candidate in session.exec(select(Router)).all():
+                if candidate.id.hex.startswith(suffix_lower):
+                    return candidate
+
+    normalized = normalize_router_name(raw)
     return session.exec(
         select(Router).where(sa.func.upper(Router.name) == normalized)
     ).first()
@@ -274,21 +304,22 @@ def record_portal_payment(
     package_id: int,
     payment_reference: str | None = None,
 ) -> tuple[Wallet, VoucherPurchase]:
-    package = find_package(session, router_name, package_id)
-    if not package:
-        raise ValueError("Package not found for this router")
     router = find_router_by_name(session, router_name)
     if not router:
         raise ValueError("Router not found for this portal")
 
-    wallet = get_or_create_wallet(session, router_name, phone_number)
+    package = find_package(session, router.name, package_id)
+    if not package:
+        raise ValueError("Package not found for this router")
+
+    wallet = get_or_create_wallet(session, router.name, phone_number)
     amount = int(package["total"])
 
     voucher = VoucherPurchase(
         wallet_id=wallet.id,
         router_name=wallet.router_name,
         phone_number=wallet.phone_number,
-        voucher_code=generate_voucher_code(router_name),
+        voucher_code=generate_voucher_code(router.name),
         package_id=package["package_id"],
         profile=package["profile"],
         speed_type=package["speed_type"],
@@ -325,9 +356,11 @@ def record_portal_payment(
 
 
 def find_vouchers(session: Session, router_name: str, phone_number: str) -> list[VoucherPurchase]:
+    router = find_router_by_name(session, router_name)
+    canonical_name = normalize_router_name(router.name) if router else normalize_router_name(router_name)
     return session.exec(
         select(VoucherPurchase)
-        .where(VoucherPurchase.router_name == normalize_router_name(router_name))
+        .where(VoucherPurchase.router_name == canonical_name)
         .where(VoucherPurchase.phone_number == normalize_phone(phone_number))
         .order_by(VoucherPurchase.created_at.desc())
     ).all()
@@ -374,12 +407,39 @@ def _render_portal_file(path: Path, router: Router) -> bytes:
     text = content.decode("utf-8")
     return (
         text.replace("__PORTAL_API_BASE__", _portal_api_base())
+        .replace("__ROUTER_PUBLIC_ID__", router_public_id(router))
         .replace("__ROUTER_NAME__", normalize_router_name(router.name))
         .encode("utf-8")
     )
 
 
-def _set_hotspot_portal_configuration(router: Router, directory: str) -> tuple[list[str], list[str]]:
+# Extra hosts that specific portal templates reach directly from the browser
+# (fonts, third-party widgets, etc.) and therefore need walled-garden access
+# before the visitor authenticates.
+_TEMPLATE_EXTRA_WALLED_GARDEN_HOSTS: dict[str, list[str]] = {
+    "auroaa": ["fonts.googleapis.com", "fonts.gstatic.com", "hspotagent.com"],
+}
+
+
+def _walled_garden_host_patterns(host: str) -> list[str]:
+    """Exact host plus a `*.host` wildcard so subdomains are allowed too."""
+    host = host.strip().lower()
+    if not host:
+        return []
+    return [host, f"*.{host}"]
+
+
+def _walled_garden_hosts_for_template(template: str) -> list[str]:
+    api_host = re.sub(r"^https?://", "", _portal_api_base()).split("/", 1)[0].split(":", 1)[0]
+    hosts: list[str] = []
+    for host in (api_host, *_TEMPLATE_EXTRA_WALLED_GARDEN_HOSTS.get(template, [])):
+        for pattern in _walled_garden_host_patterns(host):
+            if pattern not in hosts:
+                hosts.append(pattern)
+    return hosts
+
+
+def _set_hotspot_portal_configuration(router: Router, directory: str, template: str = "renault") -> tuple[list[str], list[str]]:
     updated_profiles: list[str] = []
     allowed_hosts: list[str] = []
     with router_connection(router) as api:
@@ -405,13 +465,17 @@ def _set_hotspot_portal_configuration(router: Router, directory: str) -> tuple[l
             profile_resource.set(id=profile_id, **{"html-directory": directory})
             updated_profiles.append(profile_name)
 
-        api_host = re.sub(r"^https?://", "", _portal_api_base()).split("/", 1)[0]
-        if api_host:
-            walled_garden = api.get_resource("/ip/hotspot/walled-garden")
-            existing = walled_garden.get(**{"dst-host": api_host})
-            if not existing:
-                walled_garden.add(action="allow", **{"dst-host": api_host})
-            allowed_hosts.append(api_host)
+        walled_garden = api.get_resource("/ip/hotspot/walled-garden")
+        existing_hosts = {
+            str(item.get("dst-host", "")).strip().lower()
+            for item in walled_garden.get()
+            if item.get("dst-host")
+        }
+        for host_pattern in _walled_garden_hosts_for_template(template):
+            if host_pattern.lower() not in existing_hosts:
+                walled_garden.add(action="allow", **{"dst-host": host_pattern})
+                existing_hosts.add(host_pattern.lower())
+            allowed_hosts.append(host_pattern)
     return updated_profiles, allowed_hosts
 
 
@@ -536,7 +600,7 @@ def deploy_captive_portal_via_fetch(router: Router, template: str = "renault") -
         }
 
     try:
-        updated_profiles, allowed_hosts = _set_hotspot_portal_configuration(router, router_directory)
+        updated_profiles, allowed_hosts = _set_hotspot_portal_configuration(router, router_directory, template)
     except Exception as exc:
         return {
             "success": False,
@@ -668,7 +732,7 @@ def push_captive_files_to_mikrotik(
                     ftp.storbinary(f"STOR {remote_name}", io.BytesIO(_render_portal_file(path, router)))
                     pushed_files.append(remote_name)
 
-        updated_profiles, allowed_hosts = _set_hotspot_portal_configuration(router, deployed_directory)
+        updated_profiles, allowed_hosts = _set_hotspot_portal_configuration(router, deployed_directory, template)
         diagnostics["updated_hotspot_profiles"] = ",".join(updated_profiles) or "none"
         diagnostics["walled_garden_hosts"] = ",".join(allowed_hosts) or "none"
         if not updated_profiles:

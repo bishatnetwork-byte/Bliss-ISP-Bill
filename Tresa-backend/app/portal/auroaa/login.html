@@ -215,7 +215,7 @@
 
         (function ($) {
             var list = $('#packagesList');
-            var routerName = '__ROUTER_NAME__';
+            var routerName = '__ROUTER_PUBLIC_ID__';
             var apiBase = '__PORTAL_API_BASE__';
 
             $.ajax({
@@ -249,7 +249,7 @@
 (function(){
   try {
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', '__PORTAL_API_BASE__/portal/__ROUTER_NAME__', true);
+    xhr.open('GET', '__PORTAL_API_BASE__/portal/__ROUTER_PUBLIC_ID__', true);
     xhr.onreadystatechange = function() {
       if (xhr.readyState === 4 && xhr.status === 200) {
         var s = JSON.parse(xhr.responseText);

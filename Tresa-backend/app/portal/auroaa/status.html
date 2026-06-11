@@ -105,7 +105,7 @@
 (function(){
   try {
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', '__PORTAL_API_BASE__/portal/__ROUTER_NAME__', true);
+    xhr.open('GET', '__PORTAL_API_BASE__/portal/__ROUTER_PUBLIC_ID__', true);
     xhr.onreadystatechange = function() {
       if (xhr.readyState === 4 && xhr.status === 200) {
         var s = JSON.parse(xhr.responseText);

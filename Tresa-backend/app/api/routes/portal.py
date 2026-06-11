@@ -98,7 +98,9 @@ def public_captive_config(
 
 @router.get("/portal/{router_name}/packages")
 def public_captive_packages(router_name: str, session: SessionDep):
-    return {"success": True, "data": get_router_packages(router_name, session)}
+    db_router = find_router_by_name(session, router_name)
+    lookup_name = db_router.name if db_router else router_name
+    return {"success": True, "data": get_router_packages(lookup_name, session)}
 
 
 @router.post("/portal/{router_name}/payments", response_model=PortalPaymentResponse)
@@ -248,4 +250,8 @@ def deploy_router_captive_r2(
 @router.get("/portal/router/{router_name}/exists")
 def public_router_exists(router_name: str, session: SessionDep):
     db_router = find_router_by_name(session, router_name)
-    return {"success": True, "router_name": normalize_router_name(router_name), "exists": db_router is not None}
+    return {
+        "success": True,
+        "router_name": normalize_router_name(db_router.name) if db_router else normalize_router_name(router_name),
+        "exists": db_router is not None,
+    }

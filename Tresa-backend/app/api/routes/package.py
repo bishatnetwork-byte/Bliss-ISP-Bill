@@ -38,6 +38,7 @@ from app.services.portal import (
     _delete_hotspot_vouchers,
     _upsert_hotspot_voucher,
     _upsert_hotspot_vouchers,
+    find_router_by_name,
     get_or_create_wallet,
     normalize_phone,
 )
@@ -111,9 +112,11 @@ def list_router_packages(
     session: SessionDep,
     router_id: str = Query(min_length=1, max_length=120),
 ) -> RouterPackagesResponse:
+    db_router = find_router_by_name(session, router_id)
+    lookup_name = db_router.name if db_router else router_id
     return RouterPackagesResponse(
         success=True,
-        data=get_router_packages(router_id, session),
+        data=get_router_packages(lookup_name, session),
     )
 
 
