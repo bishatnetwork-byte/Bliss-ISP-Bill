@@ -19,6 +19,7 @@ from app.services.access import require_branch_access
 from app.services.avatar import get_staff_avatar
 from app.services.email import send_staff_invite_email
 from app.services.notification import notify
+from app.services.portal import normalize_router_name
 from app.services.security import hash_password, normalize_email
 
 router = APIRouter(tags=["Staff"])
@@ -131,9 +132,13 @@ def branch_revenue_share(
     router_names = session.exec(select(Router.name).where(Router.branch_id == branch_id)).all()
     gross_sales = 0
     if router_names:
+        # VoucherPurchase.router_name is always stored normalized (see
+        # get_or_create_wallet), while Router.name keeps whatever casing the
+        # owner typed — normalize before matching or sales come back as 0.
+        normalized_names = [normalize_router_name(name) for name in router_names]
         gross_sales = int(session.exec(
             select(func.coalesce(func.sum(VoucherPurchase.amount), 0))
-            .where(col(VoucherPurchase.router_name).in_(router_names))
+            .where(col(VoucherPurchase.router_name).in_(normalized_names))
         ).one())
     staff_rows = session.exec(
         select(Staff).where(Staff.branch_id == branch_id).where(Staff.is_active.is_(True))

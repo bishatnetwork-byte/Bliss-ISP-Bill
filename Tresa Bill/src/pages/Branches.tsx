@@ -11,8 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Building2, Plus, Trash2, User, UserPlus } from "lucide-react";
+import { Building2, Pencil, Plus, Trash2, User, UserPlus } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -30,6 +31,8 @@ export default function BranchesPage() {
   const [isStaffLoading, setIsStaffLoading] = useState(false);
   const [isBranchOpen, setIsBranchOpen] = useState(false);
   const [isStaffOpen, setIsStaffOpen] = useState(false);
+  const [isEditStaffOpen, setIsEditStaffOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<StaffResponse | null>(null);
   const [branchName, setBranchName] = useState("");
   const [staffForm, setStaffForm] = useState({
     full_name: "",
@@ -38,6 +41,15 @@ export default function BranchesPage() {
     role: "staff",
     share_percentage: 10,
     permissions: ["dashboard", "routers", "sales", "vouchers"],
+  });
+  const [editForm, setEditForm] = useState({
+    full_name: "",
+    email: "",
+    phone_number: "",
+    role: "staff",
+    share_percentage: 0,
+    permissions: [] as string[],
+    is_active: true,
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("sidebar-collapsed") === "true");
 
@@ -136,6 +148,52 @@ export default function BranchesPage() {
       toast.success("Staff member removed");
     } catch (err: unknown) {
       toast.error(errorMessage(err, "Failed to delete staff"));
+    }
+  };
+
+  const openEditStaff = (person: StaffResponse) => {
+    setEditingStaff(person);
+    setEditForm({
+      full_name: person.full_name,
+      email: person.email,
+      phone_number: person.phone_number || "",
+      role: person.role,
+      share_percentage: person.share_percentage,
+      permissions: person.permissions,
+      is_active: person.is_active,
+    });
+    setIsEditStaffOpen(true);
+  };
+
+  const updateStaff = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingStaff) return;
+    try {
+      const updated = await renultApi.staff.update(editingStaff.id, {
+        full_name: editForm.full_name,
+        email: editForm.email,
+        phone_number: editForm.phone_number || null,
+        role: editForm.role,
+        share_percentage: editForm.share_percentage,
+        permissions: editForm.permissions,
+        is_active: editForm.is_active,
+      });
+      setStaff((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setIsEditStaffOpen(false);
+      setEditingStaff(null);
+      toast.success("Staff member updated");
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, "Failed to update staff"));
+    }
+  };
+
+  const toggleStaffActive = async (person: StaffResponse) => {
+    try {
+      const updated = await renultApi.staff.update(person.id, { is_active: !person.is_active });
+      setStaff((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      toast.success(updated.is_active ? `${updated.full_name} activated` : `${updated.full_name} deactivated`);
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, "Failed to update staff status"));
     }
   };
 
@@ -241,7 +299,8 @@ export default function BranchesPage() {
                       <TableHead>Phone</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Share</TableHead>
-                      <TableHead className="w-12" />
+                      <TableHead>Active</TableHead>
+                      <TableHead className="w-16" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -261,9 +320,21 @@ export default function BranchesPage() {
                         <TableCell className="text-xs capitalize">{person.role}</TableCell>
                         <TableCell className="text-xs font-semibold">{person.share_percentage}%</TableCell>
                         <TableCell>
-                          <button onClick={() => deleteStaff(person.id)} className="text-muted-foreground hover:text-destructive transition-colors" aria-label="Delete staff">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <Switch
+                            checked={person.is_active}
+                            onCheckedChange={() => toggleStaffActive(person)}
+                            aria-label={person.is_active ? "Deactivate agent" : "Activate agent"}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => openEditStaff(person)} className="text-muted-foreground hover:text-primary transition-colors" aria-label="Edit staff">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => deleteStaff(person.id)} className="text-muted-foreground hover:text-destructive transition-colors" aria-label="Delete staff">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -356,6 +427,86 @@ export default function BranchesPage() {
               <Button type="submit" className="w-full h-9 gap-2">
                 <UserPlus className="w-4 h-4" />
                 Invite Agent
+              </Button>
+            </div>
+          </form>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={isEditStaffOpen} onOpenChange={(open) => { setIsEditStaffOpen(open); if (!open) setEditingStaff(null); }}>
+        <SheetContent side="right" className="w-full sm:max-w-md flex flex-col gap-0 p-0">
+          <SheetHeader className="px-6 py-5 border-b border-border/40">
+            <SheetTitle>
+              <div className="flex items-center gap-2.5">
+                <div>
+                  <p className="text-sm font-semibold">Edit Staff</p>
+                  {editingStaff && (
+                    <p className="text-xs text-muted-foreground font-normal">Update details for {editingStaff.full_name}</p>
+                  )}
+                </div>
+              </div>
+            </SheetTitle>
+          </SheetHeader>
+          <form onSubmit={updateStaff} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Full name</Label>
+              <Input placeholder="Jane Doe" value={editForm.full_name} onChange={(e) => setEditForm((p) => ({ ...p, full_name: e.target.value }))} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Email address</Label>
+              <Input type="email" placeholder="jane@example.com" value={editForm.email} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Phone number <span className="text-muted-foreground">(optional)</span></Label>
+              <Input placeholder="+256 700 000000" value={editForm.phone_number} onChange={(e) => setEditForm((p) => ({ ...p, phone_number: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Role</Label>
+              <Select value={editForm.role} onValueChange={(role) => setEditForm((prev) => ({ ...prev, role }))}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {["admin", "manager", "support", "staff"].map((role) => (
+                    <SelectItem key={role} value={role} className="text-xs capitalize">{role}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Revenue share (%) <span className="text-rose-400">*</span></Label>
+              <Input type="number" min={0} max={100} step="0.1" value={editForm.share_percentage} onChange={(e) => setEditForm((p) => ({ ...p, share_percentage: Number(e.target.value) }))} />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Allowed areas <span className="text-rose-500">*</span></Label>
+              <div className="grid grid-cols-2 gap-2 rounded border border-border/60 p-3 bg-muted/20">
+                {["routers", "sales", "vouchers", "support", "network", "captive"].map((permission) => (
+                  <label key={permission} className="flex items-center gap-2 text-xs capitalize cursor-pointer">
+                    <Checkbox
+                      checked={editForm.permissions.includes(permission)}
+                      onCheckedChange={(checked) => setEditForm((prev) => ({
+                        ...prev,
+                        permissions: checked
+                          ? [...prev.permissions, permission]
+                          : prev.permissions.filter((item) => item !== permission),
+                      }))}
+                    />
+                    {permission}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded border border-border/60 p-3 bg-muted/20">
+              <div>
+                <Label className="text-xs font-medium">Account active</Label>
+                <p className="text-[11px] text-muted-foreground">Deactivated agents lose access and stop earning revenue share.</p>
+              </div>
+              <Switch checked={editForm.is_active} onCheckedChange={(checked) => setEditForm((p) => ({ ...p, is_active: checked }))} />
+            </div>
+            <div className="pt-2">
+              <Button type="submit" className="w-full h-9 gap-2">
+                <Pencil className="w-4 h-4" />
+                Save changes
               </Button>
             </div>
           </form>
