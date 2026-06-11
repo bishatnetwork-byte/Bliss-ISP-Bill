@@ -192,3 +192,21 @@ export const MikrotikIcon: React.FC<IconProps> = ({
   className,
   ...props
 }) => <img src="/icons/hub.png" className={className} />;
+
+
+export const WithdrawIcon: React.FC<IconProps> = ({
+  size = 24,
+  className,
+}) => <img src="/icons/withdraw.png" className={className} />;
+
+
+export const VoucherIcon: React.FC<IconProps> = ({
+  size = 24,
+  className,
+}) => <img src="/icons/voucher.png" className={className} />;
+
+
+export const MoneyIcon: React.FC<IconProps> = ({
+  size = 24,
+  className,
+}) => <img src="/icons/money.png" className={className} />;

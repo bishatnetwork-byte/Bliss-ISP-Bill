@@ -1,5 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { renultApi, RouterCreate, RouterUpdate, RouterPingRequest, RouterTestConnectionRequest, HotspotProvisionConfig, RouterPackagePayload, VoucherBatchCreate, RouterPublishScriptResponse } from "@/api/foreform";
+import { useQueries, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { renultApi, RouterCreate, RouterUpdate, RouterPingRequest, RouterTestConnectionRequest, HotspotProvisionConfig, RouterPackagePayload, VoucherBatchCreate, RouterPublishScriptResponse, RouterResponse } from "@/api/foreform";
 
 // ── Hook Implementations ─────────────────────────────────────────────
 // All hooks call the real API. On failure the query enters the standard
@@ -88,6 +88,18 @@ export function useRouterActiveUsers(routerId: string) {
     queryFn: () => renultApi.routers.activeUsers(routerId),
     enabled: !!routerId,
     refetchInterval: 15000,
+  });
+}
+
+// Aggregates active hotspot users across every router in a branch.
+export function useBranchActiveUsers(routers: RouterResponse[]) {
+  return useQueries({
+    queries: routers.map((router) => ({
+      queryKey: ["routerActiveUsers", router.id],
+      queryFn: () => renultApi.routers.activeUsers(router.id),
+      refetchInterval: 15000,
+      retry: 1,
+    })),
   });
 }
 

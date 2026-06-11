@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { renultApi, NotificationResponse } from "@/api/foreform";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,7 +8,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Bell, CheckCheck, Loader2, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -20,10 +19,10 @@ function timeLabel(value: string) {
 }
 
 import {
+  useDeleteNotification,
+  useMarkAllRead,
   useNotifications,
   useUnreadCount,
-  useMarkAllRead,
-  useDeleteNotification,
 } from "@/hooks/useNotifications";
 
 export default function NotificationsDialog() {

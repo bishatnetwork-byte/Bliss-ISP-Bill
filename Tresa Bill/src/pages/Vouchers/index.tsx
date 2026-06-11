@@ -14,9 +14,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
+    useBranchActiveUsers,
     useBranchVouchers,
     useDeleteRouterVoucher,
     useDeleteRouterVoucherBatch,
@@ -32,6 +34,7 @@ import { downloadVoucherPdf } from "@/lib/voucherPdf";
 import { voucherUiStatus } from "@/lib/voucherStatus";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+    Activity,
     Barcode,
     CheckCircle2,
     Coins,
@@ -49,10 +52,13 @@ import {
     Sparkles,
     Ticket,
     Trash2,
+    Users,
     Wifi,
+    WifiOff,
     X
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 // Internet Package Interfaces
@@ -159,7 +165,31 @@ export default function VouchersIndex() {
     }, [branchVouchersResponse]);
 
     // Active Tab
-    const [activeTab, setActiveTab] = useState<string>("generator");
+    const [searchParams] = useSearchParams();
+    const [activeTab, setActiveTab] = useState<string>(
+        () => (searchParams.get("tab") === "active-users" ? "active-users" : "generator"),
+    );
+
+    // Active Users (aggregated across all routers in this branch)
+    const activeUsersQueries = useBranchActiveUsers(routers);
+    const activeUsersLoading = routers.length > 0 && activeUsersQueries.some((query) => query.isLoading);
+    const activeUsers = useMemo(() => {
+        return activeUsersQueries.flatMap((query, index) => {
+            const router = routers[index];
+            const items = query.data?.active_users || [];
+            return items.map((item, itemIndex) => ({
+                id: `${router.id}-${item[".id"] || item.id || itemIndex}`,
+                routerName: router.name,
+                device: String(item["login-by"] || item["server"] || "Hotspot client"),
+                ip: String(item.address || "N/A"),
+                mac: String(item["mac-address"] || "N/A"),
+                user: String(item.user || item.name || "N/A"),
+                uptime: String(item.uptime || "N/A"),
+                uploaded: String(item["bytes-in"] || "0 B"),
+                downloaded: String(item["bytes-out"] || "0 B"),
+            }));
+        });
+    }, [activeUsersQueries, routers]);
 
     // Single Voucher Form State
     const [singlePhone, setSinglePhone] = useState<string>("");
@@ -699,6 +729,10 @@ export default function VouchersIndex() {
                             <Barcode className="w-3.5 h-3.5" />
                             Active Registry ({vouchersLoading ? "..." : `${vouchers.filter((voucher) => voucher.type === "Single").length} singles / ${new Set(vouchers.filter((voucher) => voucher.batchId).map((voucher) => voucher.batchId)).size} batches`})
                         </TabsTrigger>
+                        <TabsTrigger value="active-users" className="gap-2 text-xs font-medium px-4 py-2 rounded active:bg-primary">
+                            <Users className="w-3.5 h-3.5" />
+                            Active Users ({activeUsersLoading ? "..." : activeUsers.length})
+                        </TabsTrigger>
                     </TabsList>
 
                     {/* TAB 1: GENERATORS */}
@@ -1040,6 +1074,84 @@ export default function VouchersIndex() {
                             getStatusClass={getStatusBadge}
                         />
 
+                    </TabsContent>
+
+                    {/* TAB 3: ACTIVE USERS */}
+                    <TabsContent value="active-users" className="space-y-4 outline-none">
+                        <Card className="border border-border/40 shadow-sm bg-card">
+                            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-sm font-bold tracking-tight text-foreground flex items-center gap-1.5">
+                                        <Activity className="w-4 h-4 text-primary animate-pulse" />
+                                        Active Hotspot Sessions
+                                    </CardTitle>
+                                    <CardDescription className="text-xs text-muted-foreground">
+                                        Devices currently connected via vouchers, across every router in this branch.
+                                    </CardDescription>
+                                </div>
+                                <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-bold">
+                                    {activeUsersLoading ? "..." : `${activeUsers.length} Online`}
+                                </Badge>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="overflow-x-auto border border-border/20 rounded-md">
+                                    <Table>
+                                        <TableHeader className="bg-muted/30">
+                                            <TableRow>
+                                                <TableHead className="font-bold text-xs uppercase text-foreground">Router</TableHead>
+                                                <TableHead className="font-bold text-xs uppercase text-foreground">Device/IP</TableHead>
+                                                <TableHead className="font-bold text-xs uppercase text-foreground">MAC Address</TableHead>
+                                                <TableHead className="font-bold text-xs uppercase text-foreground">Voucher Code</TableHead>
+                                                <TableHead className="font-bold text-xs uppercase text-foreground">TX / RX</TableHead>
+                                                <TableHead className="font-bold text-xs uppercase text-foreground text-right">Uptime</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {activeUsersLoading ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={6} className="h-44 text-center">
+                                                        <div className="flex flex-col items-center justify-center text-muted-foreground">
+                                                            <Loader2 className="w-6 h-6 mb-2 animate-spin" />
+                                                            <span className="text-sm font-semibold">Loading active sessions...</span>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : activeUsers.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={6} className="h-44 text-center">
+                                                        <div className="flex flex-col items-center justify-center text-muted-foreground">
+                                                            <WifiOff className="w-10 h-10 mb-2 stroke-[1.5] text-muted-foreground/60" />
+                                                            <span className="text-sm font-semibold">No active sessions</span>
+                                                            <span className="text-xs mt-0.5">Connected hotspot clients will appear here in real time.</span>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                activeUsers.map((session) => (
+                                                    <TableRow key={session.id} className="hover:bg-muted/40 transition-colors">
+                                                        <TableCell className="text-xs font-semibold text-foreground">{session.routerName}</TableCell>
+                                                        <TableCell>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-xs font-bold text-foreground">{session.device}</span>
+                                                                <span className="text-[10px] font-mono text-muted-foreground">{session.ip}</span>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="font-mono text-xs font-medium text-muted-foreground">{session.mac}</TableCell>
+                                                        <TableCell className="font-mono text-xs font-semibold text-primary">{session.user}</TableCell>
+                                                        <TableCell className="text-xs text-foreground/80">
+                                                            <span className="font-bold text-emerald-500">↑ {session.uploaded}</span>
+                                                            <span className="text-muted-foreground mx-1">/</span>
+                                                            <span className="font-bold text-blue-500">↓ {session.downloaded}</span>
+                                                        </TableCell>
+                                                        <TableCell className="text-right text-xs font-mono text-muted-foreground">{session.uptime}</TableCell>
+                                                    </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </CardContent>
+                        </Card>
                     </TabsContent>
                 </Tabs>
             </main>

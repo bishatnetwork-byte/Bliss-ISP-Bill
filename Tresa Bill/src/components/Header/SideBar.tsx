@@ -1,4 +1,4 @@
-import { renultApi } from "@/api/foreform";
+import { renultApi, RouterMonitorSummary } from "@/api/foreform";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Popover,
@@ -11,12 +11,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { MikrotikIcon, SettingsIcon } from "@/constants/Icons";
+import { MikrotikIcon, MoneyIcon, SettingsIcon, VoucherIcon, WithdrawIcon } from "@/constants/Icons";
 import { useAuth } from "@/lib/auth";
 import {
   Check,
+  ChevronDown,
   ChevronsUpDown,
-  CircleDollarSign,
   CircleUser,
   Globe,
   Home,
@@ -24,13 +24,14 @@ import {
   MessagesSquare,
   MoreHorizontal,
   Network,
+  Package,
   PackageSearchIcon,
   PanelLeft,
-  PhoneIncomingIcon,
+  PhoneForwardedIcon,
   Plus,
   Settings,
   Ticket,
-  Wallet2Icon,
+  Users
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -40,12 +41,19 @@ interface SideBarProps {
   onClose: () => void;
 }
 
+interface SubNavItem {
+  label: string;
+  path: string;
+  icon: React.ReactNode;
+}
+
 interface NavItem {
   label: string;
   icon: React.ReactNode;
   path: string;
   iconColor?: string;
   hasSubmenu?: boolean;
+  submenu?: SubNavItem[];
 }
 
 const primaryNavItems: NavItem[] = [
@@ -58,16 +66,20 @@ const primaryNavItems: NavItem[] = [
     label: "Mikrotiks",
     icon: <MikrotikIcon className="w-5 h-5" />, //Mikrotiks Router
     path: "/router",
-    hasSubmenu: true, // Here i gonna add the count for available routers
   },
   {
     label: "Vouchers & Users",
-    icon: <Ticket className="w-5 h-5" />,
+    icon: <VoucherIcon className="w-5 h-5" />,
     path: "/vouchers",
+    submenu: [
+      { label: "Vouchers", path: "/vouchers", icon: <Ticket className="w-4 h-4" /> },
+      { label: "Packages", path: "/router/packages", icon: <Package className="w-4 h-4" /> },
+      { label: "Active Users", path: "/vouchers?tab=active-users", icon: <Users className="w-4 h-4" /> },
+    ],
   },
   {
     label: "Revenue Sales",
-    icon: <CircleDollarSign className="w-5 h-5" />,
+    icon: <MoneyIcon className="w-5 h-5" />,
     path: "/sales",
   },
 ];
@@ -75,12 +87,12 @@ const primaryNavItems: NavItem[] = [
 const supportNavItems: NavItem[] = [
   {
     label: "Withdrawals",
-    icon: <Wallet2Icon className="w-5 h-5" />,
+    icon: <WithdrawIcon className="w-5 h-5" />,
     path: "/withdrawals",
   },
   {
     label: "Support",
-    icon: <PhoneIncomingIcon className="w-5 h-5" />,
+    icon: <PhoneForwardedIcon className="w-5 h-5" />,
     path: "/voucher-support",
   },
   {
@@ -89,7 +101,7 @@ const supportNavItems: NavItem[] = [
     path: "/network",
   },
   {
-    label: "Captive Portals",
+    label: "Captive Portal",
     icon: <PackageSearchIcon className="w-5 h-5" />,
     path: "/captive-portals",
   },
@@ -119,6 +131,19 @@ const secondaryNavItems: NavItem[] = [
   },
 ];
 
+const PERMISSION_BY_PATH: Record<string, string> = {
+  "/router": "routers",
+  "/router/packages": "routers",
+  "/sales": "sales",
+  "/vouchers": "vouchers",
+  "/voucher-support": "support",
+  "/messages": "support",
+  "/network": "network",
+  "/remote-access": "network",
+  "/captive-portals": "captive",
+  "/campaigns": "support",
+};
+
 interface Workspace {
   id: string;
   name: string;
@@ -134,6 +159,8 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
   );
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace>();
+  const [monitoring, setMonitoring] = useState<RouterMonitorSummary | null>(null);
+  const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
 
   const handleSelectWorkspace = (workspace: Workspace) => {
     setSelectedWorkspace(workspace);
@@ -201,8 +228,8 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
         const exists = prev.some((item) => item.id === workspace.id);
         return exists
           ? prev.map((item) =>
-              item.id === workspace.id ? { ...item, ...workspace } : item,
-            )
+            item.id === workspace.id ? { ...item, ...workspace } : item,
+          )
           : [workspace, ...prev];
       });
       setSelectedWorkspace(workspace);
@@ -213,6 +240,25 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
       window.removeEventListener("renult-branch-change", branchHandler);
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedWorkspace?.id) return;
+    let mounted = true;
+    const loadMonitoring = async () => {
+      try {
+        const summary = await renultApi.monitoring.summary(selectedWorkspace.id);
+        if (mounted) setMonitoring(summary);
+      } catch {
+        if (mounted) setMonitoring(null);
+      }
+    };
+    loadMonitoring();
+    const interval = window.setInterval(loadMonitoring, 60000);
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
+  }, [selectedWorkspace?.id]);
 
   const toggleCollapse = () => {
     const next = !isCollapsed;
@@ -243,64 +289,112 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
     return location.pathname.startsWith(path);
   };
 
+  const isSubActive = (path: string) => {
+    const [pathname, search = ""] = path.split("?");
+    const currentSearch = location.search.replace(/^\?/, "");
+    return location.pathname === pathname && currentSearch === search;
+  };
+
+  // Auto-expand a submenu when one of its links is the active route.
+  useEffect(() => {
+    const allItems = [...primaryNavItems, ...supportNavItems, ...secondaryNavItems];
+    const currentSearch = location.search.replace(/^\?/, "");
+    const activeParent = allItems.find((item) =>
+      item.submenu?.some((sub) => {
+        const [pathname, search = ""] = sub.path.split("?");
+        return location.pathname === pathname && currentSearch === search;
+      }),
+    );
+    if (activeParent) setExpandedMenu(activeParent.label);
+  }, [location.pathname, location.search]);
+
   const selectedWorkspaceName = selectedWorkspace?.name || "Select branch";
   const selectedWorkspaceInitials = selectedWorkspace?.name
     ? selectedWorkspace.name.slice(0, 2).toUpperCase()
     : "BR";
 
   const renderNavItem = (item: NavItem) => {
-    if (user?.account_type === "staff") {
-      const permissions = new Set(user.staff_permissions || []);
-      const permissionByPath: Record<string, string> = {
-        "/router": "routers",
-        "/sales": "sales",
-        "/vouchers": "vouchers",
-        "/voucher-support": "support",
-        "/messages": "support",
-        "/network": "network",
-        "/remote-access": "network",
-        "/captive-portals": "captive",
-        "/campaigns": "support",
-      };
+    const permissions = user?.account_type === "staff"
+      ? new Set(user.staff_permissions || [])
+      : null;
+    if (permissions) {
       if (["/withdrawals", "/settings"].includes(item.path)) return null;
-      const required = permissionByPath[item.path];
+      const required = PERMISSION_BY_PATH[item.path];
       if (required && !permissions.has(required)) return null;
     }
-    const active = isActive(item.path);
+
+    const submenu = item.submenu?.filter((sub) => {
+      if (!permissions) return true;
+      const required = PERMISSION_BY_PATH[sub.path.split("?")[0]];
+      return !required || permissions.has(required);
+    });
+    const hasSubmenuItems = !!submenu && submenu.length > 0;
+    const subActive = submenu?.some((sub) => isSubActive(sub.path)) ?? false;
+    const active = isActive(item.path) || subActive;
+    const isExpanded = expandedMenu === item.label;
+    const iconClassName = `shrink-0 ${active ? "text-primary" : item.iconColor || "text-muted-foreground"}`;
+
+    const handleItemClick = () => {
+      if (hasSubmenuItems) {
+        setExpandedMenu((prev) => (prev === item.label ? null : item.label));
+      }
+      handleNavigate(item.path);
+    };
+
+    const routerCountBadge = item.label === "Mikrotiks" && monitoring && monitoring.total > 0 ? (
+      <span
+        className={`flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${monitoring.online > 0 ? "bg-emerald-100 text-emerald-600" : "bg-muted text-muted-foreground"
+          }`}
+        title={`${monitoring.online} of ${monitoring.total} routers online`}
+      >
+        <span className={`h-1.5 w-1.5 rounded-full ${monitoring.online > 0 ? "bg-emerald-500" : "bg-muted-foreground/40"}`} />
+        {monitoring.online}/{monitoring.total}
+      </span>
+    ) : null;
+
     const buttonContent = (
       <button
         key={item.label}
-        onClick={() => handleNavigate(item.path)}
+        onClick={handleItemClick}
         className={`
           flex items-center rounded text-sm font-medium
           transition-all duration-150 ease-in-out group
-          ${isCollapsed ? "justify-center w-10 h-10 mx-auto" : "w-full justify-between px-4 py-2.5"}
-          ${
-            active
-              ? "bg-primary/10 text-primary font-semibold"
-              : "text-foreground/80 hover:bg-muted/60"
+          ${isCollapsed ? "justify-center w-10 h-10 mx-auto relative" : "w-full justify-between px-4 py-2.5"}
+          ${active
+            ? "bg-primary/10 text-primary font-semibold"
+            : "text-foreground/80 hover:bg-muted/60"
           }
         `}
       >
         {isCollapsed ? (
-          <span
-            className={`shrink-0 ${active ? "text-primary" : item.iconColor || "text-muted-foreground"}`}
-          >
+          <span className={iconClassName}>
             {item.icon}
+            {item.label === "Mikrotiks" && monitoring && monitoring.total > 0 && (
+              <span
+                className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full border border-white ${monitoring.online > 0 ? "bg-emerald-500" : "bg-muted-foreground/50"
+                  }`}
+              />
+            )}
           </span>
         ) : (
           <>
             <div className="flex items-center gap-4 overflow-hidden">
-              <span
-                className={`shrink-0 ${active ? "text-primary" : item.iconColor || "text-muted-foreground"}`}
-              >
+              <span className={iconClassName}>
                 {item.icon}
               </span>
               <span className="truncate">{item.label}</span>
             </div>
-            {item.hasSubmenu && (
-              <MoreHorizontal className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-colors" />
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              {routerCountBadge}
+              {item.hasSubmenu && (
+                <MoreHorizontal className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-colors" />
+              )}
+              {hasSubmenuItems && (
+                <ChevronDown
+                  className={`w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                />
+              )}
+            </div>
           </>
         )}
       </button>
@@ -317,6 +411,34 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
             {item.label}
           </TooltipContent>
         </Tooltip>
+      );
+    }
+
+    if (hasSubmenuItems && isExpanded) {
+      return (
+        <div key={item.label}>
+          {buttonContent}
+          <div className="mt-0.5 ml-[34px] pl-3 border-l border-border/40 space-y-0.5">
+            {submenu!.map((sub) => {
+              const subItemActive = isSubActive(sub.path);
+              return (
+                <button
+                  key={sub.label}
+                  onClick={() => handleNavigate(sub.path)}
+                  className={`flex w-full items-center gap-2.5 rounded px-3 py-2 text-xs font-medium transition-colors ${subItemActive
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-foreground/70 hover:bg-muted/60"
+                    }`}
+                >
+                  <span className={subItemActive ? "text-primary" : "text-muted-foreground"}>
+                    {sub.icon}
+                  </span>
+                  <span className="truncate">{sub.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       );
     }
 
@@ -403,11 +525,10 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
                     <button
                       key={workspace.id}
                       onClick={() => handleSelectWorkspace(workspace)}
-                      className={`w-full flex items-center justify-between px-2.5 py-2 rounded text-sm transition-colors text-left ${
-                        isActive
-                          ? "bg-primary/10 text-primary font-semibold"
-                          : "hover:bg-muted/60 text-foreground/80"
-                      }`}
+                      className={`w-full flex items-center justify-between px-2.5 py-2 rounded text-sm transition-colors text-left ${isActive
+                        ? "bg-primary/10 text-primary font-semibold"
+                        : "hover:bg-muted/60 text-foreground/80"
+                        }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <Avatar className="w-5 h-5 shrink-0">
