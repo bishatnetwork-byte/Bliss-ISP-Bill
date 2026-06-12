@@ -63,6 +63,8 @@ export default function RouterPackages() {
   const [isTrialOpen, setIsTrialOpen] = useState(false);
   const [trialEnabled, setTrialEnabled] = useState(false);
   const [trialMinutes, setTrialMinutes] = useState(30);
+  const selectedRouter = routers.find((router) => router.id === selectedRouterId);
+  const routerName = selectedRouter?.name || "";
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -86,8 +88,6 @@ export default function RouterPackages() {
     }
   }, [selectedRouter?.id, selectedRouter?.trial_enabled, selectedRouter?.trial_minutes]);
 
-  const selectedRouter = routers.find((router) => router.id === selectedRouterId);
-  const routerName = selectedRouter?.name || "";
   const packagesQuery = useRouterPackages(selectedRouterId);
   const createPackage = useCreateRouterPackage(selectedRouterId);
   const syncPackages = useSyncRouterPackages(selectedRouterId);
