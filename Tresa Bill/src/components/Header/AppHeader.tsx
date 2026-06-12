@@ -30,6 +30,13 @@ interface AppHeaderProps {
   onCreateForm?: () => void;
 }
 
+interface PingStatus {
+  router_id: string;
+  reachable: boolean;
+  latency_ms: number | null;
+  checking: boolean;
+}
+
 export default function AppHeader({ onCreateForm }: AppHeaderProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("sidebar-collapsed") === "true");
@@ -38,6 +45,8 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
   const { user, logout } = useAuth();
   const [monitoring, setMonitoring] = useState<RouterMonitorSummary | null>(null);
   const [enablingRouterId, setEnablingRouterId] = useState<string | null>(null);
+  // Ping fallback state: keyed by router_id
+  const [pingStatuses, setPingStatuses] = useState<Record<string, PingStatus>>({});
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -47,15 +56,79 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
     return () => window.removeEventListener("sidebar-collapse-change", handler);
   }, []);
 
+  /**
+   * Ping fallback: called after SNMP summary loads.
+   * Fires a direct ping to any router that has no SNMP data (unconfigured or unknown).
+   * Vercel is serverless — the SNMP poller never runs, so these routers are always
+   * "waiting / offline" via SNMP alone. The ping gives us real reachability.
+   *
+   * We ping ANY router not confirmed "online" by SNMP — because on Vercel
+   * the poller never runs, so even configured routers stay "offline" forever.
+   */
+  const runPingFallback = useCallback(async (summary: RouterMonitorSummary) => {
+    const needsPing = summary.routers.filter(
+      (r) => r.status !== "online"
+    );
+    if (needsPing.length === 0) return;
+
+    // Mark as "checking" immediately so the UI shows a spinner/pulse
+    setPingStatuses((prev) => {
+      const next = { ...prev };
+      needsPing.forEach((r) => {
+        next[r.router_id] = {
+          router_id: r.router_id,
+          reachable: false,
+          latency_ms: null,
+          checking: true,
+        };
+      });
+      return next;
+    });
+
+    // Fire all pings concurrently
+    const results = await Promise.allSettled(
+      needsPing.map(async (r) => {
+        const res = await renultApi.routers.ping(r.router_id, { timeout_seconds: 5 });
+        return { router_id: r.router_id, reachable: res.reachable, latency_ms: res.latency_ms };
+      })
+    );
+
+    // Persist results
+    setPingStatuses((prev) => {
+      const next = { ...prev };
+      results.forEach((result, idx) => {
+        const routerId = needsPing[idx].router_id;
+        if (result.status === "fulfilled") {
+          next[routerId] = {
+            router_id: routerId,
+            reachable: result.value.reachable,
+            latency_ms: result.value.latency_ms,
+            checking: false,
+          };
+        } else {
+          next[routerId] = {
+            router_id: routerId,
+            reachable: false,
+            latency_ms: null,
+            checking: false,
+          };
+        }
+      });
+      return next;
+    });
+  }, []);
+
   const loadMonitoring = useCallback(async () => {
     const branchId = localStorage.getItem("selected-workspace");
     try {
       const summary = await renultApi.monitoring.summary(branchId);
       setMonitoring(summary);
+      // After SNMP summary, run ping for routers with no real SNMP data
+      runPingFallback(summary);
     } catch {
       setMonitoring(null);
     }
-  }, []);
+  }, [runPingFallback]);
 
   useEffect(() => {
     loadMonitoring();
@@ -90,9 +163,7 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
   const getBreadcrumbs = () => {
     const path = location.pathname;
     if (path === "/") {
-      return [
-        { label: "Home", path: "/", isLast: true }
-      ];
+      return [{ label: "Home", path: "/", isLast: true }];
     }
 
     const parts = path.split("/").filter(Boolean);
@@ -107,27 +178,73 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
       if (part === "settings") label = "Profile";
       if (part === "bookmark-documents") label = "Documents";
 
-      breadcrumbs.push({
-        label,
-        path: currentPath,
-        isLast
-      });
+      breadcrumbs.push({ label, path: currentPath, isLast });
     });
 
     return breadcrumbs;
   };
 
+  /**
+   * Compute the effective status for a single router:
+   * - If SNMP confirms "online", trust it.
+   * - For anything else (offline / unknown), use ping fallback if available.
+   *   On Vercel the poller never runs, so SNMP "offline" is unreliable.
+   */
+  const getEffectiveRouterStatus = (
+    routerId: string,
+    snmpStatus: "online" | "offline" | "unknown",
+    configured: boolean
+  ): { status: "online" | "offline" | "unknown" | "checking"; method: "snmp" | "ping" } => {
+    // Only trust SNMP when it says "online" — that's a real confirmed reading
+    if (snmpStatus === "online") {
+      return { status: "online", method: "snmp" };
+    }
+    // For everything else, prefer ping data if we have it
+    const ping = pingStatuses[routerId];
+    if (!ping) return { status: snmpStatus, method: configured ? "snmp" : "ping" };
+    if (ping.checking) return { status: "checking", method: "ping" };
+    return { status: ping.reachable ? "online" : "offline", method: "ping" };
+  };
+
+  /**
+   * Re-compute aggregate online/offline/unknown counts using
+   * the merged SNMP + ping status for each router.
+   */
+  const computedCounts = (() => {
+    if (!monitoring) return { online: 0, offline: 0, unknown: 0, total: 0 };
+    let online = 0, offline = 0, unknown = 0;
+    monitoring.routers.forEach((r) => {
+      const eff = getEffectiveRouterStatus(r.router_id, r.status, r.configured);
+      if (eff.status === "online") online++;
+      else if (eff.status === "offline") offline++;
+      else unknown++; // "unknown" or "checking"
+    });
+    return { online, offline, unknown, total: monitoring.total };
+  })();
+
+  // Overall badge status: prefer any "online" signal over "offline"
+  const overallStatus =
+    computedCounts.online > 0
+      ? "online"
+      : computedCounts.offline > 0
+        ? "offline"
+        : "unknown";
+
   const breadcrumbs = getBreadcrumbs();
-  const monitorColor = monitoring?.status === "online"
-    ? "bg-emerald-500"
-    : monitoring?.status === "offline"
-      ? "bg-red-500"
-      : "bg-muted-foreground/25";
-  const monitorLabel = monitoring?.status === "online"
-    ? "Online"
-    : monitoring?.status === "offline"
-      ? "Offline"
-      : "Waiting";
+  const monitorColor =
+    overallStatus === "online"
+      ? "bg-emerald-500"
+      : overallStatus === "offline"
+        ? "bg-red-500"
+        : "bg-muted-foreground/25";
+  const monitorLabel =
+    overallStatus === "online"
+      ? "Online"
+      : overallStatus === "offline"
+        ? "Offline"
+        : "Waiting";
+
+  const anyPingChecking = Object.values(pingStatuses).some((p) => p.checking);
 
   return (
     <>
@@ -158,25 +275,23 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
               onClick={() => navigate("/")}
               className="flex items-center gap-2 hover:opacity-80 transition-opacity md:hidden"
             >
-              <img
-                src="/icons/mini.png"
-                alt="Logo"
-                className="w-8 h-8 object-contain"
-              />
+              <img src="/icons/mini.png" alt="Logo" className="w-8 h-8 object-contain" />
             </button>
 
             {/* Desktop Dynamic Breadcrumbs */}
             <div className="hidden md:block ml-1">
               <Breadcrumb>
                 <BreadcrumbList>
-                  {breadcrumbs.map((crumb, idx) => (
+                  {breadcrumbs.map((crumb) => (
                     <React.Fragment key={crumb.path}>
                       <BreadcrumbItem>
                         {crumb.isLast ? (
                           <BreadcrumbPage className="font-semibold text-foreground/80">{crumb.label}</BreadcrumbPage>
                         ) : (
                           <BreadcrumbLink asChild>
-                            <Link to={crumb.path} className="text-muted-foreground hover:text-foreground">{crumb.label}</Link>
+                            <Link to={crumb.path} className="text-muted-foreground hover:text-foreground">
+                              {crumb.label}
+                            </Link>
                           </BreadcrumbLink>
                         )}
                       </BreadcrumbItem>
@@ -193,83 +308,130 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2 h-9 px-3 rounded font-semibold text-xs sm:text-sm">
-                  <span className={`h-2.5 w-2.5 rounded-full ${monitorColor}`} />
-                  <span className="hidden sm:inline">{monitorLabel}</span>
+                  {anyPingChecking ? (
+                    <Loader2 className="h-2.5 w-2.5 animate-spin text-amber-500" />
+                  ) : (
+                    <span className={`h-2.5 w-2.5 rounded-full ${monitorColor}`} />
+                  )}
+                  <span className="hidden sm:inline">{anyPingChecking ? "Checking…" : monitorLabel}</span>
                 </Button>
               </PopoverTrigger>
+
               <PopoverContent align="end" className="w-80 p-4 rounded">
+                {/* Header row */}
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-bold">Router SNMP Status</p>
+                    <p className="text-sm font-bold">Router Status</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">SNMP · Ping fallback</p>
                   </div>
-                  <span className={`rounded px-2 py-1 text-[10px] font-bold ${
-                    monitoring?.status === "online"
-                      ? "bg-emerald-100 text-emerald-600"
-                      : monitoring?.status === "offline"
-                        ? "bg-red-100 text-red-600"
-                        : "bg-muted text-muted-foreground"
-                  }`}>{monitorLabel}</span>
+                  <span
+                    className={`rounded px-2 py-1 text-[10px] font-bold ${overallStatus === "online"
+                        ? "bg-emerald-100 text-emerald-600"
+                        : overallStatus === "offline"
+                          ? "bg-red-100 text-red-600"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                  >
+                    {anyPingChecking ? "Checking" : monitorLabel}
+                  </span>
                 </div>
+
+                {/* Visual bar */}
                 <div
                   className="mt-4 flex h-7 items-stretch justify-between gap-1"
                   role="img"
-                  aria-label="Router SNMP status indicator"
+                  aria-label="Router status bar"
                 >
-                  {Array.from({ length: Math.max(1, monitoring?.total || 1) }, (_, index) => (
-                    <span
-                      key={index}
-                      className={`min-w-1 flex-1 rounded-full ${
-                        index < (monitoring?.online || 0)
-                          ? "bg-emerald-500"
-                          : index < (monitoring?.online || 0) + (monitoring?.offline || 0)
-                            ? "bg-red-500"
-                            : "bg-muted-foreground/20"
-                      }`}
-                    />
-                  ))}
+                  {Array.from({ length: Math.max(1, monitoring?.total || 1) }, (_, index) => {
+                    const router = monitoring?.routers[index];
+                    const eff = router
+                      ? getEffectiveRouterStatus(router.router_id, router.status, router.configured)
+                      : null;
+                    const barColor =
+                      eff?.status === "online"
+                        ? "bg-emerald-500"
+                        : eff?.status === "offline"
+                          ? "bg-red-500"
+                          : eff?.status === "checking"
+                            ? "bg-amber-400 animate-pulse"
+                            : "bg-muted-foreground/20";
+                    return <span key={index} className={`min-w-1 flex-1 rounded-full ${barColor}`} />;
+                  })}
                 </div>
+
+                {/* Aggregate count */}
                 <p className="mt-3 text-xs text-muted-foreground">
                   {monitoring?.total
-                    ? `${monitoring.online} online, ${monitoring.offline} offline, ${monitoring.unknown} waiting`
+                    ? `${computedCounts.online} online, ${computedCounts.offline} offline, ${computedCounts.unknown} ${anyPingChecking ? "checking" : "unknown"}`
                     : "No active routers are being monitored."}
                 </p>
-                {monitoring?.routers?.some((router) => !router.configured) && (
+
+                {/* Per-router detail list */}
+                {monitoring && monitoring.routers.length > 0 && (
                   <div className="mt-4 space-y-2 border-t pt-3">
-                    <p className="text-[11px] font-semibold text-foreground">
-                      SNMP setup required
-                    </p>
-                    {monitoring.routers
-                      .filter((router) => !router.configured)
-                      .map((router) => (
-                        <div key={router.router_id} className="flex items-center justify-between gap-3 rounded border border-border/50 p-2">
-                          <div className="min-w-0">
+                    {monitoring.routers.map((router) => {
+                      const eff = getEffectiveRouterStatus(router.router_id, router.status, router.configured);
+                      const ping = pingStatuses[router.router_id];
+                      return (
+                        <div
+                          key={router.router_id}
+                          className="flex items-center justify-between gap-3 rounded border border-border/50 p-2"
+                        >
+                          <div className="min-w-0 flex-1">
                             <p className="truncate text-xs font-medium">{router.router_name}</p>
                             <p className="text-[10px] text-muted-foreground">
-                              Physical MikroTik + CHR
+                              {eff.method === "ping"
+                                ? ping?.checking
+                                  ? "Pinging…"
+                                  : ping?.latency_ms != null
+                                    ? `Ping · ${ping.latency_ms}ms`
+                                    : "Ping · no response"
+                                : "SNMP v2c"}
                             </p>
                           </div>
-                          <Button
-                            size="sm"
-                            className="h-7 shrink-0 gap-1.5 px-2 text-[10px]"
-                            disabled={enablingRouterId !== null}
-                            onClick={() => handleEnableSnmp(router.router_id)}
-                          >
-                            {enablingRouterId === router.router_id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <RadioTower className="h-3 w-3" />
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* Status badge */}
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${eff.status === "online"
+                                  ? "bg-emerald-100 text-emerald-600"
+                                  : eff.status === "offline"
+                                    ? "bg-red-100 text-red-600"
+                                    : "bg-amber-100 text-amber-600"
+                                }`}
+                            >
+                              {eff.status === "checking" ? "…" : eff.status}
+                            </span>
+
+                            {/* Enable SNMP button for unconfigured routers */}
+                            {!router.configured && (
+                              <Button
+                                size="sm"
+                                className="h-7 shrink-0 gap-1.5 px-2 text-[10px]"
+                                disabled={enablingRouterId !== null}
+                                onClick={() => handleEnableSnmp(router.router_id)}
+                              >
+                                {enablingRouterId === router.router_id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <RadioTower className="h-3 w-3" />
+                                )}
+                                SNMP
+                              </Button>
                             )}
-                            Enable SNMP
-                          </Button>
+                          </div>
                         </div>
-                      ))}
+                      );
+                    })}
                   </div>
                 )}
+
+                {/* Footer */}
                 <p className="mt-4 border-t pt-3 text-[11px] text-muted-foreground">
-                  Polling every 60s via SNMP v2c
-                  {monitoring?.last_checked_at
-                    ? ` · last checked ${new Date(monitoring.last_checked_at).toLocaleTimeString()}`
-                    : ""}
+                  {anyPingChecking
+                    ? "Pinging routers for reachability…"
+                    : monitoring?.last_checked_at
+                      ? `SNMP · last checked ${new Date(monitoring.last_checked_at).toLocaleTimeString()}`
+                      : "Ping fallback active · enable SNMP for full metrics"}
                 </p>
               </PopoverContent>
             </Popover>
@@ -294,10 +456,10 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
               >
                 <DropdownMenuLabel className="px-3 py-2">
                   <div className="flex flex-col space-y-0.5">
-                    <p className="text-sm font-bold truncate">
-                      {user?.full_name || "My Account"}
-                    </p>
-                    {user?.email && <p className="text-xs text-muted-foreground truncate">{user.email}</p>}
+                    <p className="text-sm font-bold truncate">{user?.full_name || "My Account"}</p>
+                    {user?.email && (
+                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                    )}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-border/40 my-1" />

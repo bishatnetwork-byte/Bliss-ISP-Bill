@@ -29,16 +29,26 @@ import {
   useRouterPackages,
   useRouters,
   useSyncRouterPackages,
+  useUpdateRouterPackage,
   useUpdateRouterTrial,
 } from "@/hooks/useRouters";
 import { cn } from "@/lib/utils";
-import { AlertCircle, ArrowLeft, Loader2, PackagePlus, Plus, RefreshCw, Timer, Trash2, Wifi } from "lucide-react";
+import { AlertCircle, Loader2, PackagePlus, Pencil, Plus, RefreshCw, Timer, Trash2, Wifi } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+// Parses "24hours" → { num: "24", unit: "hours" } for the limit UI.
+function parseLimitToComponents(limit: string): { num: string; unit: string } {
+  const m = limit.match(/^(\d+)\s*(minutes?|hours?|days?|weeks?|months?)$/i);
+  if (!m) return { num: "24", unit: "hours" };
+  const raw = m[2].toLowerCase();
+  const unit = raw.endsWith("s") ? raw : raw + "s"; // normalise to plural
+  return { num: m[1], unit };
 }
 
 const initialForm: RouterPackagePayload = {
@@ -61,6 +71,14 @@ export default function RouterPackages() {
   const [form, setForm] = useState<RouterPackagePayload>(initialForm);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isTrialOpen, setIsTrialOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingPackageId, setEditingPackageId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<RouterPackagePayload>(initialForm);
+  // Limit field split: value + unit, composed to "24hours" / "30minutes" etc.
+  const [createLimitNum, setCreateLimitNum] = useState("24");
+  const [createLimitUnit, setCreateLimitUnit] = useState("hours");
+  const [editLimitNum, setEditLimitNum] = useState("24");
+  const [editLimitUnit, setEditLimitUnit] = useState("hours");
   const [trialEnabled, setTrialEnabled] = useState(false);
   const [trialMinutes, setTrialMinutes] = useState(30);
   const selectedRouter = routers.find((router) => router.id === selectedRouterId);
@@ -90,6 +108,7 @@ export default function RouterPackages() {
 
   const packagesQuery = useRouterPackages(selectedRouterId);
   const createPackage = useCreateRouterPackage(selectedRouterId);
+  const updatePackage = useUpdateRouterPackage(selectedRouterId);
   const syncPackages = useSyncRouterPackages(selectedRouterId);
   const deletePackage = useDeleteRouterPackage(selectedRouterId);
   const updateTrial = useUpdateRouterTrial(branchId);
@@ -104,17 +123,70 @@ export default function RouterPackages() {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
+  const updateEditForm = (key: keyof RouterPackagePayload, value: string | number) => {
+    setEditForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleOpenEdit = (item: typeof packages[number]) => {
+    setEditingPackageId(item.id);
+    const { num, unit } = parseLimitToComponents(item.limit);
+    setEditLimitNum(num);
+    setEditLimitUnit(unit);
+    setEditForm({
+      limit: item.limit,
+      devices: item.devices,
+      data: item.data,
+      profile: item.profile,
+      total: item.total,
+      priority: item.priority,
+      speed_type: item.speed_type,
+      rate_limit: item.rate_limit ?? "",
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEditPackage = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedRouterId || editingPackageId === null) return;
+    const composedLimit = `${editLimitNum.trim()}${editLimitUnit}`;
+    try {
+      const result = await updatePackage.mutateAsync({
+        packageRowId: editingPackageId,
+        payload: {
+          ...editForm,
+          limit: composedLimit,
+          devices: editForm.devices.trim(),
+          data: editForm.data.trim(),
+          profile: editForm.profile.trim(),
+          total: editForm.total.trim(),
+          speed_type: editForm.speed_type.trim(),
+          rate_limit: editForm.rate_limit?.trim() || null,
+        },
+      });
+      if (result.router_sync_error) {
+        toast.warning(`Package updated, but MikroTik sync failed: ${result.router_sync_error}`);
+      } else {
+        toast.success("Package updated and pushed to MikroTik.");
+      }
+      setIsEditOpen(false);
+      setEditingPackageId(null);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to update package."));
+    }
+  };
+
   const handleCreatePackage = async (event: FormEvent) => {
     event.preventDefault();
     if (!selectedRouterId) {
       toast.error("Select a router first.");
       return;
     }
+    const composedLimit = `${createLimitNum.trim()}${createLimitUnit}`;
 
     try {
       const result = await createPackage.mutateAsync({
         ...form,
-        limit: form.limit.trim(),
+        limit: composedLimit,
         devices: form.devices.trim(),
         data: form.data.trim(),
         profile: form.profile.trim(),
@@ -280,7 +352,7 @@ export default function RouterPackages() {
                   <TableHead className="text-xs">Devices</TableHead>
                   <TableHead className="text-xs">Rate</TableHead>
                   <TableHead className="text-xs">Price</TableHead>
-                  <TableHead className="w-[70px] text-right text-xs">Action</TableHead>
+                  <TableHead className="w-[100px] text-right text-xs">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -312,9 +384,14 @@ export default function RouterPackages() {
                       </TableCell>
                       <TableCell className="text-xs font-bold">UGX {Number(item.total || 0).toLocaleString()}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(item.id)} disabled={deletePackage.isPending}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(item)} title="Edit package">
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(item.id)} disabled={deletePackage.isPending} title="Delete package">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -352,28 +429,35 @@ export default function RouterPackages() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-muted-foreground">Limit</Label>
-                <Select value={form.limit} onValueChange={(value) => updateForm("limit", value)}>
-                  <SelectTrigger className="h-9 text-xs bg-card/40 border-border/60">
-                    <SelectValue placeholder="Select limit" />
+            {/* Limit: number value + unit selector */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-muted-foreground">Limit</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min="1"
+                  value={createLimitNum}
+                  onChange={(e) => setCreateLimitNum(e.target.value)}
+                  placeholder="24"
+                  className="h-9 text-xs bg-card/40 border-border/60 w-24 shrink-0"
+                />
+                <Select value={createLimitUnit} onValueChange={setCreateLimitUnit}>
+                  <SelectTrigger className="h-9 text-xs bg-card/40 border-border/60 flex-1">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1hour">1 Hour</SelectItem>
-                    <SelectItem value="2hours">2 Hours</SelectItem>
-                    <SelectItem value="3hours">3 Hours</SelectItem>
-                    <SelectItem value="6hours">6 Hours</SelectItem>
-                    <SelectItem value="12hours">12 Hours</SelectItem>
-                    <SelectItem value="24hours">24 Hours (1 Day)</SelectItem>
-                    <SelectItem value="2days">2 Days</SelectItem>
-                    <SelectItem value="3days">3 Days</SelectItem>
-                    <SelectItem value="7days">7 Days (1 Week)</SelectItem>
-                    <SelectItem value="14days">14 Days (2 Weeks)</SelectItem>
-                    <SelectItem value="30days">30 Days (1 Month)</SelectItem>
+                    <SelectItem value="minutes">Minutes</SelectItem>
+                    <SelectItem value="hours">Hours</SelectItem>
+                    <SelectItem value="days">Days</SelectItem>
+                    <SelectItem value="weeks">Weeks</SelectItem>
+                    <SelectItem value="months">Months</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              <p className="text-[11px] text-muted-foreground">Composes to: <span className="font-mono">{createLimitNum}{createLimitUnit}</span></p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-muted-foreground">Devices</Label>
                 <Input value={form.devices} onChange={(event) => updateForm("devices", event.target.value)} placeholder="1" className="h-9 text-xs bg-card/40 border-border/60" />
@@ -415,6 +499,95 @@ export default function RouterPackages() {
             <Button type="submit" disabled={!selectedRouterId || createPackage.isPending} className="w-full gap-2 mt-2 h-9 text-xs font-semibold">
               {createPackage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
               Save And Push Package
+            </Button>
+          </form>
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Edit Package Sheet ───────────────────────────────────── */}
+      <Sheet open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md border-border/40 bg-background overflow-y-auto">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+              <Pencil className="w-5 h-5 text-primary" />
+              Edit Package
+            </SheetTitle>
+            <SheetDescription className="text-xs text-muted-foreground mt-1">
+              Update this package and push the changes to the MikroTik router profile.
+            </SheetDescription>
+          </SheetHeader>
+
+          <form onSubmit={handleEditPackage} className="space-y-5 py-6">
+            {/* Limit: number value + unit selector */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-muted-foreground">Limit</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min="1"
+                  value={editLimitNum}
+                  onChange={(e) => setEditLimitNum(e.target.value)}
+                  placeholder="24"
+                  className="h-9 text-xs bg-card/40 border-border/60 w-24 shrink-0"
+                />
+                <Select value={editLimitUnit} onValueChange={setEditLimitUnit}>
+                  <SelectTrigger className="h-9 text-xs bg-card/40 border-border/60 flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="minutes">Minutes</SelectItem>
+                    <SelectItem value="hours">Hours</SelectItem>
+                    <SelectItem value="days">Days</SelectItem>
+                    <SelectItem value="weeks">Weeks</SelectItem>
+                    <SelectItem value="months">Months</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Composes to: <span className="font-mono">{editLimitNum}{editLimitUnit}</span></p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-muted-foreground">Devices</Label>
+                <Input value={editForm.devices} onChange={(e) => updateEditForm("devices", e.target.value)} placeholder="1" className="h-9 text-xs bg-card/40 border-border/60" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-muted-foreground">Profile Name</Label>
+              <Input value={editForm.profile} onChange={(e) => updateEditForm("profile", e.target.value)} placeholder="24hours" className="h-9 text-xs bg-card/40 border-border/60" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-muted-foreground">Speed Description</Label>
+              <Input value={editForm.data} onChange={(e) => updateEditForm("data", e.target.value)} placeholder="SuperFast Upto 100MBps" className="h-9 text-xs bg-card/40 border-border/60" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-muted-foreground">Price UGX</Label>
+                <Input value={editForm.total} onChange={(e) => updateEditForm("total", e.target.value)} placeholder="1000" className="h-9 text-xs bg-card/40 border-border/60" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-muted-foreground">Priority</Label>
+                <Input type="number" value={editForm.priority} onChange={(e) => updateEditForm("priority", Number(e.target.value))} className="h-9 text-xs bg-card/40 border-border/60" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-muted-foreground">Speed Type</Label>
+                <Input value={editForm.speed_type} onChange={(e) => updateEditForm("speed_type", e.target.value)} placeholder="SuperFast" className="h-9 text-xs bg-card/40 border-border/60" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-muted-foreground">Rate Limit</Label>
+                <Input value={editForm.rate_limit || ""} onChange={(e) => updateEditForm("rate_limit", e.target.value)} placeholder="100M/100M" className="h-9 text-xs bg-card/40 border-border/60" />
+              </div>
+            </div>
+
+            <Button type="submit" disabled={updatePackage.isPending} className="w-full gap-2 mt-2 h-9 text-xs font-semibold">
+              {updatePackage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+              Update Package
             </Button>
           </form>
         </SheetContent>

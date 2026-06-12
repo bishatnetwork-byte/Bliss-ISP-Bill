@@ -12,6 +12,8 @@ export function useRouters(branchId: string, query?: { limit?: number; offset?: 
     queryFn: () => renultApi.routers.list(branchId, query),
     enabled: !!branchId,
     retry: 1,
+    staleTime: 30000,
+    gcTime: 300000,
   });
 }
 
@@ -87,6 +89,7 @@ export function useRouterStatus(routerId: string, enabled = true) {
     enabled: !!routerId && enabled,
     refetchInterval: 10000,
     retry: 1,
+    staleTime: 5000,
   });
 }
 
@@ -222,6 +225,17 @@ export function useCreateRouterPackage(routerId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: RouterPackagePayload) => renultApi.packages.create(routerId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["routerPackages", routerId] });
+    },
+  });
+}
+
+export function useUpdateRouterPackage(routerId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ packageRowId, payload }: { packageRowId: number; payload: Partial<RouterPackagePayload> }) =>
+      renultApi.packages.update(routerId, packageRowId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["routerPackages", routerId] });
     },

@@ -91,9 +91,7 @@ export default function SettingsLayout({
       window.removeEventListener("sidebar-collapse-change", handler);
   }, []);
 
-  const isActive = (path: string) => {
-    return location.pathname === path;
-  };
+  const isActive = (path: string) => location.pathname === path;
 
   return (
     <div
@@ -103,13 +101,55 @@ export default function SettingsLayout({
       <SEO title={title} />
       <AppHeader />
 
+      {/* ── Mobile / Tablet: horizontal scrollable tab strip (hidden on lg+) ── */}
+      <div className="lg:hidden sticky top-[57px] z-20 bg-white border-b border-border/50 shadow-sm">
+        <div
+          className="flex overflow-x-auto gap-1 px-2 py-1.5"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          {navItems.map((item) => {
+            const active = isActive(item.path);
+            return (
+              <button
+                key={item.id}
+                onClick={() => navigate(item.path)}
+                className={`
+                  flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded
+                  text-[11px] font-medium transition-all duration-150 cursor-pointer whitespace-nowrap
+                  ${active
+                    ? "bg-primary text-white"
+                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  }
+                `}
+              >
+                <span
+                  className={`transition-colors duration-150 ${active ? "text-white" : "text-muted-foreground/70"
+                    }`}
+                >
+                  {item.icon}
+                </span>
+                <span>{item.label}</span>
+                {item.badge && (
+                  <span
+                    className={`
+                      text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none
+                      ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}
+                    `}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="flex min-h-[calc(100vh-57px)]">
-        {/* ── settings sidebar ── */}
+        {/* ── Desktop settings sidebar (lg+) ── */}
         <aside className="hidden lg:flex flex-col w-[250px] shrink-0 border-r border-border/50 bg-white">
           <div className="px-4 pt-6 pb-2">
-            <span className="text-lg font-semibold text-black">
-              Settings
-            </span>
+            <span className="text-lg font-semibold text-black">Settings</span>
           </div>
 
           <nav className="flex-1 px-2 pb-4 pt-1">
@@ -121,11 +161,11 @@ export default function SettingsLayout({
                     key={item.id}
                     onClick={() => navigate(item.path)}
                     className={`
-                      group flex items-center gap-2.5 px-3 py-2 m-0.5 rounded  text-sm font-medium
+                      group flex items-center gap-2.5 px-3 py-2 m-0.5 rounded text-sm font-medium
                       transition-all duration-150 cursor-pointer w-full text-left
                       ${active
-                        ? "bg-primary text-white border border-border/10 "
-                        : "text-muted-foreground hover:bg-muted/40 hover:text-foreground "
+                        ? "bg-primary text-white border border-border/10"
+                        : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                       }
                     `}
                   >
@@ -158,7 +198,7 @@ export default function SettingsLayout({
           </nav>
         </aside>
 
-        {/* ── main content ── */}
+        {/* ── Main content ── */}
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>

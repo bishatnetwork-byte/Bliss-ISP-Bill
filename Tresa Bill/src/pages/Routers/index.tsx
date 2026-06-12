@@ -34,6 +34,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import RouterDetails from "./Router_Details";
+import { Skeleton } from "@/components/ui/skeleton";
 import { RouterResponse, RouterUpdate } from "@/api/foreform";
 import {
     useRouters,
@@ -394,9 +395,11 @@ export default function RoutersIndex() {
                         {/* Full Width Router Cards Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-h-0 overflow-y-auto">
                             {isLoading ? (
-                                <div className="col-span-full flex items-center justify-center p-12">
-                                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                                </div>
+                                <>
+                                    <RouterCardSkeleton />
+                                    <RouterCardSkeleton />
+                                    <RouterCardSkeleton />
+                                </>
                             ) : filteredRouters.length === 0 ? (
                                 <Card className="p-10 border border-dashed rounded text-center text-muted-foreground bg-card col-span-full">
                                     <AlertCircle className="w-8 h-8 mx-auto mb-2 text-muted-foreground/60" />
@@ -1016,6 +1019,48 @@ function RouterCard({
                     >
                         <Trash2 className="w-3 h-3" />
                     </Button>
+                </div>
+            </div>
+        </Card>
+    );
+}
+
+function RouterCardSkeleton() {
+    return (
+        <Card className="border border-border/50 shadow-sm rounded flex flex-col justify-between bg-card animate-pulse">
+            <div className="p-4 space-y-3">
+                {/* Details Header */}
+                <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5 w-full">
+                        <Skeleton className="w-8 h-8 rounded bg-muted/70" />
+                        <div className="space-y-1.5 flex-1">
+                            <Skeleton className="h-3.5 w-24 bg-muted/70" />
+                            <Skeleton className="h-2.5 w-32 bg-muted/70" />
+                        </div>
+                    </div>
+                    <Skeleton className="h-4 w-12 rounded bg-muted/70" />
+                </div>
+
+                {/* Mini Telemetry Values */}
+                <div className="grid grid-cols-2 gap-2 text-[12px] pt-1">
+                    <Skeleton className="h-3 w-16 bg-muted/70" />
+                    <Skeleton className="h-3 w-20 bg-muted/70" />
+                </div>
+
+                {/* Bottom stats row */}
+                <div className="grid grid-cols-3 gap-1 pt-2 border-t border-border/20">
+                    <Skeleton className="h-3 w-12 bg-muted/70" />
+                    <Skeleton className="h-3 w-12 bg-muted/70" />
+                    <Skeleton className="h-3 w-12 bg-muted/70" />
+                </div>
+            </div>
+
+            {/* Action Bar */}
+            <div className="border-t border-border/50 px-4 py-2 flex items-center justify-between bg-muted/40 rounded-b">
+                <Skeleton className="h-3.5 w-20 bg-muted/70" />
+                <div className="flex items-center gap-1">
+                    <Skeleton className="h-6 w-6 rounded bg-muted/70" />
+                    <Skeleton className="h-6 w-6 rounded bg-muted/70" />
                 </div>
             </div>
         </Card>

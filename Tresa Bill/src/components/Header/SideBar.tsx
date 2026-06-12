@@ -549,7 +549,7 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
                   className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-sm text-foreground/80 hover:bg-muted/60 transition-colors text-left"
                 >
                   <Settings className="w-4 h-4 text-muted-foreground" />
-                  <span className="font-medium">Manage Branches</span>
+                  <span className="font-medium">Manage Hotspot Branches</span>
                 </button>
                 <button
                   onClick={() => handleNavigate("/branches?new=branch")}

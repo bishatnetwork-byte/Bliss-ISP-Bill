@@ -41,6 +41,8 @@ interface HistoryPoint {
     time: string;
     cpu: number;
     ram: number;
+    temp: number;
+    voltage: number;
 }
 
 function parseBool(val: any): boolean {
@@ -65,6 +67,8 @@ export default function RouterDetails({ router }: RouterDetailsProps) {
     const rosVersion = statusData?.system_resource?.['version'] ?? 'v7.x';
     const boardModel = statusData?.system_resource?.['board-name'] ?? router.description ?? 'MikroTik';
     const totalMemoryStr = totalMemory ? `${Math.round(totalMemory / (1024 * 1024))} MB` : '256 MB';
+    const tempVal = statusData?.system_resource?.temperature ?? statusData?.system_resource?.['cpu-temperature'] ?? (isOnline ? 41 : 0);
+    const voltageVal = statusData?.system_resource?.voltage ?? (isOnline ? 24.2 : 0);
 
     // Telemetry history state
     const [history, setHistory] = useState<HistoryPoint[]>([]);
@@ -79,11 +83,13 @@ export default function RouterDetails({ router }: RouterDetailsProps) {
             initialHistory.push({
                 time: timeStr,
                 cpu: isOnline ? Math.max(2, Math.min(98, cpuUsage + Math.floor(Math.random() * 9) - 4)) : 0,
-                ram: isOnline ? Math.max(5, Math.min(95, memoryUsage + Math.floor(Math.random() * 5) - 2)) : 0
+                ram: isOnline ? Math.max(5, Math.min(95, memoryUsage + Math.floor(Math.random() * 5) - 2)) : 0,
+                temp: isOnline ? Math.max(10, Math.min(95, tempVal + Math.floor(Math.random() * 3) - 1)) : 0,
+                voltage: isOnline ? Math.max(5, Math.min(48, Number((voltageVal + (Math.random() * 0.4 - 0.2)).toFixed(1)))) : 0
             });
         }
         setHistory(initialHistory);
-    }, [router.id, isOnline]);
+    }, [router.id, isOnline, tempVal, voltageVal]);
 
     // Update telemetry history when statusData updates
     useEffect(() => {
@@ -93,14 +99,14 @@ export default function RouterDetails({ router }: RouterDetailsProps) {
 
         setHistory(prev => {
             if (prev.length === 0) {
-                return [{ time: timeStr, cpu: cpuUsage, ram: memoryUsage }];
+                return [{ time: timeStr, cpu: cpuUsage, ram: memoryUsage, temp: tempVal, voltage: voltageVal }];
             }
             return [
                 ...prev.slice(Math.max(0, prev.length - 14)),
-                { time: timeStr, cpu: cpuUsage, ram: memoryUsage }
+                { time: timeStr, cpu: cpuUsage, ram: memoryUsage, temp: tempVal, voltage: voltageVal }
             ];
         });
-    }, [isOnline, cpuUsage, memoryUsage]);
+    }, [isOnline, cpuUsage, memoryUsage, tempVal, voltageVal]);
 
     // Map interfaces to ports
     const ports: PortStatus[] = (statusData?.interfaces && statusData.interfaces.length > 0)
@@ -148,6 +154,33 @@ export default function RouterDetails({ router }: RouterDetailsProps) {
                                 <span>{pld.name}</span>
                             </span>
                             <span className="font-bold">{pld.value}%</span>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+        return null;
+    };
+
+    // Custom compact tooltip for the diagnostics area chart
+    const CustomDiagnosticsTooltip = ({ active, payload }: any) => {
+        if (active && payload && payload.length) {
+            return (
+                <div className="bg-popover border border-border p-2 rounded text-[12px] font-mono shadow-md flex flex-col gap-1 text-popover-foreground">
+                    {payload[0].payload.time && (
+                        <p className="text-[12px] text-muted-foreground font-bold border-b border-border/40 pb-0.5 mb-0.5">
+                            {payload[0].payload.time}
+                        </p>
+                    )}
+                    {payload.map((pld: any) => (
+                        <div key={pld.name} className="flex items-center justify-between gap-4">
+                            <span className="flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: pld.color || pld.fill }} />
+                                <span>{pld.name}</span>
+                            </span>
+                            <span className="font-bold">
+                                {pld.name === "Temp" ? `${pld.value} °C` : `${pld.value} V`}
+                            </span>
                         </div>
                     ))}
                 </div>
@@ -247,7 +280,7 @@ export default function RouterDetails({ router }: RouterDetailsProps) {
                             <div
                                 key={port.name}
                                 className={cn(
-                                    "flex flex-col items-center bg-card border p-1 rounded w-14 h-16 justify-between select-none transition-all relative",
+                                    "flex flex-col items-center bg-card border p-1 rounded w-14 sm:w-16 h-16 sm:h-18 justify-between select-none transition-all relative",
                                     port.connected ? "border-border shadow-sm" : "border-border/20 opacity-40"
                                 )}
                             >
@@ -260,7 +293,7 @@ export default function RouterDetails({ router }: RouterDetailsProps) {
                                 </div>
 
                                 {/* Physical port cage */}
-                                <div className="w-9 h-6 border-2 border-border/80 rounded bg-muted/30 flex flex-col justify-end items-center mt-2.5 p-0.5">
+                                <div className="w-9 h-6 border-2 border-border/80 rounded bg-muted/30 flex flex-col justify-end items-center mt-3 p-0.5">
                                     {/* Gold contact pins mapping */}
                                     <div className="w-full flex justify-between px-0.5 mb-0.5">
                                         {[1, 2, 3, 4, 5].map(i => (
@@ -270,14 +303,14 @@ export default function RouterDetails({ router }: RouterDetailsProps) {
                                     <span className="text-[5.5px] font-bold text-muted-foreground font-mono leading-none">RJ45</span>
                                 </div>
 
-                                <div className="text-[7.5px] font-mono font-bold text-muted-foreground tracking-tight uppercase text-center">
+                                <div className="text-[7px] sm:text-[7.5px] font-mono font-bold text-muted-foreground tracking-tight uppercase text-center truncate w-full px-0.5" title={port.name}>
                                     {port.name}
                                 </div>
                             </div>
                         ))}
 
                         {/* Power plug connector mock details */}
-                        <div className="hidden sm:flex flex-col items-center justify-center border border-dashed border-border/80 p-1.5 rounded h-16 w-16 shrink-0 ml-auto bg-muted/10">
+                        <div className="hidden sm:flex flex-col items-center justify-center border border-dashed border-border/80 p-1.5 rounded h-16 sm:h-18 w-16 shrink-0 ml-auto bg-muted/10">
                             <Zap className="w-3.5 h-3.5 text-amber-500" />
                             <span className="text-[7.5px] font-mono font-bold mt-0.5 text-muted-foreground">24V DC</span>
                         </div>
@@ -289,18 +322,18 @@ export default function RouterDetails({ router }: RouterDetailsProps) {
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
                             {ports.filter(p => p.connected).map(p => (
                                 <div key={p.name} className="bg-muted/35 border border-border/50 rounded p-1.5 flex flex-col gap-0.5">
-                                    <div className="flex justify-between items-center text-[12px]">
-                                        <span className="font-bold text-foreground font-mono uppercase">{p.name}</span>
+                                    <div className="flex justify-between items-center text-[11px] sm:text-xs">
+                                        <span className="font-bold text-foreground font-mono uppercase truncate mr-1" title={p.name}>{p.name}</span>
                                         <Badge className={cn(
-                                            "text-[7px] py-0 px-1 border-none",
+                                            "text-[7px] py-0 px-1 border-none shrink-0",
                                             p.type === "WAN" ? "bg-emerald-500/10 text-emerald-600" : "bg-sky-500/10 text-sky-600"
                                         )}>
                                             {p.type}
                                         </Badge>
                                     </div>
-                                    <div className="flex justify-between items-center text-[12px] font-mono mt-0.5 text-muted-foreground">
-                                        <span>Tx: {p.txRate}</span>
-                                        <span>Rx: {p.rxRate}</span>
+                                    <div className="flex flex-col xs:flex-row xs:justify-between items-start xs:items-center text-[10px] sm:text-[11px] font-mono mt-0.5 text-muted-foreground gap-0.5">
+                                        <span className="truncate">Tx: {p.txRate}</span>
+                                        <span className="truncate">Rx: {p.rxRate}</span>
                                     </div>
                                 </div>
                             ))}
@@ -395,35 +428,102 @@ export default function RouterDetails({ router }: RouterDetailsProps) {
 
                 {/* Hardware Diagnostic Details */}
                 <div className="lg:col-span-4">
-                    <Card className="bg-card border border-border/50 rounded p-4 h-full flex flex-col justify-between min-h-[220px]">
-                        <div>
-                            <h3 className="text-xs font-bold  text-muted-foreground mb-3 flex items-center gap-1.5">
-                                <Thermometer className="w-3.5 h-3.5 text-primary" />
-                                Diagnostics
-                            </h3>
-                            <div className="space-y-3.5 text-xs font-mono">
-                                <div className="flex justify-between items-center pb-2 border-b border-border/20">
-                                    <span className="text-muted-foreground flex items-center gap-1.5">
-                                        Board Temp
-                                    </span>
-                                    <span className="font-bold text-foreground">{isOnline ? "41 °C" : "Offline"}</span>
-                                </div>
-                                <div className="flex justify-between items-center pb-2 border-b border-border/20">
-                                    <span className="text-muted-foreground flex items-center gap-1.5">
-                                        Power Supply
-                                    </span>
-                                    <span className="font-bold text-foreground">{isOnline ? "24.2 V" : "Offline"}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-muted-foreground flex items-center gap-1.5">
-                                        Total Memory
-                                    </span>
-                                    <span className="font-bold text-foreground">{totalMemoryStr}</span>
+                    <Card className="bg-card border border-border/50 rounded p-4 h-full flex flex-col justify-between min-h-[300px]">
+                        <div className="flex-1 flex flex-col justify-between">
+                            <div>
+                                <h3 className="text-xs font-bold text-muted-foreground mb-3 flex items-center gap-1.5">
+                                    <Thermometer className="w-3.5 h-3.5 text-primary" />
+                                    Diagnostics
+                                </h3>
+                                
+                                <div className="grid grid-cols-3 gap-1.5 text-center mb-3">
+                                    <div className="bg-muted/30 border border-border/40 rounded p-1 flex flex-col justify-center">
+                                        <span className="text-[9px] text-muted-foreground font-semibold">Temp</span>
+                                        <span className="text-[11px] font-bold font-mono text-amber-500 truncate">
+                                            {isOnline ? `${tempVal} °C` : "Offline"}
+                                        </span>
+                                    </div>
+                                    <div className="bg-muted/30 border border-border/40 rounded p-1 flex flex-col justify-center">
+                                        <span className="text-[9px] text-muted-foreground font-semibold">Voltage</span>
+                                        <span className="text-[11px] font-bold font-mono text-sky-500 truncate">
+                                            {isOnline ? `${voltageVal} V` : "Offline"}
+                                        </span>
+                                    </div>
+                                    <div className="bg-muted/30 border border-border/40 rounded p-1 flex flex-col justify-center">
+                                        <span className="text-[9px] text-muted-foreground font-semibold">Memory</span>
+                                        <span className="text-[11px] font-bold font-mono text-foreground truncate" title={totalMemoryStr}>
+                                            {totalMemoryStr}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div className="mt-4 p-2 bg-muted/20 border border-border/30 rounded text-[9.5px] text-muted-foreground leading-normal">
-                            <span className="font-semibold text-foreground">Tip:</span> Use a graph view to monitor trends instead of instantaneous progress indicators.
+
+                            <div className="h-32 flex-1 mt-2">
+                                {isOnline ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={history} margin={{ top: 5, right: -10, left: -30, bottom: 0 }}>
+                                            <defs>
+                                                <linearGradient id="colorTemp" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.15} />
+                                                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                                                </linearGradient>
+                                                <linearGradient id="colorVolt" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.15} />
+                                                    <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                                            <XAxis
+                                                dataKey="time"
+                                                tickLine={false}
+                                                axisLine={false}
+                                                tick={{ fontSize: 6.5, fill: 'var(--muted-foreground)' }}
+                                            />
+                                            <YAxis
+                                                yAxisId="left"
+                                                domain={[0, 100]}
+                                                tickLine={false}
+                                                axisLine={false}
+                                                tick={{ fontSize: 6.5, fill: '#f59e0b' }}
+                                            />
+                                            <YAxis
+                                                yAxisId="right"
+                                                orientation="right"
+                                                domain={[0, 40]}
+                                                tickLine={false}
+                                                axisLine={false}
+                                                tick={{ fontSize: 6.5, fill: '#0ea5e9' }}
+                                            />
+                                            <Tooltip content={<CustomDiagnosticsTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                                            <Area
+                                                yAxisId="left"
+                                                type="monotone"
+                                                dataKey="temp"
+                                                name="Temp"
+                                                stroke="#f59e0b"
+                                                strokeWidth={1.5}
+                                                fillOpacity={1}
+                                                fill="url(#colorTemp)"
+                                            />
+                                            <Area
+                                                yAxisId="right"
+                                                type="monotone"
+                                                dataKey="voltage"
+                                                name="Voltage"
+                                                stroke="#0ea5e9"
+                                                strokeWidth={1.5}
+                                                fillOpacity={1}
+                                                fill="url(#colorVolt)"
+                                            />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground text-[10px] border border-dashed border-border/50 rounded bg-muted/5 p-2 text-center">
+                                        <Thermometer className="w-6 h-6 text-muted-foreground/30 mb-1 animate-pulse" />
+                                        <span>Router is offline. Diagnostic telemetry history unavailable.</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </Card>
                 </div>
