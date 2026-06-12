@@ -130,16 +130,17 @@ def branch_revenue_share(
 ) -> RevenueShareResponse:
     branch, current_staff = require_branch_access(session, branch_id, user, "dashboard")
     router_names = session.exec(select(Router.name).where(Router.branch_id == branch_id)).all()
-    gross_sales = 0
+    voucher_sales = 0
     if router_names:
         # VoucherPurchase.router_name is always stored normalized (see
         # get_or_create_wallet), while Router.name keeps whatever casing the
         # owner typed — normalize before matching or sales come back as 0.
         normalized_names = [normalize_router_name(name) for name in router_names]
-        gross_sales = int(session.exec(
+        voucher_sales = int(session.exec(
             select(func.coalesce(func.sum(VoucherPurchase.amount), 0))
             .where(col(VoucherPurchase.router_name).in_(normalized_names))
         ).one())
+    gross_sales = voucher_sales
     staff_rows = session.exec(
         select(Staff).where(Staff.branch_id == branch_id).where(Staff.is_active.is_(True))
     ).all()

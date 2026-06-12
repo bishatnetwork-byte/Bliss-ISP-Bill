@@ -18,6 +18,7 @@ from app.models.staff import Staff
 from app.models.user import User
 from app.models.voucher_purchase import VoucherPurchase
 from app.models.wallet import Wallet
+from app.services import wallet as wallet_svc
 from app.services.routers.Packages import get_router_packages
 from app.services.routers.routeros import router_connection
 from app.services.storage import STORAGE_ERRORS, object_url, upload_bytes
@@ -339,6 +340,20 @@ def record_portal_payment(
     session.commit()
     session.refresh(wallet)
     session.refresh(voucher)
+
+    # The customer has paid via the captive portal — collect that amount into
+    # the branch's wallet now, regardless of whether MikroTik provisioning
+    # below succeeds, since the payment itself has already been taken.
+    branch = session.get(Branch, router.branch_id)
+    if branch:
+        branch_wallet = wallet_svc.ensure_wallet(session, branch.id)
+        wallet_svc.deposit(
+            session=session,
+            wallet_id=branch_wallet.id,
+            amount=amount,
+            user_id=branch.user_id,
+            reference=payment_reference or voucher.voucher_code,
+        )
 
     try:
         _upsert_hotspot_voucher(router, voucher, package)
