@@ -21,6 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   useCreateRouterPackage,
@@ -28,9 +29,10 @@ import {
   useRouterPackages,
   useRouters,
   useSyncRouterPackages,
+  useUpdateRouterTrial,
 } from "@/hooks/useRouters";
 import { cn } from "@/lib/utils";
-import { AlertCircle, ArrowLeft, Loader2, PackagePlus, Plus, RefreshCw, Trash2, Wifi } from "lucide-react";
+import { AlertCircle, ArrowLeft, Loader2, PackagePlus, Plus, RefreshCw, Timer, Trash2, Wifi } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -58,6 +60,9 @@ export default function RouterPackages() {
   const [selectedRouterId, setSelectedRouterId] = useState("");
   const [form, setForm] = useState<RouterPackagePayload>(initialForm);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isTrialOpen, setIsTrialOpen] = useState(false);
+  const [trialEnabled, setTrialEnabled] = useState(false);
+  const [trialMinutes, setTrialMinutes] = useState(30);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -74,12 +79,20 @@ export default function RouterPackages() {
     }
   }, [routers, selectedRouterId]);
 
+  useEffect(() => {
+    if (selectedRouter) {
+      setTrialEnabled(selectedRouter.trial_enabled);
+      setTrialMinutes(selectedRouter.trial_minutes || 30);
+    }
+  }, [selectedRouter?.id, selectedRouter?.trial_enabled, selectedRouter?.trial_minutes]);
+
   const selectedRouter = routers.find((router) => router.id === selectedRouterId);
   const routerName = selectedRouter?.name || "";
   const packagesQuery = useRouterPackages(selectedRouterId);
   const createPackage = useCreateRouterPackage(selectedRouterId);
   const syncPackages = useSyncRouterPackages(selectedRouterId);
   const deletePackage = useDeleteRouterPackage(selectedRouterId);
+  const updateTrial = useUpdateRouterTrial(branchId);
   const packages = packagesQuery.data?.data.voucher || [];
   const publicPackagesPath = routerName ? `packages?router_id=${routerName.toUpperCase()}` : "packages?router_id=ROUTER";
 
@@ -154,6 +167,29 @@ export default function RouterPackages() {
     }
   };
 
+  const handleSaveTrial = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedRouterId) {
+      toast.error("Select a router first.");
+      return;
+    }
+
+    try {
+      const result = await updateTrial.mutateAsync({
+        routerId: selectedRouterId,
+        payload: { trial_enabled: trialEnabled, trial_minutes: trialMinutes },
+      });
+      if (result.router_sync_error) {
+        toast.warning(`Trial settings saved, but MikroTik sync failed: ${result.router_sync_error}`);
+      } else {
+        toast.success(trialEnabled ? "Free trial enabled on MikroTik." : "Free trial disabled on MikroTik.");
+      }
+      setIsTrialOpen(false);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to update trial settings."));
+    }
+  };
+
   return (
     <div className={cn("min-h-screen bg-background transition-all duration-300", sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[280px]")}>
       <SEO title="Router Packages" />
@@ -187,6 +223,20 @@ export default function RouterPackages() {
               >
                 {syncPackages.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 Refresh All
+              </Button>
+
+              <Button
+                onClick={() => setIsTrialOpen(true)}
+                variant="outline"
+                size="sm"
+                disabled={!selectedRouterId}
+                className="gap-1.5 text-xs font-semibold h-10 px-3"
+              >
+                <Timer className="h-4 w-4" />
+                Trial
+                {selectedRouter?.trial_enabled ? (
+                  <Badge variant="secondary" className="ml-1 rounded text-[10px]">On</Badge>
+                ) : null}
               </Button>
 
               <Button onClick={() => setIsCreateOpen(true)} disabled={!selectedRouterId} className="gap-2 h-10 text-xs font-semibold">
@@ -365,6 +415,53 @@ export default function RouterPackages() {
             <Button type="submit" disabled={!selectedRouterId || createPackage.isPending} className="w-full gap-2 mt-2 h-9 text-xs font-semibold">
               {createPackage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
               Save And Push Package
+            </Button>
+          </form>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={isTrialOpen} onOpenChange={setIsTrialOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md border-border/40 bg-background overflow-y-auto">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+              <Timer className="w-5 h-5 text-primary" />
+              Free Trial Access
+            </SheetTitle>
+            <SheetDescription className="text-xs text-muted-foreground mt-1">
+              Let new devices on {routerName || "this router"} browse for free for a limited time before they need to buy a package.
+            </SheetDescription>
+          </SheetHeader>
+
+          <form onSubmit={handleSaveTrial} className="space-y-5 py-6">
+            <div className="flex items-center justify-between rounded border border-border/60 bg-card/40 p-3">
+              <div className="space-y-0.5 pr-3">
+                <Label className="text-xs font-bold text-muted-foreground">Enable Free Trial</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Devices can request the trial once per day from the connect page.
+                </p>
+              </div>
+              <Switch checked={trialEnabled} onCheckedChange={setTrialEnabled} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-muted-foreground">Trial Duration (minutes)</Label>
+              <Input
+                type="number"
+                min={1}
+                max={1440}
+                value={trialMinutes}
+                onChange={(event) => setTrialMinutes(Number(event.target.value))}
+                disabled={!trialEnabled}
+                className="h-9 text-xs bg-card/40 border-border/60"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                How long a device can use the internet for free, e.g. 30 minutes.
+              </p>
+            </div>
+
+            <Button type="submit" disabled={!selectedRouterId || updateTrial.isPending} className="w-full gap-2 mt-2 h-9 text-xs font-semibold">
+              {updateTrial.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Timer className="h-4 w-4" />}
+              Save Trial Settings
             </Button>
           </form>
         </SheetContent>

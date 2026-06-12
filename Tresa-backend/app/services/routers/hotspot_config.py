@@ -604,3 +604,46 @@ def provision_hotspot(
         "command_log": command_log,
         "error": f"{len(failed)} command(s) failed" if failed else None,
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# 5. TRIAL ACCESS
+# ═══════════════════════════════════════════════════════════════
+
+
+def apply_trial_settings(router: Router, trial_enabled: bool, trial_minutes: int) -> str | None:
+    """
+    Push the free-trial window to every hotspot server profile on the router.
+
+    Sets ``trial-uptime-limit`` to the requested duration (and
+    ``trial-uptime-reset`` to "1d" so a device can retry once per day) when
+    enabled, or zeroes both fields — RouterOS's documented way of disabling
+    the trial feature — when disabled.
+
+    Returns an error string on failure, or ``None`` on success.
+    """
+    if trial_enabled:
+        hours, minutes = divmod(max(1, trial_minutes), 60)
+        params = {
+            "trial-uptime-limit": f"{hours:02d}:{minutes:02d}:00",
+            "trial-uptime-reset": "1d",
+        }
+    else:
+        params = {
+            "trial-uptime-limit": "00:00:00",
+            "trial-uptime-reset": "00:00:00",
+        }
+
+    try:
+        with router_connection(router) as api:
+            resource = api.get_resource("/ip/hotspot/profile")
+            profiles = resource.get()
+            if not profiles:
+                return "No hotspot server profile found on router"
+            for profile in profiles:
+                item_id = profile.get("id", profile.get(".id"))
+                if item_id:
+                    resource.set(id=item_id, **params)
+        return None
+    except Exception as exc:
+        return str(exc)

@@ -387,6 +387,32 @@ body {
   color: rgba(248, 250, 252, 0.7);
 }
 
+.spinner {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+
+.spinner-sm {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .tile-left {
   min-width: 0;
 }
@@ -594,5 +620,45 @@ body {
 
   .portal-title {
     font-size: 1.55rem;
+  }
+
+  .portal-lead {
+    font-size: 0.82rem;
+  }
+
+  .btn-connect {
+    height: 44px;
+    font-size: 0.9rem;
+  }
+
+  .package-tile {
+    padding: 9px 10px;
+    gap: 8px;
+  }
+
+  .tile-name {
+    font-size: 0.82rem;
+  }
+
+  .tile-meta {
+    font-size: 0.66rem;
+  }
+
+  .tile-price {
+    font-size: 0.82rem;
+  }
+
+  .trial-link {
+    font-size: 0.78rem;
+  }
+}
+
+@media (max-width: 340px) {
+  .portal-wrap {
+    padding: 16px 12px;
+  }
+
+  .input-field {
+    font-size: 15px;
   }
 }

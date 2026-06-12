@@ -43,6 +43,8 @@ class RouterResponse(BaseModel):
     ppp_username: Optional[str] = None
     tunnel_ip: Optional[str] = None
     nat_port: Optional[int] = None
+    trial_enabled: bool = False
+    trial_minutes: int = 30
     status: str = "pending"
     last_seen: Optional[datetime] = None
     created_at: datetime
@@ -236,3 +238,17 @@ class RouterPublishScriptResponse(BaseModel):
     mikrotik_v7_command: str
     mikrotik_v6_command: str
     expires_note: str
+
+
+class RouterTrialUpdate(BaseModel):
+    trial_enabled: bool
+    trial_minutes: int = Field(default=30, ge=1, le=1440)
+
+
+class RouterTrialResponse(BaseModel):
+    success: bool
+    router_id: UUID
+    router_name: str
+    trial_enabled: bool
+    trial_minutes: int
+    router_sync_error: Optional[str] = None

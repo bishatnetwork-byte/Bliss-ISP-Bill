@@ -45,12 +45,15 @@ from app.schemas.router import (
     RouterStatusResponse,
     RouterTestConnectionRequest,
     RouterTestConnectionResponse,
+    RouterTrialResponse,
+    RouterTrialUpdate,
     RouterUpdate,
     RouterVouchersResponse,
 )
 from app.services.routers.active_users.active_users import get_remote_winbox_access
 from app.services.portal import normalize_router_name, push_captive_files_to_mikrotik
 from app.services.routers.hotspot_config import (
+    apply_trial_settings,
     detect_router_hardware,
     provision_hotspot,
 )
@@ -140,6 +143,8 @@ def serialize_router(db_router: Router) -> RouterResponse:
         ppp_username=db_router.ppp_username,
         tunnel_ip=db_router.tunnel_ip,
         nat_port=db_router.nat_port,
+        trial_enabled=db_router.trial_enabled,
+        trial_minutes=db_router.trial_minutes,
         status=db_router.status,
         last_seen=db_router.last_seen,
         created_at=db_router.created_at,
@@ -326,6 +331,34 @@ def update_router(
         push_captive_files_to_mikrotik(db_router, captive.portal_template if captive else "renault")
 
     return serialize_router(db_router)
+
+
+@router.put("/routers/{router_id}/trial", response_model=RouterTrialResponse)
+def update_router_trial(
+    router_id: UUID,
+    payload: RouterTrialUpdate,
+    user: CurrentUser,
+    session: SessionDep,
+) -> RouterTrialResponse:
+    """Toggle the MikroTik hotspot free-trial window and set its duration."""
+    db_router = get_router_with_ownership(session, router_id, user.id)
+
+    db_router.trial_enabled = payload.trial_enabled
+    db_router.trial_minutes = payload.trial_minutes
+    db_router.updated_at = datetime.utcnow()
+    session.add(db_router)
+    session.commit()
+    session.refresh(db_router)
+
+    sync_error = apply_trial_settings(db_router, payload.trial_enabled, payload.trial_minutes)
+    return RouterTrialResponse(
+        success=sync_error is None,
+        router_id=db_router.id,
+        router_name=db_router.name,
+        trial_enabled=db_router.trial_enabled,
+        trial_minutes=db_router.trial_minutes,
+        router_sync_error=sync_error,
+    )
 
 
 @router.delete("/routers/{router_id}", response_model=MessageResponse)

@@ -45,6 +45,8 @@ class Router(SQLModel, table=True):
     winbox_nat_rule_id: Optional[str] = Field(default=None)
     api_username: Optional[str] = Field(default=None)
     api_password_encrypted: Optional[str] = Field(default=None)
+    trial_enabled: bool = Field(default=False)
+    trial_minutes: int = Field(default=30)
     status: str = Field(default="pending", index=True)
     snmp_status: str = Field(default="unknown", index=True)
     snmp_configured: bool = Field(default=False)

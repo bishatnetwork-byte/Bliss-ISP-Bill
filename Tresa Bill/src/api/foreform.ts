@@ -158,10 +158,26 @@ export interface RouterResponse {
   ppp_username: string | null;
   tunnel_ip: string | null;
   nat_port: number | null;
+  trial_enabled: boolean;
+  trial_minutes: number;
   status: string;
   last_seen: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RouterTrialUpdate {
+  trial_enabled: boolean;
+  trial_minutes: number;
+}
+
+export interface RouterTrialResponse {
+  success: boolean;
+  router_id: string;
+  router_name: string;
+  trial_enabled: boolean;
+  trial_minutes: number;
+  router_sync_error: string | null;
 }
 
 export interface RouterCreate {
@@ -942,6 +958,8 @@ export const renultApi = {
       apiRequest<RouterHardwareResponse>(`/routers/${routerId}/hardware`),
     provisionHotspot: (routerId: string, payload: HotspotProvisionConfig) =>
       apiRequest<HotspotProvisionResponse>(`/routers/${routerId}/provision-hotspot`, { method: "POST", body: JSON.stringify(payload) }),
+    updateTrial: (routerId: string, payload: RouterTrialUpdate) =>
+      apiRequest<RouterTrialResponse>(`/routers/${routerId}/trial`, { method: "PUT", body: JSON.stringify(payload) }),
   },
   captivePortal: {
     get: (routerId: string) =>

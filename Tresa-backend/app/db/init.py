@@ -124,6 +124,8 @@ def _ensure_router_columns() -> None:
         "connected_at": "TIMESTAMP",
         "disconnected_at": "TIMESTAMP",
         "last_seen": "TIMESTAMP",
+        "trial_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
+        "trial_minutes": "INTEGER DEFAULT 30 NOT NULL",
     }
     with engine.begin() as conn:
         for name, sql_type in column_types.items():

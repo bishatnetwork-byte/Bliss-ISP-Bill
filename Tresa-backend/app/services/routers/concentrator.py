@@ -452,7 +452,7 @@ def register_router(
     router.mac_address = mac_address
     router.model = model[:255]
     router.os_version = version[:255]
-    router.host = settings.chr_host
+    router.host = settings.chr_public_host
     router.username = router.api_username or "billingapi"
     router.password = encrypt_secret(api_password)
     router.updated_at = datetime.utcnow()
@@ -513,7 +513,7 @@ def provision_router(
                 _ensure_nat_rule(session, new_api, router)
         now = datetime.utcnow()
         router.port = router.nat_port
-        router.host = settings.chr_host
+        router.host = settings.chr_public_host
         router.status = "connected"
         router.connected_at = now
         router.disconnected_at = None

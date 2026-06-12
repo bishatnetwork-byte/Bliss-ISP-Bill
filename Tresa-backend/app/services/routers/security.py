@@ -12,7 +12,6 @@ from app.services.routers.concentrator import registration_token
 
 MIN_DYNAMIC_API_PORT = int(os.getenv("ROUTER_API_PORT_MIN", "49152"))
 MAX_DYNAMIC_API_PORT = int(os.getenv("ROUTER_API_PORT_MAX", "65534"))
-CHR_HOST = os.getenv("ROUTER_CHR_HOST", "23.92.30.38")
 CHR_TUNNEL_ADDRESS = os.getenv("ROUTER_CHR_TUNNEL_ADDRESS", "10.0.0.1")
 L2TP_USERNAME = os.getenv("ROUTER_L2TP_USER", "")
 L2TP_PASSWORD = os.getenv("ROUTER_L2TP_PASSWORD", "")
@@ -76,7 +75,7 @@ def build_secure_setup_script(
     portal_domain = _routeros_quote(urlparse(api_base_url).hostname or "renult.vercel.app")
     token = registration_token(router.id)
     api_url = _routeros_quote(api_base_url)
-    chr_host = _routeros_quote(settings.chr_host)
+    chr_host = _routeros_quote(settings.chr_public_host)
     ipsec_secret = _routeros_quote(settings.router_l2tp_ipsec_secret)
     snmp_community = _routeros_quote(settings.snmp_community)
     token = _routeros_quote(token)

@@ -49,6 +49,7 @@ class Settings:
     credential_encryption_key: str | None = os.getenv("CREDENTIAL_ENCRYPTION_KEY")
     router_registration_secret: str = os.getenv("ROUTER_REGISTRATION_SECRET", jwt_secret)
     chr_host: str = os.getenv("CHR_HOST", "23.92.30.38")
+    chr_public_host: str = os.getenv("CHR_PUBLIC_HOST", chr_host)
     chr_api_port: int = int(os.getenv("CHR_API_PORT", ""))
     chr_api_username: str = os.getenv("CHR_API_USERNAME", "tresachr")
     chr_api_password: str = os.getenv("CHR_API_PASSWORD", "")

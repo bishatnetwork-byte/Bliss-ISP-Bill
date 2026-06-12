@@ -1,5 +1,5 @@
 import { useQueries, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { renultApi, RouterCreate, RouterUpdate, RouterPingRequest, RouterTestConnectionRequest, HotspotProvisionConfig, RouterPackagePayload, VoucherBatchCreate, RouterPublishScriptResponse, RouterResponse } from "@/api/foreform";
+import { renultApi, RouterCreate, RouterUpdate, RouterTrialUpdate, RouterPingRequest, RouterTestConnectionRequest, HotspotProvisionConfig, RouterPackagePayload, VoucherBatchCreate, RouterPublishScriptResponse, RouterResponse } from "@/api/foreform";
 
 // ── Hook Implementations ─────────────────────────────────────────────
 // All hooks call the real API. On failure the query enters the standard
@@ -39,6 +39,22 @@ export function useUpdateRouter(branchId?: string) {
   return useMutation({
     mutationFn: ({ routerId, payload }: { routerId: string; payload: RouterUpdate }) =>
       renultApi.routers.update(routerId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["router", variables.routerId] });
+      if (branchId) {
+        queryClient.invalidateQueries({ queryKey: ["routers", branchId] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["routers"] });
+      }
+    },
+  });
+}
+
+export function useUpdateRouterTrial(branchId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ routerId, payload }: { routerId: string; payload: RouterTrialUpdate }) =>
+      renultApi.routers.updateTrial(routerId, payload),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["router", variables.routerId] });
       if (branchId) {

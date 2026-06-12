@@ -372,11 +372,18 @@
     .trial-link {
       display: block;
       margin-top: 10px;
+      padding: 9px 4px;
       color: var(--primary);
       font-size: .78rem;
       font-weight: 800;
       text-align: center;
       text-decoration: none;
+      border-radius: 4px;
+      transition: background .15s;
+    }
+
+    .trial-link:active {
+      background: var(--primary-pale);
     }
 
     .router-template {
@@ -1160,6 +1167,114 @@
       gap: 4px;
       margin-top: 10px;
     }
+
+    /* ── Mobile fine-tuning for smaller phones ── */
+    @media (max-width: 380px) {
+      .hero-content {
+        padding: 22px 14px 38px;
+        gap: 10px;
+      }
+
+      .hero-title {
+        font-size: 1.12rem;
+      }
+
+      .hero-subtitle {
+        font-size: .72rem;
+      }
+
+      .hero-logo-circle {
+        width: 44px;
+        height: 44px;
+      }
+
+      .hero-logo-circle svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      .connect-section,
+      .section-wrap {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .connect-card {
+        padding: 14px 12px 12px;
+      }
+
+      .connect-bar {
+        padding: 5px 5px 5px 10px;
+      }
+
+      .connect-input {
+        font-size: .85rem;
+      }
+
+      .connect-btn {
+        padding: 8px 12px;
+        font-size: .8rem;
+      }
+
+      .pkg-tile {
+        padding: 11px 10px;
+        gap: 8px;
+      }
+
+      .pkg-name {
+        font-size: .86rem;
+      }
+
+      .pkg-price-mid {
+        padding: 0 8px;
+      }
+
+      .pkg-amount {
+        font-size: .88rem;
+      }
+
+      .pkg-buy-btn {
+        padding: 8px 12px;
+        font-size: .7rem;
+      }
+
+      .trial-link {
+        font-size: .82rem;
+      }
+    }
+
+    /* ── Extra-small phones: stack the voucher input and connect button ── */
+    @media (max-width: 340px) {
+      .connect-bar {
+        flex-wrap: wrap;
+        padding: 8px 10px;
+      }
+
+      .connect-input {
+        flex: 1 1 100%;
+        padding: 4px 0 8px;
+      }
+
+      .connect-btn {
+        flex: 1 1 100%;
+        justify-content: center;
+      }
+    }
+
+    /* ── Short / landscape screens ── */
+    @media (max-height: 560px) and (orientation: landscape) {
+      .bottom-sheet {
+        max-height: 96vh;
+      }
+
+      .hero-banner {
+        min-height: 140px;
+      }
+
+      .hero-content {
+        padding: 18px 20px 28px;
+      }
+    }
   </style>
 </head>
 
@@ -1586,8 +1701,9 @@
     }
 
     function loadPackages() {
-      document.getElementById('packageListHome').innerHTML =
-        '<p style="text-align:center;color:var(--text-muted);padding:20px 0;">Loading packages...</p>';
+      var loadingHtml = '<div class="spinner-wrap" style="display:block;"><div class="spinner"></div></div>';
+      document.getElementById('packageListHome').innerHTML = loadingHtml;
+      document.getElementById('packageListModal').innerHTML = loadingHtml;
       var xhr = new XMLHttpRequest();
       xhr.open('GET', API_BASE + '/packages?router_id=' + encodeURIComponent(ROUTER_ID), true);
       xhr.timeout = 15000;
