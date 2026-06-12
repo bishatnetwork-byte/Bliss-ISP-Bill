@@ -12,7 +12,7 @@ export interface RegistryVoucher {
   packageName: string;
   pricePaid: number;
   purchaseTime: string;
-  status: "Active" | "Expired" | "Unactivated";
+  status: "Active" | "Expired" | "Unactivated" | "Sync Issue";
 }
 
 export interface RegistryBatch {
@@ -25,6 +25,7 @@ export interface RegistryBatch {
   active: number;
   unactivated: number;
   expired: number;
+  syncIssue: number;
 }
 
 interface BulkBatchesTableProps {
@@ -90,6 +91,7 @@ export function BulkBatchesTable({
                       {batch.active > 0 && <Badge className="bg-emerald-500/10 text-emerald-600 border-none text-[9px]">{batch.active} active</Badge>}
                       {batch.unactivated > 0 && <Badge className="bg-amber-500/10 text-amber-600 border-none text-[9px]">{batch.unactivated} ready</Badge>}
                       {batch.expired > 0 && <Badge className="bg-slate-500/10 text-slate-600 border-none text-[9px]">{batch.expired} expired</Badge>}
+                      {batch.syncIssue > 0 && <Badge className="bg-orange-500/10 text-orange-600 border-none text-[9px]">{batch.syncIssue} sync issue</Badge>}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">

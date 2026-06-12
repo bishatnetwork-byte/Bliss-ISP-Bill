@@ -77,7 +77,7 @@ interface Voucher {
     duration: string;
     pricePaid: number;
     purchaseTime: string;
-    status: 'Active' | 'Expired' | 'Unactivated';
+    status: 'Active' | 'Expired' | 'Unactivated' | 'Sync Issue';
     type: 'Single' | 'Bulk';
     batchId?: string;
 }
@@ -424,6 +424,7 @@ export default function VouchersIndex() {
                 active: items.filter((item) => item.status === "Active").length,
                 unactivated: items.filter((item) => item.status === "Unactivated").length,
                 expired: items.filter((item) => item.status === "Expired").length,
+                syncIssue: items.filter((item) => item.status === "Sync Issue").length,
             }))
             .filter((batch) => {
                 const matchesSearch = !query
@@ -434,7 +435,8 @@ export default function VouchersIndex() {
                 const matchesStatus = filterStatus === "all"
                     || (filterStatus === "Active" && batch.active > 0)
                     || (filterStatus === "Unactivated" && batch.unactivated > 0)
-                    || (filterStatus === "Expired" && batch.expired > 0);
+                    || (filterStatus === "Expired" && batch.expired > 0)
+                    || (filterStatus === "Sync Issue" && batch.syncIssue > 0);
                 return matchesSearch && matchesPackage && matchesStatus;
             })
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -641,6 +643,8 @@ export default function VouchersIndex() {
                 return "bg-slate-500/10 text-slate-500 border-slate-500/20";
             case "Unactivated":
                 return "bg-amber-500/10 text-amber-500 border-amber-500/20";
+            case "Sync Issue":
+                return "bg-orange-500/10 text-orange-500 border-orange-500/20";
         }
     };
 
@@ -670,13 +674,13 @@ export default function VouchersIndex() {
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                         <Button
                             variant="destructive"
                             size="sm"
                             onClick={handleVerifyAllVouchers}
                             disabled={!selectedRouterId || fetchRouterVouchers.isPending}
-                            className="gap-2 text-xs font-semibold h-9"
+                            className="gap-2 text-xs font-semibold h-9 flex-1 sm:flex-initial"
                             title="Verify all database vouchers against the selected MikroTik router"
                         >
                             {fetchRouterVouchers.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -687,24 +691,27 @@ export default function VouchersIndex() {
                             size="sm"
                             onClick={handleSyncToRouter}
                             disabled={!selectedRouterId || syncRouterVouchers.isPending}
-                            className="gap-2 text-xs font-semibold h-9"
+                            className="gap-2 text-xs font-semibold h-9 flex-1 sm:flex-initial"
                             title="Push database vouchers to the selected router"
                         >
                             {syncRouterVouchers.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4" />}
                             Sync Router
                         </Button>
-                        <Select value={selectedRouterId} onValueChange={setSelectedRouterId} disabled={routersLoading}>
-                            <SelectTrigger className="h-9 text-xs">
-                                <SelectValue placeholder={routersLoading ? "Loading routers..." : "Select router"} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {routers.map((router) => (
-                                    <SelectItem key={router.id} value={router.id}>{router.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="w-full sm:w-[180px]">
+                            <Select value={selectedRouterId} onValueChange={setSelectedRouterId} disabled={routersLoading}>
+                                <SelectTrigger className="h-9 text-xs">
+                                    <SelectValue placeholder={routersLoading ? "Loading routers..." : "Select router"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {routers.map((router) => (
+                                        <SelectItem key={router.id} value={router.id}>{router.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <Button
                             size="sm"
+                            className="gap-2 text-xs font-semibold h-9 flex-1 sm:flex-initial"
                             onClick={() => {
                                 const toPrint = selectedVouchers.length > 0
                                     ? vouchers.filter((v) => selectedVouchers.includes(v.id))
@@ -717,7 +724,6 @@ export default function VouchersIndex() {
                                 setPrintBatchRef(null);
                                 setIsPrintPreviewOpen(true);
                             }}
-                            className="gap-2 text-xs font-semibold h-9"
                         >
                             <Printer className="w-4 h-4" />
                             Print Preview ({selectedVouchers.length > 0 ? selectedVouchers.length : filteredVouchers.length})
@@ -727,31 +733,33 @@ export default function VouchersIndex() {
 
                 {/* Navigation Tabs */}
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    <TabsList className="bg-white p-1 border border-primary rounded">
-                        <TabsTrigger
-                            value="generator"
-                            className="gap-2 text-xs font-medium px-4 py-2 rounded transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                        >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            Voucher Generator
-                        </TabsTrigger>
+                    <div className="overflow-x-auto -mx-4 px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
+                        <TabsList className="bg-white p-1 border border-primary rounded w-max">
+                            <TabsTrigger
+                                value="generator"
+                                className="gap-2 text-xs font-medium px-4 py-2 rounded transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                            >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                Voucher Generator
+                            </TabsTrigger>
 
-                        <TabsTrigger
-                            value="batches"
-                            className="gap-2 text-sm font-medium px-4 py-2 rounded transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                        >
-                            <Users className="w-3.5 h-3.5" />
-                            Bulk Batches ({vouchersLoading ? "..." : `${voucherBatches.length}`})
-                        </TabsTrigger>
+                            <TabsTrigger
+                                value="batches"
+                                className="gap-2 text-sm font-medium px-4 py-2 rounded transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                            >
+                                <Users className="w-3.5 h-3.5" />
+                                Bulk Batches ({vouchersLoading ? "..." : `${voucherBatches.length}`})
+                            </TabsTrigger>
 
-                        <TabsTrigger
-                            value="singles"
-                            className="gap-2 text-xs font-medium px-4 py-2 rounded transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                        >
-                            <Ticket className="w-3.5 h-3.5" />
-                            Individual Vouchers ({vouchersLoading ? "..." : `${filteredSingleVouchers.length}`})
-                        </TabsTrigger>
-                    </TabsList>
+                            <TabsTrigger
+                                value="singles"
+                                className="gap-2 text-xs font-medium px-4 py-2 rounded transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                            >
+                                <Ticket className="w-3.5 h-3.5" />
+                                Individual Vouchers ({vouchersLoading ? "..." : `${filteredSingleVouchers.length}`})
+                            </TabsTrigger>
+                        </TabsList>
+                    </div>
 
 
                     {/* TAB 1: GENERATORS */}
@@ -770,7 +778,7 @@ export default function VouchersIndex() {
                                 </CardHeader>
                                 <form onSubmit={handleCreateBulk}>
                                     <CardContent className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             {/* Quantity */}
                                             <div className="space-y-2">
                                                 <Label htmlFor="bulk-qty" className="text-xs font-semibold">
@@ -836,7 +844,7 @@ export default function VouchersIndex() {
                                             </div>
                                         )}
 
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             {/* Character Set Choice */}
                                             <div className="space-y-2">
                                                 <Label htmlFor="bulk-format" className="text-xs font-semibold">
@@ -874,7 +882,7 @@ export default function VouchersIndex() {
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             {/* Internet Package Selector */}
                                             <div className="space-y-2 col-span-2 sm:col-span-1">
                                                 <Label htmlFor="bulk-package" className="text-xs font-semibold">
@@ -977,6 +985,7 @@ export default function VouchersIndex() {
                                             <SelectItem value="Active">Active</SelectItem>
                                             <SelectItem value="Unactivated">Unactivated</SelectItem>
                                             <SelectItem value="Expired">Expired</SelectItem>
+                                            <SelectItem value="Sync Issue">Sync Issue</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -1042,6 +1051,7 @@ export default function VouchersIndex() {
                                             <SelectItem value="Active">Active</SelectItem>
                                             <SelectItem value="Unactivated">Unactivated</SelectItem>
                                             <SelectItem value="Expired">Expired</SelectItem>
+                                            <SelectItem value="Sync Issue">Sync Issue</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

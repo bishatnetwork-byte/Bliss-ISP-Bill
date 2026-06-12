@@ -66,6 +66,7 @@ export default function SupportsIndex() {
   const statusClass = (value: string) => {
     if (value === "Active") return "bg-emerald-500/10 text-emerald-600";
     if (value === "Expired") return "bg-slate-500/10 text-slate-600";
+    if (value === "Sync Issue") return "bg-orange-500/10 text-orange-600";
     return "bg-amber-500/10 text-amber-600";
   };
 

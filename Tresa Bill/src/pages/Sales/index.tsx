@@ -69,7 +69,7 @@ interface SalesRecord {
     amount: number; // in UGX
     activatedAt: string;
     expiresAt: string;
-    status: "Active" | "Expired" | "Unactivated";
+    status: "Active" | "Expired" | "Unactivated" | "Sync Issue";
     paymentMode: "Online Payment" | "Voucher Printing";
     paymentMethod: "MTN Mobile Money" | "Airtel Money" | "Cash" | "Credit Card" | "PayPal";
     buyerName: string;
@@ -432,6 +432,8 @@ export default function SalesIndex() {
                 return <Badge variant="outline" className="bg-slate-500/10 text-slate-500 border-slate-500/20">Expired</Badge>;
             case "Unactivated":
                 return <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20">Unactivated</Badge>;
+            case "Sync Issue":
+                return <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-orange-500/20">Sync Issue</Badge>;
         }
     };
 
