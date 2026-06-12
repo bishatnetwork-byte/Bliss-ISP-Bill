@@ -1,14 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { renultApi } from "@/api/foreform";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
-import { Chrome, Loader2 } from "lucide-react";
+import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
+import { Loader2 } from "lucide-react";
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import AuthShell from "./AuthShell";
-import { AuthInput, Divider, PasswordInput, SubmitButton } from "./auth-ui";
-import { getGoogleRedirectUri, rememberGoogleRedirectUri } from "./google-auth";
+import { AuthInput, Divider, GoogleButtonContainer, PasswordInput, SubmitButton } from "./auth-ui";
 
 type SignupStep = "details" | "verify";
 
@@ -86,15 +85,19 @@ export default function Signup() {
     if (step === "verify") void handleVerify();
   };
 
-  const handleGoogle = async () => {
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
+    if (!credentialResponse.credential) {
+      toast.error("Google sign up failed");
+      return;
+    }
     setIsGoogleLoading(true);
     try {
-      const redirectUri = getGoogleRedirectUri();
-      rememberGoogleRedirectUri(redirectUri);
-      const { authorization_url } = await renultApi.auth.googleLoginUrl(redirectUri);
-      window.location.href = authorization_url;
+      const auth = await renultApi.auth.google({ id_token: credentialResponse.credential });
+      login(auth);
+      navigate(auth.user.auth_provider === "google" ? "/set-password" : "/", { replace: true });
     } catch (err: any) {
-      toast.error(err.message || "Failed to start Google sign up");
+      toast.error(err.message || "Google sign up failed");
+    } finally {
       setIsGoogleLoading(false);
     }
   };
@@ -109,10 +112,24 @@ export default function Signup() {
       <div className="w-full">
         {step === "details" ? (
           <>
-            <Button type="button" variant="outline" disabled={isGoogleLoading} onClick={handleGoogle} className="w-full h-10 bg-white">
-              {isGoogleLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Chrome className="w-4 h-4 mr-2" />}
-              Continue with Google
-            </Button>
+            <GoogleButtonContainer>
+              {(width) => (
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => toast.error("Google sign up failed")}
+                  shape="pill"
+                  size="large"
+                  text="signup_with"
+                  logo_alignment="center"
+                  width={width}
+                />
+              )}
+            </GoogleButtonContainer>
+            {isGoogleLoading && (
+              <div className="mt-2 flex items-center justify-center gap-2 text-[12px] text-slate-500">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating your account...
+              </div>
+            )}
             <Divider />
           </>
         ) : null}

@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 export function AuthInput(props: React.ComponentProps<typeof Input>) {
   return (
@@ -50,6 +51,29 @@ export function Divider() {
       <div className="flex-1 h-px bg-slate-200" />
       <span className="px-3 text-[11px] text-slate-300 font-medium uppercase">or</span>
       <div className="flex-1 h-px bg-slate-200" />
+    </div>
+  );
+}
+
+/** Measures its own width so the Google Identity button can be sized to match. */
+export function GoogleButtonContainer({ children }: { children: (width: number) => React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const next = entries[0]?.contentRect.width;
+      if (next) setWidth(Math.floor(next));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="w-full flex justify-center">
+      {width > 0 ? children(width) : null}
     </div>
   );
 }
