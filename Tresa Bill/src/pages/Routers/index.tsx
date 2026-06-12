@@ -367,16 +367,7 @@ export default function RoutersIndex() {
                                     className="gap-1.5 text-xs font-semibold h-10 px-3 bg-primary text-primary-foreground hover:bg-primary/95 shadow-sm"
                                 >
                                     <Wifi className="w-4 h-4" />
-                                    Provision Router
-                                </Button>
-                                <Button
-                                    onClick={() => navigate('/router/configure')}
-                                    variant="outline"
-                                    size="sm"
-                                    className="gap-1.5 text-xs font-semibold h-10 px-3 border-slate-200 text-slate-700 bg-white hover:bg-slate-50 shadow-sm"
-                                >
-                                    <Link className="w-4 h-4" />
-                                    Connect New Router
+                                    Connect & Provision Router
                                 </Button>
                             </div>
                         </div>
