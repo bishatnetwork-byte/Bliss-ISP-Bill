@@ -997,60 +997,63 @@ export default function SetUpProvison() {
                       </div>
                     )}
 
-                    {/* Command results */}
-                    {provisionResult && provisionResult.command_log.length > 0 && (
+                    {/* Provisioning console */}
+                    {(provisionHotspot.isPending ||
+                      (provisionResult && provisionResult.command_log.length > 0) ||
+                      deployCaptivePortal.isPending ||
+                      captivePortalResult) && (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="font-semibold text-slate-700">Commands executed</span>
-                          <span className="font-semibold text-primary">
-                            {provisionResult.command_log.filter((c) => c.success).length} / {provisionResult.command_log.length} succeeded
-                          </span>
-                        </div>
-                        <div className="rounded border border-slate-100 bg-slate-50/40 max-h-[300px] overflow-y-auto divide-y divide-slate-100">
-                          {provisionResult.command_log.map((command, index) => (
-                            <div key={`${command.step}-${index}`} className="p-3 text-xs flex items-start gap-2">
-                              {command.success ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />}
-                              <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-slate-700">{command.step}</p>
-                                {command.error && <p className="mt-0.5 break-words text-rose-600">{command.error}</p>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Captive portal deployment status */}
-                    {(deployCaptivePortal.isPending || captivePortalResult) && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-semibold text-slate-700">WiFi login page</span>
-                          {deployCaptivePortal.isPending ? (
-                            <span className="flex items-center gap-1.5 text-xs font-medium text-primary">
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Deploying...
-                            </span>
-                          ) : captivePortalResult?.success ? (
-                            <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Deployed
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1.5 text-xs font-medium text-destructive">
-                              <AlertCircle className="h-3.5 w-3.5" /> Needs attention
+                          <span className="font-semibold text-slate-700">Provisioning Console</span>
+                          {provisionResult && provisionResult.command_log.length > 0 && (
+                            <span className="font-semibold text-primary">
+                              {provisionResult.command_log.filter((c) => c.success).length} / {provisionResult.command_log.length} succeeded
                             </span>
                           )}
                         </div>
-                        {captivePortalResult && (
-                          <div className="rounded border border-slate-100 bg-slate-50/40 p-3 text-xs">
-                            {captivePortalResult.success ? (
-                              <p className="text-slate-600">
-                                {captivePortalResult.fetched_files.length} portal file(s) deployed to the hotspot
-                                login page.
+                        <div className="rounded-lg overflow-hidden border border-slate-800 bg-slate-950 shadow-inner">
+                          <div className="flex items-center gap-1.5 border-b border-slate-800 bg-slate-900/80 px-3 py-2">
+                            <span className="h-2.5 w-2.5 rounded-full bg-rose-500/70" />
+                            <span className="h-2.5 w-2.5 rounded-full bg-amber-500/70" />
+                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
+                            <span className="ml-2 text-[11px] font-medium text-slate-400">tresa@provisioning ~ console</span>
+                          </div>
+                          <div className="max-h-[300px] overflow-y-auto p-3 font-mono text-[11px] leading-5 text-slate-100">
+                            {provisionResult?.command_log.map((command, index) => (
+                              <p key={`${command.step}-${index}`} className="break-words">
+                                <span className={command.success ? "text-emerald-400" : "text-rose-400"}>
+                                  {command.success ? "[OK]" : "[FAIL]"}
+                                </span>{" "}
+                                <span className="text-slate-300">$ {command.step}</span>
+                                {command.error && <span className="text-rose-400"> — {command.error}</span>}
                               </p>
-                            ) : (
-                              <p className="break-words text-rose-600">{captivePortalResult.error}</p>
+                            ))}
+                            {provisionResult && !provisionResult.success && provisionResult.error && (
+                              <p className="break-words text-rose-400">[FAIL] $ {provisionResult.error}</p>
+                            )}
+                            {provisionHotspot.isPending && (
+                              <p className="text-sky-400">
+                                $ Applying hotspot/PPPoE configuration...
+                                <span className="ml-1 inline-block animate-pulse text-slate-400">▋</span>
+                              </p>
+                            )}
+                            {deployCaptivePortal.isPending && (
+                              <p className="text-sky-400">
+                                $ Deploying WiFi login page...
+                                <span className="ml-1 inline-block animate-pulse text-slate-400">▋</span>
+                              </p>
+                            )}
+                            {captivePortalResult && (
+                              captivePortalResult.success ? (
+                                <p className="break-words text-emerald-400">
+                                  [OK] $ WiFi login page deployed ({captivePortalResult.fetched_files.length} file(s))
+                                </p>
+                              ) : (
+                                <p className="break-words text-rose-400">[FAIL] $ WiFi login page — {captivePortalResult.error}</p>
+                              )
                             )}
                           </div>
-                        )}
+                        </div>
                       </div>
                     )}
 

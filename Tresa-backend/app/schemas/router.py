@@ -131,6 +131,9 @@ class RouterRemoteAccessResponse(BaseModel):
     port: int
     endpoint: str
     url: str
+    api_port: int
+    api_endpoint: str
+    api_protocol: str = "MikroTik API"
 
 
 class RouterSecureSetupResponse(BaseModel):

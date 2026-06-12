@@ -12,6 +12,7 @@ class Router(SQLModel, table=True):
         sa.UniqueConstraint("branch_id", "name", name="uq_router_branch_name"),
         sa.UniqueConstraint("ppp_username", name="uq_router_ppp_username"),
         sa.UniqueConstraint("nat_port", name="uq_router_nat_port"),
+        sa.UniqueConstraint("winbox_nat_port", name="uq_router_winbox_nat_port"),
         sa.UniqueConstraint("mac_address", name="uq_router_mac_address"),
     )
 
@@ -40,6 +41,8 @@ class Router(SQLModel, table=True):
     nat_port: Optional[int] = Field(default=None, index=True)
     nat_rule_id: Optional[str] = Field(default=None)
     snmp_nat_rule_id: Optional[str] = Field(default=None)
+    winbox_nat_port: Optional[int] = Field(default=None, index=True)
+    winbox_nat_rule_id: Optional[str] = Field(default=None)
     api_username: Optional[str] = Field(default=None)
     api_password_encrypted: Optional[str] = Field(default=None)
     status: str = Field(default="pending", index=True)

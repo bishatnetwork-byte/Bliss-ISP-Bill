@@ -27,6 +27,7 @@ from app.services.routers.routeros import routeros_api
 
 NAT_COMMENT_PREFIX = "customer:"
 SNMP_NAT_COMMENT_PREFIX = "customer-snmp:"
+WINBOX_NAT_COMMENT_PREFIX = "customer-winbox:"
 SAFE_COMMANDS = {
     ("/system/resource", "print"),
     ("/system/identity", "print"),
@@ -143,6 +144,7 @@ def _publish(session: Session, router: Router, payload: dict[str, Any]) -> None:
 
 def _allocate_nat_port(session: Session) -> int:
     used = set(session.exec(select(Router.nat_port).where(Router.nat_port.is_not(None))).all())
+    used.update(session.exec(select(Router.winbox_nat_port).where(Router.winbox_nat_port.is_not(None))).all())
     used.update(session.exec(select(Router.port)).all())
     size = settings.router_nat_port_max - settings.router_nat_port_min + 1
     for _ in range(10):
@@ -223,6 +225,43 @@ def _create_nat_rule(api: Any, router: Router) -> str:
     return str(rule_id)
 
 
+def _find_winbox_nat_rule(api: Any, router: Router) -> dict[str, Any] | None:
+    rules = _resource_items(api, "/ip/firewall/nat")
+    if router.winbox_nat_rule_id:
+        match = next((rule for rule in rules if rule.get("id") == router.winbox_nat_rule_id), None)
+        if match:
+            return match
+    comment = f"{WINBOX_NAT_COMMENT_PREFIX}{router.ppp_username}"
+    return next((rule for rule in rules if rule.get("comment") == comment), None)
+
+
+def _create_winbox_nat_rule(api: Any, router: Router) -> str:
+    resource = api.get_resource("/ip/firewall/nat")
+    payload = {
+        "chain": "dstnat",
+        "dst-address": settings.chr_host,
+        "dst-port": str(router.winbox_nat_port),
+        "protocol": "tcp",
+        "action": "dst-nat",
+        "to-addresses": str(router.tunnel_ip),
+        "to-ports": str(settings.router_winbox_internal_port),
+        "comment": f"{WINBOX_NAT_COMMENT_PREFIX}{router.ppp_username}",
+    }
+    result = resource.call("add", payload)
+    rule_id = result.done_message.get("ret")
+    if not rule_id:
+        match_keys = ("dst-port", "to-addresses", "to-ports", "comment")
+        rules = _resource_items(api, "/ip/firewall/nat")
+        match = next(
+            (rule for rule in rules if all(str(rule.get(key, "")) == payload[key] for key in match_keys)),
+            None,
+        )
+        rule_id = match.get("id") if match else None
+    if not rule_id:
+        raise RuntimeError("CHR created the Winbox NAT rule but did not return its id")
+    return str(rule_id)
+
+
 def _create_snmp_nat_rule(api: Any, router: Router) -> str:
     resource = api.get_resource("/ip/firewall/nat")
     payload = {
@@ -257,11 +296,15 @@ def _remove_nat_rule(api: Any, router: Router) -> None:
     snmp_rule = _find_snmp_nat_rule(api, router)
     if snmp_rule and snmp_rule.get("id"):
         api.get_resource("/ip/firewall/nat").remove(id=snmp_rule["id"])
+    winbox_rule = _find_winbox_nat_rule(api, router)
+    if winbox_rule and winbox_rule.get("id"):
+        api.get_resource("/ip/firewall/nat").remove(id=winbox_rule["id"])
     router.nat_rule_id = None
     router.snmp_nat_rule_id = None
+    router.winbox_nat_rule_id = None
 
 
-def _ensure_nat_rule(api: Any, router: Router) -> None:
+def _ensure_nat_rule(session: Session, api: Any, router: Router) -> None:
     rule = _find_nat_rule(api, router)
     expected = {
         "dst-address": settings.chr_host,
@@ -290,6 +333,23 @@ def _ensure_nat_rule(api: Any, router: Router) -> None:
             api.get_resource("/ip/firewall/nat").remove(id=snmp_rule["id"])
         router.snmp_nat_rule_id = _create_snmp_nat_rule(api, router)
 
+    if router.winbox_nat_port is None:
+        router.winbox_nat_port = _allocate_nat_port(session)
+
+    winbox_rule = _find_winbox_nat_rule(api, router)
+    expected_winbox = {
+        "dst-address": settings.chr_host,
+        "dst-port": str(router.winbox_nat_port),
+        "to-addresses": str(router.tunnel_ip),
+        "to-ports": str(settings.router_winbox_internal_port),
+    }
+    if winbox_rule and all(str(winbox_rule.get(key, "")) == value for key, value in expected_winbox.items()):
+        router.winbox_nat_rule_id = str(winbox_rule.get("id"))
+    else:
+        if winbox_rule and winbox_rule.get("id"):
+            api.get_resource("/ip/firewall/nat").remove(id=winbox_rule["id"])
+        router.winbox_nat_rule_id = _create_winbox_nat_rule(api, router)
+
 
 def ensure_snmp_forwarding(session: Session, router: Router) -> Router:
     if not router.ppp_username or not router.tunnel_ip or router.nat_port is None:
@@ -308,6 +368,32 @@ def ensure_snmp_forwarding(session: Session, router: Router) -> Router:
             if snmp_rule and snmp_rule.get("id"):
                 api.get_resource("/ip/firewall/nat").remove(id=snmp_rule["id"])
             router.snmp_nat_rule_id = _create_snmp_nat_rule(api, router)
+    router.updated_at = datetime.utcnow()
+    session.add(router)
+    session.commit()
+    session.refresh(router)
+    return router
+
+
+def ensure_winbox_forwarding(session: Session, router: Router) -> Router:
+    if not router.ppp_username or not router.tunnel_ip:
+        raise ValueError("Router tunnel provisioning must be completed before enabling Winbox forwarding")
+    with chr_connection() as api:
+        if router.winbox_nat_port is None:
+            router.winbox_nat_port = _allocate_nat_port(session)
+        winbox_rule = _find_winbox_nat_rule(api, router)
+        expected = {
+            "dst-address": settings.chr_host,
+            "dst-port": str(router.winbox_nat_port),
+            "to-addresses": str(router.tunnel_ip),
+            "to-ports": str(settings.router_winbox_internal_port),
+        }
+        if winbox_rule and all(str(winbox_rule.get(key, "")) == value for key, value in expected.items()):
+            router.winbox_nat_rule_id = str(winbox_rule.get("id"))
+        else:
+            if winbox_rule and winbox_rule.get("id"):
+                api.get_resource("/ip/firewall/nat").remove(id=winbox_rule["id"])
+            router.winbox_nat_rule_id = _create_winbox_nat_rule(api, router)
     router.updated_at = datetime.utcnow()
     session.add(router)
     session.commit()
@@ -421,10 +507,10 @@ def provision_router(
         if router.nat_port is None:
             router.nat_port = _allocate_nat_port(session)
         if api is not None:
-            _ensure_nat_rule(api, router)
+            _ensure_nat_rule(session, api, router)
         else:
             with chr_connection() as new_api:
-                _ensure_nat_rule(new_api, router)
+                _ensure_nat_rule(session, new_api, router)
         now = datetime.utcnow()
         router.port = router.nat_port
         router.host = settings.chr_host

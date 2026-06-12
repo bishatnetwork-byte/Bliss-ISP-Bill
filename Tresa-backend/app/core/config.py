@@ -56,6 +56,7 @@ class Settings:
     chr_tunnel_local_address: str = os.getenv("CHR_TUNNEL_LOCAL_ADDRESS", "10.0.0.1")
     router_l2tp_ipsec_secret: str = os.getenv("ROUTER_L2TP_IPSEC_SECRET", "")
     router_api_internal_port: int = int(os.getenv("ROUTER_API_INTERNAL_PORT", "8728"))
+    router_winbox_internal_port: int = int(os.getenv("ROUTER_WINBOX_INTERNAL_PORT", "8291"))
     router_nat_port_min: int = int(os.getenv("ROUTER_NAT_PORT_MIN", "49152"))
     router_nat_port_max: int = int(os.getenv("ROUTER_NAT_PORT_MAX", "65534"))
     concentrator_enabled: bool = os.getenv("CONCENTRATOR_ENABLED", "true").lower() == "true"

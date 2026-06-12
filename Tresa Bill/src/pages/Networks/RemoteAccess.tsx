@@ -11,7 +11,6 @@ import {
     Loader2,
     RefreshCw,
     Server,
-    Shield,
     Wifi,
     WifiOff,
     Zap,
@@ -55,20 +54,30 @@ export default function RemoteAccess() {
         checkedAt?: string;
     }>({ status: 'idle' });
 
-    const [copied, setCopied] = useState(false);
+    const [copiedField, setCopiedField] = useState<"winbox" | "api" | null>(null);
 
     const isEnabled = remoteAccessData?.enabled ?? false;
-    const publicUrl = remoteAccessData ? `${remoteAccessData.host}:${remoteAccessData.port}` : "Offline";
-    const protocol = remoteAccessData?.protocol ?? "SSH Tunnel";
-    const service = remoteAccessData?.service ?? "TCP";
-    const port = remoteAccessData?.port ?? 8000;
+    const winboxPort = remoteAccessData?.port ?? 0;
+    const winboxPending = isEnabled && winboxPort === 0;
+    const winboxUrl = winboxPort
+        ? (remoteAccessData?.url || `${remoteAccessData?.host}:${winboxPort}`)
+        : "";
+    const publicUrl = winboxPort ? winboxUrl : winboxPending ? "Pending reconnect" : "Offline";
+    const apiPort = remoteAccessData?.api_port ?? 0;
+    const apiUrl = apiPort
+        ? (remoteAccessData?.api_endpoint || `${remoteAccessData?.host}:${apiPort}`)
+        : "";
+    const protocol = remoteAccessData?.protocol ?? "L2TP";
+    const service = remoteAccessData?.service ?? "Winbox";
+    const port = winboxPort || 8291;
     const routerHost = routers[0]?.host || "192.168.88.1";
 
-    const handleCopy = () => {
-        navigator.clipboard.writeText(remoteAccessData?.url || publicUrl);
-        setCopied(true);
+    const handleCopy = (field: "winbox" | "api", value: string) => {
+        if (!value) return;
+        navigator.clipboard.writeText(value);
+        setCopiedField(field);
         toast.success("Connection URL copied to clipboard!");
-        setTimeout(() => setCopied(false), 2000);
+        setTimeout(() => setCopiedField(null), 2000);
     };
 
     const handleReconnect = async () => {
@@ -84,6 +93,10 @@ export default function RemoteAccess() {
 
     const handleConnectionCheck = async () => {
         if (!routerId) return;
+        if (winboxPending) {
+            toast.error("Winbox port not yet allocated. Click Refresh and try again shortly.");
+            return;
+        }
         setIsChecking(true);
         setCheckResult({ status: 'checking' });
 
@@ -92,7 +105,7 @@ export default function RemoteAccess() {
                 routerId,
                 payload: {
                     target: remoteAccessData?.host || routerHost,
-                    port: remoteAccessData?.port || port,
+                    port: winboxPort || port,
                     timeout_seconds: 5
                 }
             });
@@ -259,38 +272,50 @@ export default function RemoteAccess() {
                             </Card>
 
                             <Card className="border border-primary/40 rounded shadow-none">
-                                <CardContent className="p-4 flex items-center justify-between">
-                                    <div className="space-y-1">
+                                <CardContent className="p-4 flex items-center justify-between gap-3">
+                                    <div className="space-y-1 min-w-0">
                                         <span className="text-[12px] text-muted-foreground font-semibold ">
-                                            Remote Endpoint
+                                            Winbox Access
                                         </span>
-                                        <div className="text-sm font-bold font-mono text-foreground flex items-center gap-1.5">
-                                            {publicUrl}
+                                        <div className="text-sm font-bold font-mono text-foreground flex items-center gap-1.5 truncate">
+                                            {winboxPort ? winboxUrl : winboxPending ? "Pending reconnect" : "Offline"}
                                         </div>
+                                        <p className="text-[10px] text-muted-foreground truncate">
+                                            {winboxPending
+                                                ? "Reopen this page after the router reconnects"
+                                                : `${protocol} · ${service}`}
+                                        </p>
                                     </div>
                                     <button
-                                        onClick={handleCopy}
-                                        disabled={!isEnabled}
-                                        className="w-9 h-9 rounded bg-muted/50 hover:bg-muted transition-colors flex items-center justify-center text-muted-foreground"
+                                        onClick={() => handleCopy("winbox", winboxUrl)}
+                                        disabled={!winboxPort}
+                                        className="w-9 h-9 rounded bg-muted/50 hover:bg-muted transition-colors flex items-center justify-center text-muted-foreground disabled:opacity-40 shrink-0"
                                     >
-                                        {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                                        {copiedField === "winbox" ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                                     </button>
                                 </CardContent>
                             </Card>
 
                             <Card className="border border-primary/40 rounded shadow-none">
-                                <CardContent className="p-4 flex items-center justify-between">
-                                    <div className="space-y-1">
+                                <CardContent className="p-4 flex items-center justify-between gap-3">
+                                    <div className="space-y-1 min-w-0">
                                         <span className="text-[12px] text-muted-foreground font-semibold ">
-                                            Protocol / Port
+                                            API Access
                                         </span>
-                                        <div className="text-sm font-bold">
-                                            {protocol} ({service} {port})
+                                        <div className="text-sm font-bold font-mono text-foreground flex items-center gap-1.5 truncate">
+                                            {apiPort ? apiUrl : "Offline"}
                                         </div>
+                                        <p className="text-[10px] text-muted-foreground truncate">
+                                            {remoteAccessData?.api_protocol ?? "MikroTik API"}
+                                        </p>
                                     </div>
-                                    <div className="w-9 h-9 rounded bg-muted/50 flex items-center justify-center">
-                                        <Shield className="w-4 h-4 text-muted-foreground" />
-                                    </div>
+                                    <button
+                                        onClick={() => handleCopy("api", apiUrl)}
+                                        disabled={!apiPort}
+                                        className="w-9 h-9 rounded bg-muted/50 hover:bg-muted transition-colors flex items-center justify-center text-muted-foreground disabled:opacity-40 shrink-0"
+                                    >
+                                        {copiedField === "api" ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                                    </button>
                                 </CardContent>
                             </Card>
                         </div>

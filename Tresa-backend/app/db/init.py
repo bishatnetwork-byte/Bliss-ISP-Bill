@@ -111,6 +111,8 @@ def _ensure_router_columns() -> None:
         "nat_port": "INTEGER",
         "nat_rule_id": "VARCHAR",
         "snmp_nat_rule_id": "VARCHAR",
+        "winbox_nat_port": "INTEGER",
+        "winbox_nat_rule_id": "VARCHAR",
         "api_username": "VARCHAR",
         "api_password_encrypted": "VARCHAR",
         "status": "VARCHAR DEFAULT 'pending' NOT NULL",
@@ -134,6 +136,10 @@ def _ensure_router_columns() -> None:
         conn.execute(sa.text(
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_router_nat_port_unique "
             "ON router (nat_port) WHERE nat_port IS NOT NULL"
+        ))
+        conn.execute(sa.text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_router_winbox_nat_port_unique "
+            "ON router (winbox_nat_port) WHERE winbox_nat_port IS NOT NULL"
         ))
         conn.execute(sa.text(
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_router_mac_address_unique "

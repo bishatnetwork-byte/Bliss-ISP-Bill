@@ -266,6 +266,9 @@ export interface RouterRemoteAccessResponse {
   port: number;
   endpoint: string;
   url: string;
+  api_port: number;
+  api_endpoint: string;
+  api_protocol: string;
 }
 
 export interface RouterPingRequest {

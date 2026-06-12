@@ -80,6 +80,7 @@ from app.services.storage import STORAGE_ERRORS, object_url, upload_bytes
 from app.services.routers.concentrator import (
     confirm_router,
     delete_router_from_chr,
+    ensure_winbox_forwarding,
     log_error,
     provision_router,
     register_router,
@@ -438,6 +439,11 @@ def router_remote_access(
     session: SessionDep,
 ) -> RouterRemoteAccessResponse:
     db_router = get_router_with_ownership(session, router_id, user.id)
+    if db_router.winbox_nat_port is None and db_router.status in {"connected", "online"}:
+        try:
+            db_router = ensure_winbox_forwarding(session, db_router)
+        except Exception:
+            pass
     return RouterRemoteAccessResponse(
         router_id=db_router.id,
         router_name=db_router.name,
@@ -522,7 +528,7 @@ def publish_router_setup_script(
         mikrotik_v7_command=f'/import url="{fetch_url}"',
         mikrotik_v6_command=(
             f'/tool fetch url="{fetch_url}" dst-path=tresa-setup.rsc\n'
-            "/import file-name=tresa-setup.rsc"
+            ":delay 2s; /import file-name=tresa-setup.rsc"
         ),
         expires_note=(
             "Script contains a 48-hour registration token. "
