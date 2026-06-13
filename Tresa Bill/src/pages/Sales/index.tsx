@@ -56,9 +56,50 @@ import {
     WifiOff
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useBranchVouchers, useRouterActiveUsers, useRouters } from "@/hooks/useRouters";
 import { voucherUiStatus } from "@/lib/voucherStatus";
+
+// ── Sparkline SVG helper ─────────────────────────────────────────
+function Sparkline({ data, color, height = 36 }: { data: number[]; color: string; height?: number }) {
+    if (!data || data.length < 2) {
+        return <div style={{ height }} className="w-full" />;
+    }
+    const width = 100;
+    const max = Math.max(...data, 1);
+    const step = width / (data.length - 1);
+    const pts = data
+        .map((v, i) => `${(i * step).toFixed(1)},${(height - (v / max) * (height - 4) - 2).toFixed(1)}`)
+        .join(" ");
+    return (
+        <svg
+            viewBox={`0 0 ${width} ${height}`}
+            preserveAspectRatio="none"
+            className="w-full"
+            style={{ height }}
+        >
+            <defs>
+                <linearGradient id={`sg-${color.replace(/[^a-z]/gi, "")}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+                    <stop offset="100%" stopColor={color} stopOpacity="0" />
+                </linearGradient>
+            </defs>
+            <polygon
+                points={`0,${height} ${pts} ${width},${height}`}
+                fill={`url(#sg-${color.replace(/[^a-z]/gi, "")})`}
+            />
+            <polyline
+                points={pts}
+                fill="none"
+                stroke={color}
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+        </svg>
+    );
+}
 
 // Interfaces
 interface SalesRecord {
@@ -183,12 +224,17 @@ export default function SalesIndex() {
     // Filters state
     const [selectedRouter, setSelectedRouter] = useState<string>("all");
     const [selectedProfile, setSelectedProfile] = useState<string>("all");
+    const [selectedStatus, setSelectedStatus] = useState<string>("all");
+    const [selectedPaymentMode, setSelectedPaymentMode] = useState<string>("all");
     const [selectedDateFilter, setSelectedDateFilter] = useState<string>("all");
     const [searchQuery, setSearchQuery] = useState<string>("");
 
+    // Navigation for customer detail page
+    const navigate = useNavigate();
+
     // Pagination
     const [currentPage, setCurrentPage] = useState<number>(1);
-    const itemsPerPage = 4;
+    const [itemsPerPage, setItemsPerPage] = useState<number>(10);
 
 
 
@@ -263,6 +309,26 @@ export default function SalesIndex() {
 
     const kpis = getKpis();
 
+    // Sparkline: returns last N days of daily revenue totals
+    const getSparkline = React.useCallback((days: number, filterFn?: (r: typeof sales[0]) => boolean) => {
+        return Array.from({ length: days }, (_, i) => {
+            const dateStr = getRelativeDateString(days - 1 - i);
+            return sales
+                .filter(r => r.createdDate === dateStr && (filterFn ? filterFn(r) : true))
+                .reduce((sum, r) => sum + r.amount, 0);
+        });
+    }, [sales]);
+
+    const handleOpenUserDetail = (phone: string) => {
+        navigate(`/sales/customer/${encodeURIComponent(phone)}`);
+    };
+
+    const formatDateLabel = (dateStr: string) => {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+        return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    };
+
     // Handle Filtering
     const filteredRecords = React.useMemo(() => {
         return sales.filter(record => {
@@ -272,6 +338,14 @@ export default function SalesIndex() {
             }
             // Profile Filter
             if (selectedProfile !== "all" && record.profile !== selectedProfile) {
+                return false;
+            }
+            // Status Filter
+            if (selectedStatus !== "all" && record.status !== selectedStatus) {
+                return false;
+            }
+            // Payment Mode Filter
+            if (selectedPaymentMode !== "all" && record.paymentMode !== selectedPaymentMode) {
                 return false;
             }
             // Date Filter
@@ -291,7 +365,7 @@ export default function SalesIndex() {
 
             return true;
         });
-    }, [sales, selectedRouter, selectedProfile, selectedDateFilter, searchQuery]);
+    }, [sales, selectedRouter, selectedProfile, selectedStatus, selectedPaymentMode, selectedDateFilter, searchQuery]);
 
     const totalAmountFiltered = React.useMemo(() => {
         return filteredRecords.reduce((sum, v) => sum + v.amount, 0);
@@ -301,18 +375,18 @@ export default function SalesIndex() {
     const paginatedRecords = React.useMemo(() => {
         const startIndex = (currentPage - 1) * itemsPerPage;
         return filteredRecords.slice(startIndex, startIndex + itemsPerPage);
-    }, [filteredRecords, currentPage, currentPage]);
+    }, [filteredRecords, currentPage, itemsPerPage]);
 
     const totalPages = Math.max(1, Math.ceil(filteredRecords.length / itemsPerPage));
 
     // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [selectedRouter, selectedProfile, selectedDateFilter, searchQuery]);
+    }, [selectedRouter, selectedProfile, selectedStatus, selectedPaymentMode, selectedDateFilter, searchQuery]);
 
     // Format currencies
     const formatUGX = (val: number) => {
-        return "UGX " + val.toLocaleString();
+        return val.toLocaleString() + " UGX";
     };
 
     // Profile pricing lookup
@@ -489,92 +563,125 @@ export default function SalesIndex() {
 
                 {/* Real-Time Sales Dashboard Panel */}
                 {activeTab === "sales" && (
-                    <div className="space-y-6">
+                    <div className="space-y-4 sm:space-y-6">
                         {/* KPI Cards Grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                             {/* Today Sales */}
-                            <Card className="rounded bg-gradient-to-br from-blue-600 via-blue-600 to-blue-700 text-white border-0 shadow-lg relative overflow-hidden group hover:scale-[1.02] transition-transform">
-                                <div className="absolute right-3 top-3 w-12 h-12 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                    <Coins className="w-6 h-6 text-white/90" />
-                                </div>
-                                <CardHeader className="pb-2">
-                                    <span className="text-xs font-semibold uppercase tracking-wider text-blue-100">Today Sales</span>
-                                    <CardTitle className="text-2xl font-black mt-1">{formatUGX(kpis.todaySales)}</CardTitle>
+                            <Card className="rounded-lg bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
+                                <CardHeader className="pb-1 pt-3 px-3 sm:px-4 sm:pt-4">
+                                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-muted-foreground">Revenue Today</span>
+                                    <CardTitle className="text-lg sm:text-2xl font-black mt-0.5 text-foreground leading-tight">
+                                        {formatUGX(kpis.todaySales)}
+                                    </CardTitle>
                                 </CardHeader>
-                                <CardContent>
-                                    <p className="text-xs text-blue-100/90 font-medium flex items-center gap-1">
-                                        <User className="w-3.5 h-3.5" />
-                                        Users: {kpis.todayUsers}
-                                    </p>
+                                <div className="px-3 sm:px-4 pb-1 mt-auto">
+                                    <Sparkline data={getSparkline(7, r => isDateToday(r.createdDate) || true).map((_, i, arr) => {
+                                        const d = getRelativeDateString(6 - i);
+                                        return sales.filter(r => r.createdDate === d).reduce((s, r) => s + r.amount, 0);
+                                    }).slice(-7)} color="#2563eb" height={36} />
+                                </div>
+                                <CardContent className="pb-3 pt-0 px-3 sm:px-4">
+                                    <div className="text-[10px] sm:text-xs text-muted-foreground font-semibold flex items-center justify-between">
+                                        <span>{kpis.todayUsers} sales · {formatDateLabel(getRelativeDateString(0))}</span>
+                                        <div className="p-1 rounded bg-blue-500/10 text-blue-600">
+                                            <CircleDollarSign className="w-3.5 h-3.5" />
+                                        </div>
+                                    </div>
                                 </CardContent>
+                                <div className="h-[2px] bg-blue-600" />
                             </Card>
 
                             {/* Yesterday Sales */}
-                            <Card className="rounded bg-gradient-to-br from-emerald-500 via-emerald-500 to-emerald-600 text-white border-0 shadow-lg relative overflow-hidden group hover:scale-[1.02] transition-transform">
-                                <div className="absolute right-3 top-3 w-12 h-12 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                    <Calendar className="w-6 h-6 text-white/90" />
-                                </div>
-                                <CardHeader className="pb-2">
-                                    <span className="text-xs font-semibold uppercase tracking-wider text-emerald-100">Yesterday Sales</span>
-                                    <CardTitle className="text-2xl font-black mt-1">{formatUGX(kpis.yesterdaySales)}</CardTitle>
+                            <Card className="rounded-lg bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
+                                <CardHeader className="pb-1 pt-3 px-3 sm:px-4 sm:pt-4">
+                                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-muted-foreground">Revenue Yesterday</span>
+                                    <CardTitle className="text-lg sm:text-2xl font-black mt-0.5 text-foreground leading-tight">
+                                        {formatUGX(kpis.yesterdaySales)}
+                                    </CardTitle>
                                 </CardHeader>
-                                <CardContent>
-                                    <p className="text-xs text-emerald-100/90 font-medium flex items-center gap-1">
-                                        <User className="w-3.5 h-3.5" />
-                                        Users: {kpis.yesterdayUsers}
-                                    </p>
+                                <div className="px-3 sm:px-4 pb-1 mt-auto">
+                                    <Sparkline data={Array.from({ length: 7 }, (_, i) => {
+                                        const d = getRelativeDateString(6 - i);
+                                        return sales.filter(r => r.createdDate === d).reduce((s, r) => s + r.amount, 0);
+                                    })} color="#10b981" height={36} />
+                                </div>
+                                <CardContent className="pb-3 pt-0 px-3 sm:px-4">
+                                    <div className="text-[10px] sm:text-xs text-muted-foreground font-semibold flex items-center justify-between">
+                                        <span>{kpis.yesterdayUsers} sales · {formatDateLabel(getRelativeDateString(1))}</span>
+                                        <div className="p-1 rounded bg-emerald-500/10 text-emerald-500">
+                                            <CircleDollarSign className="w-3.5 h-3.5" />
+                                        </div>
+                                    </div>
                                 </CardContent>
+                                <div className="h-[2px] bg-emerald-500" />
                             </Card>
 
                             {/* This Week */}
-                            <Card className="rounded bg-gradient-to-br from-cyan-500 via-cyan-500 to-cyan-600 text-white border-0 shadow-lg relative overflow-hidden group hover:scale-[1.02] transition-transform">
-                                <div className="absolute right-3 top-3 w-12 h-12 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                    <TrendingUp className="w-6 h-6 text-white/90" />
-                                </div>
-                                <CardHeader className="pb-2">
-                                    <span className="text-xs font-semibold uppercase tracking-wider text-cyan-100">This Week</span>
-                                    <CardTitle className="text-2xl font-black mt-1">{formatUGX(kpis.weekSales)}</CardTitle>
+                            <Card className="rounded-lg bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
+                                <CardHeader className="pb-1 pt-3 px-3 sm:px-4 sm:pt-4">
+                                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-muted-foreground">Revenue This Week</span>
+                                    <CardTitle className="text-lg sm:text-2xl font-black mt-0.5 text-foreground leading-tight">
+                                        {formatUGX(kpis.weekSales)}
+                                    </CardTitle>
                                 </CardHeader>
-                                <CardContent>
-                                    <p className="text-xs text-cyan-100/90 font-medium flex items-center gap-1">
-                                        <User className="w-3.5 h-3.5" />
-                                        Users: {kpis.weekUsers}
-                                    </p>
+                                <div className="px-3 sm:px-4 pb-1 mt-auto">
+                                    <Sparkline data={Array.from({ length: 7 }, (_, i) => {
+                                        const d = getRelativeDateString(6 - i);
+                                        return sales.filter(r => r.createdDate === d).reduce((s, r) => s + r.amount, 0);
+                                    })} color="#06b6d4" height={36} />
+                                </div>
+                                <CardContent className="pb-3 pt-0 px-3 sm:px-4">
+                                    <div className="text-[10px] sm:text-xs text-muted-foreground font-semibold flex items-center justify-between">
+                                        <span>{kpis.weekUsers} sales · This Week</span>
+                                        <div className="p-1 rounded bg-cyan-500/10 text-cyan-500">
+                                            <CircleDollarSign className="w-3.5 h-3.5" />
+                                        </div>
+                                    </div>
                                 </CardContent>
+                                <div className="h-[2px] bg-cyan-500" />
                             </Card>
 
                             {/* This Month */}
-                            <Card className="rounded bg-gradient-to-br from-orange-500 via-orange-500 to-orange-600 text-white border-0 shadow-lg relative overflow-hidden group hover:scale-[1.02] transition-transform">
-                                <div className="absolute right-3 top-3 w-12 h-12 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                    <RouterIcon className="w-6 h-6 text-white/90" />
-                                </div>
-                                <CardHeader className="pb-2">
-                                    <span className="text-xs font-semibold uppercase tracking-wider text-orange-100">This Month</span>
-                                    <CardTitle className="text-2xl font-black mt-1">{formatUGX(kpis.monthSales)}</CardTitle>
+                            <Card className="rounded-lg bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
+                                <CardHeader className="pb-1 pt-3 px-3 sm:px-4 sm:pt-4">
+                                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-muted-foreground">Revenue This Month</span>
+                                    <CardTitle className="text-lg sm:text-2xl font-black mt-0.5 text-foreground leading-tight">
+                                        {formatUGX(kpis.monthSales)}
+                                    </CardTitle>
                                 </CardHeader>
-                                <CardContent>
-                                    <p className="text-xs text-orange-100/90 font-medium flex items-center gap-1">
-                                        <User className="w-3.5 h-3.5" />
-                                        Users: {kpis.monthUsers}
-                                    </p>
+                                <div className="px-3 sm:px-4 pb-1 mt-auto">
+                                    <Sparkline data={Array.from({ length: 30 }, (_, i) => {
+                                        const d = getRelativeDateString(29 - i);
+                                        return sales.filter(r => r.createdDate === d).reduce((s, r) => s + r.amount, 0);
+                                    })} color="#f97316" height={36} />
+                                </div>
+                                <CardContent className="pb-3 pt-0 px-3 sm:px-4">
+                                    <div className="text-[10px] sm:text-xs text-muted-foreground font-semibold flex items-center justify-between">
+                                        <span>{kpis.monthUsers} sales · This Month</span>
+                                        <div className="p-1 rounded bg-orange-500/10 text-orange-500">
+                                            <CircleDollarSign className="w-3.5 h-3.5" />
+                                        </div>
+                                    </div>
                                 </CardContent>
+                                <div className="h-[2px] bg-orange-500" />
                             </Card>
                         </div>
 
                         {/* Filters & Search Panel */}
-                        <Card className=" border-0 shadow-none  rounded-none bg-card">
+                        <Card className=" border border-border/40 shadow-none rounded-md bg-card">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-sm font-bold tracking-tight text-foreground flex items-center justify-between">
                                     <p>Filters & Search</p>
                                     <div className="flex items-center justify-between ">
-                                        {(selectedRouter !== "all" || selectedProfile !== "all" || selectedDateFilter !== "all" || searchQuery !== "") && (
+                                        {(selectedRouter !== "all" || selectedProfile !== "all" || selectedStatus !== "all" || selectedPaymentMode !== "all" || selectedDateFilter !== "all" || searchQuery !== "") && (
                                             <Button
                                                 variant="destructive"
-
                                                 size="sm"
                                                 onClick={() => {
                                                     setSelectedRouter("all");
                                                     setSelectedProfile("all");
+                                                    setSelectedStatus("all");
+                                                    setSelectedPaymentMode("all");
                                                     setSelectedDateFilter("all");
                                                     setSearchQuery("");
                                                 }}
@@ -587,8 +694,8 @@ export default function SalesIndex() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    {/* Router */}
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+                                    {/* Router — real data */}
                                     <div className="space-y-1.5">
                                         <Label htmlFor="routerFilter" className="text-xs font-semibold text-muted-foreground">Router</Label>
                                         <Select value={selectedRouter} onValueChange={setSelectedRouter}>
@@ -597,15 +704,14 @@ export default function SalesIndex() {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="all">All Routers</SelectItem>
-                                                <SelectItem value="Kampala Branch">Kampala Branch</SelectItem>
-                                                <SelectItem value="Gulu Branch">Gulu Branch</SelectItem>
-                                                <SelectItem value="Arua Branch">Arua Branch</SelectItem>
-                                                <SelectItem value="Mbarara Branch">Mbarara Branch</SelectItem>
+                                                {routers.map(r => (
+                                                    <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
+                                                ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
 
-                                    {/* Profile */}
+                                    {/* Profile — derived from real sales data */}
                                     <div className="space-y-1.5">
                                         <Label htmlFor="profileFilter" className="text-xs font-semibold text-muted-foreground">Profile</Label>
                                         <Select value={selectedProfile} onValueChange={setSelectedProfile}>
@@ -614,11 +720,41 @@ export default function SalesIndex() {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="all">All Profiles</SelectItem>
-                                                <SelectItem value="1 Hour High Speed">1 Hour High Speed</SelectItem>
-                                                <SelectItem value="2 Hours Standard">2 Hours Standard</SelectItem>
-                                                <SelectItem value="24 Hours Unlimited">24 Hours Unlimited</SelectItem>
-                                                <SelectItem value="7 Days Premium">7 Days Premium</SelectItem>
-                                                <SelectItem value="30 Days Enterprise">30 Days Enterprise</SelectItem>
+                                                {[...new Set(sales.map(s => s.profile))].sort().map(p => (
+                                                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Status Filter */}
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="statusFilter" className="text-xs font-semibold text-muted-foreground">Status</Label>
+                                        <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                                            <SelectTrigger id="statusFilter" className="h-9 text-xs bg-background">
+                                                <SelectValue placeholder="All Statuses" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Statuses</SelectItem>
+                                                <SelectItem value="Active">Active</SelectItem>
+                                                <SelectItem value="Expired">Expired</SelectItem>
+                                                <SelectItem value="Unactivated">Unactivated</SelectItem>
+                                                <SelectItem value="Sync Issue">Sync Issue</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Payment Mode */}
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="modeFilter" className="text-xs font-semibold text-muted-foreground">Payment Mode</Label>
+                                        <Select value={selectedPaymentMode} onValueChange={setSelectedPaymentMode}>
+                                            <SelectTrigger id="modeFilter" className="h-9 text-xs bg-background">
+                                                <SelectValue placeholder="All Modes" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Modes</SelectItem>
+                                                <SelectItem value="Online Payment">Online Payment</SelectItem>
+                                                <SelectItem value="Voucher Printing">Voucher Printing</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -640,6 +776,23 @@ export default function SalesIndex() {
                                         </Select>
                                     </div>
 
+                                    {/* Items Per Page */}
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="pageSizeFilter" className="text-xs font-semibold text-muted-foreground">Show Rows</Label>
+                                        <Select value={String(itemsPerPage)} onValueChange={(val) => setItemsPerPage(Number(val))}>
+                                            <SelectTrigger id="pageSizeFilter" className="h-9 text-xs bg-background">
+                                                <SelectValue placeholder="10 rows" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="5">5 rows</SelectItem>
+                                                <SelectItem value="10">10 rows</SelectItem>
+                                                <SelectItem value="20">20 rows</SelectItem>
+                                                <SelectItem value="50">50 rows</SelectItem>
+                                                <SelectItem value="100">100 rows</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
                                     {/* Search bar */}
                                     <div className="space-y-1.5">
                                         <Label htmlFor="searchQuery" className="text-xs font-semibold text-muted-foreground">Search Vouchers</Label>
@@ -648,7 +801,7 @@ export default function SalesIndex() {
                                             <Input
                                                 id="searchQuery"
                                                 type="text"
-                                                placeholder="Search Voucher, user name..."
+                                                placeholder="Search Voucher, name, phone..."
                                                 value={searchQuery}
                                                 onChange={(e) => setSearchQuery(e.target.value)}
                                                 className="pl-9 h-9 text-xs bg-background border-input"
@@ -670,11 +823,12 @@ export default function SalesIndex() {
                                 </div>
                             </CardHeader>
                             <CardContent>
-                                <div className="overflow-x-auto border border-border/10 rounded">
-                                    <Table>
+                                <div className="overflow-x-auto -mx-4 sm:mx-0 border border-border/10 rounded">
+                                    <Table className="min-w-[700px]">
                                         <TableHeader className="bg-muted/30">
                                             <TableRow>
-                                                <TableHead className="w-[50px] font-bold text-xs uppercase text-foreground">#</TableHead>
+                                                <TableHead className="w-[40px] font-bold text-xs uppercase text-foreground">#</TableHead>
+                                                <TableHead className="font-bold text-xs uppercase text-foreground min-w-[140px]">User / Client</TableHead>
                                                 <TableHead className="font-bold text-xs uppercase text-foreground">Router</TableHead>
                                                 <TableHead className="font-bold text-xs uppercase text-foreground">Voucher Code</TableHead>
                                                 <TableHead className="font-bold text-xs uppercase text-foreground">Profile</TableHead>
@@ -688,7 +842,7 @@ export default function SalesIndex() {
                                         <TableBody>
                                             {paginatedRecords.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={9} className="h-44 text-center">
+                                                    <TableCell colSpan={10} className="h-44 text-center">
                                                         <div className="flex flex-col items-center justify-center text-muted-foreground">
                                                             <WifiOff className="w-10 h-10 mb-2 stroke-[1.5] text-muted-foreground/60" />
                                                             <span className="text-sm font-semibold">No sales records found</span>
@@ -705,12 +859,29 @@ export default function SalesIndex() {
                                                             className="hover:bg-muted/40 transition-colors"
                                                         >
                                                             <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{serialNum}</TableCell>
+                                                            <TableCell className="text-xs text-left">
+                                                                {record.phone ? (
+                                                                    <button
+                                                                        onClick={() => handleOpenUserDetail(record.phone)}
+                                                                        className="font-semibold text-primary hover:underline text-left flex flex-col focus:outline-none group/user"
+                                                                        title="View purchase history"
+                                                                    >
+                                                                        <span className="font-bold group-hover/user:underline">{record.buyerName || "Unknown Customer"}</span>
+                                                                        <span className="text-[10px] text-muted-foreground font-mono">{record.phone}</span>
+                                                                    </button>
+                                                                ) : (
+                                                                    <div className="flex flex-col text-left">
+                                                                        <span className="font-medium text-muted-foreground">{record.buyerName || "Bulk / Walk-in"}</span>
+                                                                        <span className="text-[10px] text-muted-foreground/60 font-mono">N/A</span>
+                                                                    </div>
+                                                                )}
+                                                            </TableCell>
                                                             <TableCell className="font-medium text-xs text-foreground">{record.router}</TableCell>
                                                             <TableCell className="font-mono text-xs font-semibold text-primary">{record.voucherCode}</TableCell>
-                                                            <TableCell className="text-xs font-semibold text-foreground/80">{record.profile}</TableCell>
-                                                            <TableCell className="font-bold text-xs text-foreground">{formatUGX(record.amount)}</TableCell>
-                                                            <TableCell className="text-xs font-mono text-muted-foreground">{record.activatedAt}</TableCell>
-                                                            <TableCell className="text-xs font-mono text-muted-foreground">{record.expiresAt}</TableCell>
+                                                            <TableCell className="text-xs font-semibold text-foreground/80 max-w-[120px] truncate">{record.profile}</TableCell>
+                                                            <TableCell className="font-bold text-xs text-foreground whitespace-nowrap">{formatUGX(record.amount)}</TableCell>
+                                                            <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{record.activatedAt}</TableCell>
+                                                            <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{record.expiresAt}</TableCell>
                                                             <TableCell className="text-xs">{getModeBadge(record.paymentMode)}</TableCell>
                                                             <TableCell className="text-center">{getStatusBadge(record.status)}</TableCell>
                                                         </TableRow>

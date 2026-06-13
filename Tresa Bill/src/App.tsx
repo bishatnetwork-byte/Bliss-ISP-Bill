@@ -30,6 +30,7 @@ import RouterPackages from './pages/Routers/Packages';
 import RoutersIndex from './pages/Routers/index';
 import SetUpProvison from './pages/SetUpProvision/SetUpProvison';
 import SalesIndex from './pages/Sales/index';
+import CustomerDetail from './pages/Sales/CustomerDetail';
 import Withdrawal from './pages/Sales/Withdrawal';
 import SupportsIndex from './pages/Supports/index';
 import VouchersIndex from './pages/Vouchers/index';
@@ -141,6 +142,7 @@ const AppRoutes = () => {
         <Route path="/voucher-support" element={protectedElement(<PermissionRoute permission="support"><SupportsIndex /></PermissionRoute>)} />
         <Route path="/messages" element={protectedElement(<PermissionRoute permission="support"><MessagesPage /></PermissionRoute>)} />
         <Route path="/sales" element={protectedElement(<PermissionRoute permission="sales"><SalesIndex /></PermissionRoute>)} />
+        <Route path="/sales/customer/:phone" element={protectedElement(<PermissionRoute permission="sales"><CustomerDetail /></PermissionRoute>)} />
         <Route path="/vouchers" element={protectedElement(<PermissionRoute permission="vouchers"><VouchersIndex /></PermissionRoute>)} />
         <Route path="/vouchers/active-users" element={protectedElement(<PermissionRoute permission="vouchers"><ActiveUsersPage /></PermissionRoute>)} />
         <Route path="/router" element={protectedElement(<PermissionRoute permission="routers"><RoutersIndex /></PermissionRoute>)} />
