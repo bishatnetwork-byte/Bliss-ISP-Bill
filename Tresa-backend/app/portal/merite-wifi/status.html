@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Merite WiFi - Status</title>
+    $(if refresh-timeout)
+    <meta http-equiv="refresh" content="$(refresh-timeout-secs)">
+    $(endif)
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link href="styles.css" rel="stylesheet" type="text/css" />
+    <script language="JavaScript">
+        $(if advert - pending == 'yes')
+            var popup = '';
+        function focusAdvert() {
+            if (window.focus) popup.focus();
+        }
+        function openAdvert() {
+            popup = open('$(link-advert)', 'hotspot_advert', '');
+            setTimeout("focusAdvert()", 1000);
+        }
+        $(endif)
+        function openLogout() {
+            if (window.name != 'hotspot_status') return true;
+            open('$(link-logout)', 'hotspot_logout', 'toolbar=0,location=0,directories=0,status=0,menubars=0,resizable=1,width=280,height=250');
+            window.close();
+            return false;
+        }
+    </script>
+</head>
+
+<body $(if advert-pending=='yes' ) onLoad="openAdvert()" $(endif)>
+    <div class="app-wrapper">
+        <div class="bg-glow"></div>
+
+        <div class="main-content">
+            <div class="container animate-fade-in-up">
+
+                <!-- Status Header -->
+                <div class="status-header">
+                    <div class="header-icon">
+                    </div>
+                    <h1 class="header-title">Connected</h1>
+                    <div class="status-indicator">
+                        <div class="status-dot"></div>
+                        <p class="status-ip">$(ip)</p>
+                    </div>
+                </div>
+
+                <form action="$(link-logout)" name="logout" onSubmit="return openLogout()">
+                    <!-- Stats Grid -->
+                    <div class="stats-grid">
+                        <!-- Duration -->
+                        <div class="stat-card">
+                            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            <div class="stat-label">Duration</div>
+                            <div class="stat-value">$(uptime)</div>
+                        </div>
+
+                        <!-- Download -->
+                        <div class="stat-card">
+                            <svg class="stat-icon accent" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            <div class="stat-label">Down</div>
+                            <div class="stat-value accent">$(bytes-out-nice)</div>
+                        </div>
+
+                        <!-- Upload -->
+                        <div class="stat-card">
+                            <svg class="stat-icon accent" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <div class="stat-label">Up</div>
+                            <div class="stat-value accent">$(bytes-in-nice)</div>
+                        </div>
+                    </div>
+
+                    <!-- Only showing Traffic Chart if we can mock it, otherwise better remove it or keep static -->
+                    <!-- Since MikroTik doesn't provide real-time arrays for charts easily in status.html, we'll keep the cards -->
+
+                    $(if session-time-left)
+                    <div class="stats-grid" style="grid-template-columns: 1fr; margin-bottom: 20px;">
+                        <div class="stat-card">
+                            <div class="stat-label">Time Left</div>
+                            <div class="stat-value" style="color: #4ade80;">$(session-time-left)</div>
+                        </div>
+                    </div>
+                    $(endif)
+
+                    <!-- Logout Section -->
+                    <div class="text-center">
+                        <button type="submit" class="btn-logout">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                            Disconnect Device
+                        </button>
+                        <p class="session-id">User: $(username)</p>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,81 @@
+MikroTik Hotspot Setup Commands for Merite WIFI Billing
+===============================================================
+
+Run all of these in the MikroTik router terminal (Winbox -> New Terminal),
+adjusting "hotspot1" or IPs if your setup is different.
+
+1) Ensure DNS works
+-------------------
+
+/ip dns
+set servers=1.1.1.1,8.8.8.8 allow-remote-requests=yes
+
+
+2) Allow merite-wifi.com through the hotspot walled garden
+----------------------------------------------------------
+
+/ip hotspot walled-garden
+add server=hotspot1 dst-host=merite-wifi.com
+add server=hotspot1 dst-host=*.vercel.app
+add server=hotspot1 dst-host=fonts.googleapis.com
+add server=hotspot1 dst-host=fonts.gstatic.com
+add server=hotspot1 dst-host=merite-wifi.com path=/assets/*
+
+# Payment APIs (Crucial for Validation & Payment)
+add server=hotspot1 dst-host=lucopay-backend.vercel.app
+add server=hotspot1 dst-host=mintospay.vercel.app
+add server=hotspot1 dst-host=merite-bill.vercel.app
+
+# Mobile Money Gateways (If redirects occur)
+add server=hotspot1 dst-host=*.mtn.co.ug
+add server=hotspot1 dst-host=*.airtel.co.ug
+add server=hotspot1 dst-host=*.easypay.co.ug
+add server=hotspot1 dst-host=*.merite-bill.vercel.app
+
+# Fonts & CDNs
+add server=hotspot1 dst-host=fonts.googleapis.com
+add server=hotspot1 dst-host=fonts.gstatic.com
+
+
+# If your Vite app uses other APIs (like Firebase, Supabase) or Payment Gateways (Stripe, PayPal, Mobile Money),
+# you MUST add them here as well. For example:
+# add server=hotspot1 dst-host=api.stripe.com
+# add server=hotspot1 dst-host=*.paypal.com
+ 
+ 
+3) Ensure hotspot uses the custom login.html folder
+---------------------------------------------------
+
+/ip hotspot profile
+set [find name="hotspot1"] html-directory=hotspot
+
+
+
+/ip hotspot walled-garden add server=hotspot1 dst-host=merite-wifi.com
+/ip hotspot walled-garden add server=hotspot1 dst-host=*.vercel.app
+/ip hotspot walled-garden add server=hotspot1 dst-host=merite-wifi.com path=/assets/*
+
+
+/ip hotspot profile set [find name="hotspot1"] https-redirect=no
+
+
+/ip proxy set enabled=no
+/ip proxy set always-from-cache=no cache-on-disk=no
+
+
+4) Optional: Use a simple local login domain for the router
+-----------------------------------------------------------
+
+This avoids SSL issues on the router login domain itself; the browser will
+still be redirected to the secure billing URL:
+https://merite-wifi.com
+
+/ip hotspot profile
+set [find name="hotspot1"] dns-name=login.merite-wifi.com
+
+/ip dns static
+add name=merite-wifi.com address=10.5.50.1
+
+Replace 10.5.50.1 with your hotspot router IP if different.
+
+

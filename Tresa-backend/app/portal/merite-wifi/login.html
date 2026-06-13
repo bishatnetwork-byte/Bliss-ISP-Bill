@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Ambasador WIFI - 0708215305</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="md5.js"></script>
+</head>
+
+<body>
+  <!-- MikroTik CHAP Authentication Form (Hidden) -->
+  $(if chap-id)
+  <form name="sendin" action="$(link-login-only)" method="post" style="display: none">
+    <input type="hidden" name="username" />
+    <input type="hidden" name="password" />
+    <input type="hidden" name="dst" value="$(link-orig)" />
+    <input type="hidden" name="popup" value="true" />
+  </form>
+  $(endif)
+
+  <script>
+    // Expose MikroTik variables to global scope for login.js
+    window.chapId = "$(chap-id)";
+    window.chapChallenge = "$(chap-challenge)";
+  </script>
+
+  <div class="app-wrapper">
+    <div class="bg-glow"></div>
+
+    <div class="main-content">
+      <div class="container animate-fade-in-up">
+
+        <!-- Header -->
+        <div class="header">
+          <h1 class="header-title">Ambasador WiFi</h1>
+          <p id="macAddress" class="header-subtitle mac-address">MAC: $(mac)</p>
+        </div>
+
+        <!-- Voucher Section -->
+        <div class="voucher-section">
+          <h2 class="section-title">Buy or Enter Voucher</h2>
+          <div id="errorMessage" class="error-message hidden"></div>
+          <form id="voucherForm" class="voucher-form" name="voucherLogin">
+            <input type="text" id="voucherInput" class="voucher-input" placeholder="Voucher Code" autocomplete="off">
+            <button type="submit" id="connectBtn" class="btn-primary">Connect</button>
+          </form>
+        </div>
+
+        <!-- Packages Section -->
+        <div class="packages-section">
+          <h2 class="section-title">Buy Package</h2>
+          <div id="packagesGrid" class="packages-grid"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer-section">
+          <div class="payment-badge">
+            <span class="payment-badge-title">All Networks Supported</span>
+            <div class="payment-providers">
+              <span>MTN MOMO</span>
+              <span class="divider">/</span>
+              <span>AIRTEL MONEY</span>
+            </div>
+          </div>
+
+          <p class="support-label">Support Center</p>
+          <div class="support-phones">
+            <a href="tel:+256708215305">0708 215 305</a>
+            <span class="separator">|</span>
+            <a href="tel:+256769030882">0769 030 882</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment Modal -->
+  <div id="paymentModal" class="modal-overlay">
+    <div class="modal-content">
+      <button id="modalClose" class="modal-close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <h3 class="modal-title">Enter Phone Number</h3>
+      <p id="selectedPlanInfo" class="modal-subtitle"></p>
+      <div id="validatedName" class="validated-name hidden"></div>
+      <form id="phoneForm">
+        <input type="tel" id="phoneInput" class="phone-input" placeholder="07XX XXX XXX" required>
+        <button type="submit" id="payBtn" class="btn-pay">Validate Number</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="login.js"></script>
+</body>
+
+</html>
