@@ -27,6 +27,7 @@ import {
   Tv
 } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 
 export interface CaptivePortal {
   id?: string | null;
@@ -72,6 +73,8 @@ const RENAULT_PACKAGES = {
 };
 
 export default function CaptivePreview() {
+  const [searchParams] = useSearchParams();
+  const requestedTemplate = searchParams.get("template");
   const [config, setConfig] = useState<CaptivePortal>(() => {
     const saved = localStorage.getItem("foreform_captive_portal_preview");
     if (saved) {
@@ -83,6 +86,14 @@ export default function CaptivePreview() {
     }
     return FALLBACK_PORTAL;
   });
+
+  useEffect(() => {
+    if (!requestedTemplate) return;
+    setConfig((current) => ({
+      ...current,
+      portal_template: requestedTemplate,
+    }));
+  }, [requestedTemplate]);
 
   // Step state: 'login' | 'otp' | 'connecting' | 'success'
   const [step, setStep] = useState<"login" | "otp" | "connecting" | "success">("login");
@@ -309,9 +320,10 @@ export default function CaptivePreview() {
   };
 
   const style = getThemeClasses(config.portal_template);
+  const usesRenaultLayout = config.portal_template === "renault" || config.portal_template === "adsmob";
 
   return (
-    <div className={`min-h-screen flex flex-col justify-between transition-all duration-300 ${config.portal_template === "renault" ? (renaultTheme === "dark" ? "bg-[#000000] text-slate-100" : "bg-[#f9f9f9] text-slate-900") : style.wrapper}`}>
+    <div className={`min-h-screen flex flex-col justify-between transition-all duration-300 ${usesRenaultLayout ? (renaultTheme === "dark" ? "bg-[#000000] text-slate-100" : "bg-[#f9f9f9] text-slate-900") : style.wrapper}`}>
 
       {/* Top Banner Alert to let user know it's a simulation */}
       <div className="w-full bg-black/85 backdrop-blur-sm border-b border-slate-800 text-white p-3 flex items-center justify-between shadow-md text-xs z-50 sticky top-0">
@@ -329,7 +341,7 @@ export default function CaptivePreview() {
         </div>
       </div>
 
-      {config.portal_template === "renault" ? (
+      {usesRenaultLayout ? (
         /* ════════════════════════════════════════════════════════
                      RENAULT CUSTOM TEMPLATE PREVIEW
            ════════════════════════════════════════════════════════ */
@@ -407,6 +419,30 @@ export default function CaptivePreview() {
           </div>
 
           <main className="p-4 space-y-6">
+            {config.portal_template === "adsmob" && step === "login" && (
+              <div className={`overflow-hidden rounded-xl border shadow-lg ${renaultTheme === "dark" ? "border-slate-800 bg-slate-900" : "border-orange-100 bg-white"}`}>
+                <div className="relative h-32 overflow-hidden bg-gradient-to-br from-orange-600 via-orange-500 to-amber-300 p-5 text-white">
+                  <div className="absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/15" />
+                  <div className="relative">
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em]">Sponsored</span>
+                    <h2 className="mt-3 text-lg font-black">Advertise where customers connect</h2>
+                    <p className="mt-1 max-w-[280px] text-[11px] text-white/85">
+                      Banner and video campaigns appear directly inside this captive portal.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 p-3">
+                  <div>
+                    <p className="text-xs font-bold">AdsMob campaign preview</p>
+                    <p className="text-[10px] text-muted-foreground">Uploaded media from Cloudflare R2 appears here.</p>
+                  </div>
+                  <span className="shrink-0 rounded bg-orange-500 px-2.5 py-1 text-[10px] font-bold text-white">
+                    Learn more
+                  </span>
+                </div>
+              </div>
+            )}
+
             {step === "connecting" && (
               <div className="py-12 text-center space-y-4">
                 <Loader2 className="w-12 h-12 animate-spin mx-auto text-[#FF6000]" />

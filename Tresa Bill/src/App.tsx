@@ -48,6 +48,7 @@ import WalletManagementPage from "./pages/Settings/WalletManagement";
 import RouterLogsPage from "./pages/Settings/RouterLogs";
 import TelegramConnectPage from "./pages/Settings/TelegramConnect";
 import AdsMobPage from "./pages/Settings/AdsMob";
+import AdsAnalyticsPage from "./pages/Settings/AdsAnalytics";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -167,6 +168,7 @@ const AppRoutes = () => {
         <Route path="/settings/notifications" element={protectedElement(<OwnerRoute><SettingsPage /></OwnerRoute>)} />
         <Route path="/settings/telegram" element={protectedElement(<OwnerRoute><TelegramConnectPage /></OwnerRoute>)} />
         <Route path="/settings/adsmob" element={protectedElement(<OwnerRoute><AdsMobPage /></OwnerRoute>)} />
+        <Route path="/settings/adsmob/analytics" element={protectedElement(<OwnerRoute><AdsAnalyticsPage /></OwnerRoute>)} />
         <Route path="/settings/support" element={protectedElement(<OwnerRoute><Campign /></OwnerRoute>)} />
         <Route path="/campaigns" element={protectedElement(<Campign />)} />
 

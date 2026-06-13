@@ -37,7 +37,7 @@
     .portal-body { padding: 20px; }
     .ad { display: none; overflow: hidden; margin-bottom: 18px; border: 1px solid #eee; border-radius: 10px; }
     .ad.visible { display: block; }
-    .ad img, .ad video { display: block; width: 100%; max-height: 260px; object-fit: cover; background: #111; }
+    .ad img, .ad video, .ad iframe { display: block; width: 100%; height: 240px; max-height: 260px; border: 0; object-fit: cover; background: #111; }
     .ad-copy { padding: 12px; }
     .ad-label { color: #ff6000; font-size: .65rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
     .ad-title { margin-top: 4px; font-weight: 800; }
@@ -77,12 +77,37 @@
     var API_BASE = "__PORTAL_API_BASE__";
     var ROUTER_ID = "__ROUTER_PUBLIC_ID__";
 
+    function visitorId() {
+      var key = "adsmob-visitor-id";
+      var value = "";
+      try {
+        value = localStorage.getItem(key) || "";
+        if (!value) {
+          value = String(Date.now()) + "-" + Math.random().toString(36).slice(2);
+          localStorage.setItem(key, value);
+        }
+      } catch (e) {}
+      return value;
+    }
+
+    function track(ad, eventType) {
+      if (!ad || !ad.id) return;
+      try {
+        var eventXhr = new XMLHttpRequest();
+        eventXhr.open("POST", API_BASE + "/portal/" + encodeURIComponent(ROUTER_ID) + "/ads/" + encodeURIComponent(ad.id) + "/events", true);
+        eventXhr.setRequestHeader("Content-Type", "application/json");
+        eventXhr.send(JSON.stringify({ event_type: eventType, visitor_id: visitorId() }));
+      } catch (e) {}
+    }
+
     function showAd(ad) {
       var container = document.getElementById("connectedAd");
-      if (!ad || !ad.enabled || !container) return 2;
-      if (ad.media_url) {
-        var media = document.createElement(ad.media_type === "video" ? "video" : "img");
-        media.src = ad.media_url;
+      if (!ad || !container) return 2;
+      track(ad, "impression");
+      window.setTimeout(function () { track(ad, "view"); }, 2000);
+      if (ad.media_url || ad.youtube_embed_url) {
+        var media = document.createElement(ad.media_type === "youtube" ? "iframe" : ad.media_type === "video" ? "video" : "img");
+        media.src = ad.media_type === "youtube" ? ad.youtube_embed_url : ad.media_url;
         if (ad.media_type === "video") {
           media.controls = true;
           media.muted = true;
@@ -116,6 +141,7 @@
         link.target = "_blank";
         link.rel = "noopener noreferrer";
         link.textContent = "Learn more";
+        link.addEventListener("click", function () { track(ad, "click"); });
         copy.appendChild(link);
       }
       container.appendChild(copy);
@@ -147,7 +173,10 @@
       if (xhr.readyState !== 4) return;
       var seconds = 2;
       if (xhr.status === 200) {
-        try { seconds = showAd(JSON.parse(xhr.responseText)); } catch (e) {}
+        try {
+          var feed = JSON.parse(xhr.responseText);
+          seconds = showAd(feed.ads && feed.ads.length ? feed.ads[0] : null);
+        } catch (e) {}
       }
       redirectAfter(seconds);
     };

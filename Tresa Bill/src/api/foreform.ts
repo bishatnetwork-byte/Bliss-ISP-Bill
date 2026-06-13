@@ -455,24 +455,71 @@ export interface CaptivePortalDeployResponse {
 }
 
 export interface PortalAdResponse {
-  id: string | null;
-  router_id: string | null;
+  id: string;
+  router_id: string;
   enabled: boolean;
+  advertiser_name: string;
+  business_type: string;
   placement: "banner" | "flash";
-  media_type: "image" | "video";
+  media_type: "image" | "video" | "youtube";
   title: string;
   description: string;
   media_url: string | null;
   target_url: string | null;
   duration_seconds: number;
-  created_at: string | null;
-  updated_at: string | null;
+  sort_order: number;
+  impressions: number;
+  views: number;
+  unique_views: number;
+  clicks: number;
+  ctr: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export type PortalAdUpsert = Omit<
   PortalAdResponse,
-  "id" | "router_id" | "created_at" | "updated_at"
+  "id" | "router_id" | "impressions" | "views" | "unique_views" | "clicks" | "ctr" | "created_at" | "updated_at"
 >;
+
+export interface PortalAdAnalyticsResponse {
+  days: number;
+  summary: {
+    impressions: number;
+    views: number;
+    unique_views: number;
+    clicks: number;
+    ctr: number;
+    view_rate: number;
+    growth_percent: number;
+  };
+  timeline: Array<{
+    date: string;
+    impressions: number;
+    views: number;
+    unique_views: number;
+    clicks: number;
+  }>;
+  areas: Array<{
+    area: string;
+    impressions: number;
+    views: number;
+    clicks: number;
+  }>;
+  ads: PortalAdResponse[];
+}
+
+export interface PublicPortalAdResponse {
+  id: string;
+  placement: "banner" | "flash";
+  media_type: "image" | "video" | "youtube";
+  title: string;
+  description: string;
+  media_url: string | null;
+  youtube_embed_url: string | null;
+  target_url: string | null;
+  duration_seconds: number;
+}
 
 // ── Packages Interfaces ────────────────────────────────────────
 export interface VoucherPackageResponse {
@@ -1047,15 +1094,26 @@ export const renultApi = {
       apiRequest<PortalPaymentResponse>(`/portal/${routerName}/payments`, { method: "POST", auth: false, body: JSON.stringify(payload) }),
   },
   ads: {
-    get: (routerId: string) =>
-      apiRequest<PortalAdResponse>(`/routers/${routerId}/ads`),
-    upsert: (routerId: string, payload: PortalAdUpsert) =>
+    list: (routerId: string) =>
+      apiRequest<PortalAdResponse[]>(`/routers/${routerId}/ads`),
+    create: (routerId: string, payload: PortalAdUpsert) =>
       apiRequest<PortalAdResponse>(`/routers/${routerId}/ads`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    update: (routerId: string, adId: string, payload: PortalAdUpsert) =>
+      apiRequest<PortalAdResponse>(`/routers/${routerId}/ads/${adId}`, {
         method: "PUT",
         body: JSON.stringify(payload),
       }),
+    delete: (routerId: string, adId: string) =>
+      apiRequest<void>(`/routers/${routerId}/ads/${adId}`, { method: "DELETE" }),
+    analytics: (routerId: string, days = 30) =>
+      apiRequest<PortalAdAnalyticsResponse>(`/routers/${routerId}/ads/analytics`, {
+        query: { days },
+      }),
     public: (routerName: string) =>
-      apiRequest<PortalAdResponse>(`/portal/${routerName}/ads`, { auth: false }),
+      apiRequest<{ ads: PublicPortalAdResponse[]; rotation_seconds: number }>(`/portal/${routerName}/ads`, { auth: false }),
   },
   packages: {
     list: (routerId: string) =>

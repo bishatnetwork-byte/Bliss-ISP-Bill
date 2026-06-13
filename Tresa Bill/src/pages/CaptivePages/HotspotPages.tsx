@@ -6,20 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     Sparkles,
-    Layers,
     Layout,
-    Tv,
-    Settings,
     ArrowRight,
-    Wifi,
-    Shield,
-    Smartphone,
     Eye,
-    CheckCircle2,
-    Verified
+    Megaphone
 } from "lucide-react";
 
 const TEMPLATES = [
+    {
+        id: "adsmob",
+        title: "AdsMob Portal",
+        description: "Monetized captive portal with banner, flash, image, and video ads.",
+        icon: <Megaphone className="w-8 h-8 text-orange-500" />,
+        badge: "Ads Ready",
+        badgeColor: "bg-orange-100 text-orange-800 dark:bg-orange-950/40 dark:text-orange-300",
+        gradient: "from-orange-500/10 via-amber-500/5 to-transparent",
+        borderHover: "hover:border-orange-500 hover:shadow-orange-500/10"
+    },
     {
         id: "classic",
         title: "Classic",
@@ -133,9 +136,12 @@ export default function HotspotPages() {
                         >
                             <CardHeader className="p-4 pb-3">
                                 <div className="flex items-center justify-between">
-                                    <CardTitle className="text-sm font-extrabold group-hover:text-primary transition-colors">
-                                        {tmpl.title}
-                                    </CardTitle>
+                                    <div className="flex items-center gap-2.5">
+                                        {tmpl.icon}
+                                        <CardTitle className="text-sm font-extrabold group-hover:text-primary transition-colors">
+                                            {tmpl.title}
+                                        </CardTitle>
+                                    </div>
                                     <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${tmpl.badgeColor}`}>
                                         {tmpl.badge}
                                     </span>
@@ -166,13 +172,24 @@ export default function HotspotPages() {
                             </CardContent>
 
                             <CardFooter className="p-5 pt-0">
-                                <Button
-                                    onClick={() => navigate(`/captive-portals/customize?template=${tmpl.id}`)}
-                                    className="w-full bg-gradient-to-r from-primary to-primary-mid hover:opacity-95 font-bold text-xs h-10 shadow-sm flex items-center justify-center gap-1.5 group/btn"
-                                >
-                                    Use This
-                                    <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover/btn:translate-x-1" />
-                                </Button>
+                                <div className="flex w-full gap-2">
+                                    {tmpl.id === "adsmob" && (
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => navigate("/settings/adsmob")}
+                                            className="flex-1 font-bold text-xs h-10"
+                                        >
+                                            Configure Ads
+                                        </Button>
+                                    )}
+                                    <Button
+                                        onClick={() => navigate(`/captive-portals/customize?template=${tmpl.id}`)}
+                                        className="flex-1 bg-gradient-to-r from-primary to-primary-mid hover:opacity-95 font-bold text-xs h-10 shadow-sm flex items-center justify-center gap-1.5 group/btn"
+                                    >
+                                        {tmpl.id === "adsmob" ? "Deploy Portal" : "Use This"}
+                                        <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover/btn:translate-x-1" />
+                                    </Button>
+                                </div>
                             </CardFooter>
                         </Card>
                     ))}

@@ -3,6 +3,7 @@ import SEO from "@/components/SEO";
 import {
   Bell,
   BadgeDollarSign,
+  ChartNoAxesCombined,
   CreditCard,
   Key,
   Megaphone,
@@ -70,6 +71,12 @@ const navItems: SettingsNavItem[] = [
     label: "AdsMob",
     icon: <BadgeDollarSign className="w-4 h-4" />,
     path: "/settings/adsmob",
+  },
+  {
+    id: "ads-analytics",
+    label: "Ads Analytics",
+    icon: <ChartNoAxesCombined className="w-4 h-4" />,
+    path: "/settings/adsmob/analytics",
   },
   {
     id: "campaigns",

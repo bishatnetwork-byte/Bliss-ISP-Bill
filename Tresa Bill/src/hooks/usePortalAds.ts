@@ -1,21 +1,51 @@
 import { PortalAdUpsert, renultApi } from "@/api/foreform";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-export function usePortalAd(routerId: string) {
+export function usePortalAds(routerId: string) {
   return useQuery({
-    queryKey: ["portalAd", routerId],
-    queryFn: () => renultApi.ads.get(routerId),
+    queryKey: ["portalAds", routerId],
+    queryFn: () => renultApi.ads.list(routerId),
     enabled: !!routerId,
     retry: 1,
   });
 }
 
-export function useSavePortalAd(routerId: string) {
+export function useCreatePortalAd(routerId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: PortalAdUpsert) => renultApi.ads.upsert(routerId, payload),
+    mutationFn: (payload: PortalAdUpsert) => renultApi.ads.create(routerId, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["portalAds", routerId] }),
+  });
+}
+
+export function useUpdatePortalAd(routerId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ adId, payload }: { adId: string; payload: PortalAdUpsert }) =>
+      renultApi.ads.update(routerId, adId, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["portalAd", routerId] });
+      queryClient.invalidateQueries({ queryKey: ["portalAds", routerId] });
+      queryClient.invalidateQueries({ queryKey: ["portalAdAnalytics", routerId] });
     },
+  });
+}
+
+export function useDeletePortalAd(routerId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (adId: string) => renultApi.ads.delete(routerId, adId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["portalAds", routerId] });
+      queryClient.invalidateQueries({ queryKey: ["portalAdAnalytics", routerId] });
+    },
+  });
+}
+
+export function usePortalAdAnalytics(routerId: string, days: number) {
+  return useQuery({
+    queryKey: ["portalAdAnalytics", routerId, days],
+    queryFn: () => renultApi.ads.analytics(routerId, days),
+    enabled: !!routerId,
+    retry: 1,
   });
 }

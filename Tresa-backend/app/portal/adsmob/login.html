@@ -2083,9 +2083,15 @@
       }
 
       function adMedia(ad) {
-        if (!ad.media_url) return null;
+        if (!ad.media_url && !ad.youtube_embed_url) return null;
         var media;
-        if (ad.media_type === "video") {
+        if (ad.media_type === "youtube" && ad.youtube_embed_url) {
+          media = document.createElement("iframe");
+          media.src = ad.youtube_embed_url;
+          media.title = ad.title || "Sponsored video";
+          media.allow = "autoplay; encrypted-media; picture-in-picture";
+          media.setAttribute("allowfullscreen", "true");
+        } else if (ad.media_type === "video") {
           media = document.createElement("video");
           media.controls = true;
           media.muted = true;
@@ -2097,8 +2103,36 @@
           media.alt = ad.title || "Sponsored";
         }
         media.className = "portal-ad-media";
-        media.src = ad.media_url;
+        if (ad.media_type !== "youtube") media.src = ad.media_url;
         return media;
+      }
+
+      function portalVisitorId() {
+        var key = "adsmob-visitor-id";
+        var value = getVoucherStorage(key);
+        if (!value) {
+          value = String(Date.now()) + "-" + Math.random().toString(36).slice(2);
+          setVoucherStorage(key, value);
+        }
+        return value;
+      }
+
+      function trackAdEvent(ad, eventType) {
+        if (!ad || !ad.id) return;
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open(
+            "POST",
+            API_BASE + "/portal/" + encodeURIComponent(ROUTER_ID) +
+              "/ads/" + encodeURIComponent(ad.id) + "/events",
+            true,
+          );
+          xhr.setRequestHeader("Content-Type", "application/json");
+          xhr.send(JSON.stringify({
+            event_type: eventType,
+            visitor_id: portalVisitorId(),
+          }));
+        } catch (e) {}
       }
 
       function adCopy(ad) {
@@ -2127,13 +2161,17 @@
           link.target = "_blank";
           link.rel = "noopener noreferrer";
           link.textContent = "Learn more";
+          link.addEventListener("click", function () {
+            trackAdEvent(ad, "click");
+          });
           copy.appendChild(link);
         }
         return copy;
       }
 
       function renderPortalAd(ad) {
-        if (!ad || !ad.enabled) return;
+        if (!ad) return;
+        trackAdEvent(ad, "impression");
         var media = adMedia(ad);
         if (ad.placement === "flash") {
           var overlay = document.createElement("div");
@@ -2150,6 +2188,9 @@
           card.appendChild(skip);
           overlay.appendChild(card);
           document.body.appendChild(overlay);
+          window.setTimeout(function () {
+            if (document.body.contains(overlay)) trackAdEvent(ad, "view");
+          }, 2000);
           var timer = window.setInterval(function () {
             remaining -= 1;
             if (remaining <= 0) {
@@ -2163,17 +2204,54 @@
           skip.addEventListener("click", function () {
             if (!skip.disabled) overlay.remove();
           });
-          return;
+          return overlay;
         }
 
         var container = document.getElementById("portalAd");
         if (!container) return;
+        container.innerHTML = "";
+        container.setAttribute("data-ad-id", ad.id);
         if (media) container.appendChild(media);
         container.appendChild(adCopy(ad));
         container.classList.add("visible");
+        window.setTimeout(function () {
+          if (container.getAttribute("data-ad-id") === ad.id) trackAdEvent(ad, "view");
+        }, 2000);
       }
 
-      function loadPortalAd() {
+      function rotatePortalAds(feed) {
+        var ads = feed && feed.ads ? feed.ads : [];
+        if (!ads.length) return;
+        var banners = ads.filter(function (ad) { return ad.placement === "banner"; });
+        var flashes = ads.filter(function (ad) { return ad.placement === "flash"; });
+        var bannerIndex = 0;
+        var flashIndex = 0;
+
+        function showNextFlash() {
+          if (flashIndex >= flashes.length) return;
+          var overlay = renderPortalAd(flashes[flashIndex++]);
+          if (!overlay) return;
+          var observer = window.setInterval(function () {
+            if (!document.body.contains(overlay)) {
+              window.clearInterval(observer);
+              window.setTimeout(showNextFlash, 300);
+            }
+          }, 300);
+        }
+
+        if (banners.length) {
+          renderPortalAd(banners[0]);
+          if (banners.length > 1) {
+            window.setInterval(function () {
+              bannerIndex = (bannerIndex + 1) % banners.length;
+              renderPortalAd(banners[bannerIndex]);
+            }, Math.max(4, Number(feed.rotation_seconds) || 8) * 1000);
+          }
+        }
+        showNextFlash();
+      }
+
+      function loadPortalAds() {
         var xhr = new XMLHttpRequest();
         xhr.open(
           "GET",
@@ -2184,7 +2262,7 @@
         xhr.onreadystatechange = function () {
           if (xhr.readyState !== 4 || xhr.status !== 200) return;
           try {
-            renderPortalAd(JSON.parse(xhr.responseText));
+            rotatePortalAds(JSON.parse(xhr.responseText));
           } catch (e) {}
         };
         xhr.send();
@@ -2750,7 +2828,7 @@
         }
         if (routerError && attemptedMode === "username") clearVoucherAttempt();
         loadPortalConfig();
-        loadPortalAd();
+        loadPortalAds();
         loadPackages();
       });
     </script>

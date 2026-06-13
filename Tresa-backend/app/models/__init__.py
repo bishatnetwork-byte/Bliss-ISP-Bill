@@ -19,6 +19,7 @@ from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
 from app.models.platform_ledger import PlatformLedgerEntry
 from app.models.telegram_connection import TelegramConnection
 from app.models.portal_ad import PortalAd
+from app.models.portal_ad_event import PortalAdEvent
 
 __all__ = [
     "EmailVerification",
@@ -45,4 +46,5 @@ __all__ = [
     "PlatformLedgerEntry",
     "TelegramConnection",
     "PortalAd",
+    "PortalAdEvent",
 ]

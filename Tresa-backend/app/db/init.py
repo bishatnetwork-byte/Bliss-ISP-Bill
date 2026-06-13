@@ -27,6 +27,7 @@ from app.models import (
     PlatformLedgerEntry,
     TelegramConnection,
     PortalAd,
+    PortalAdEvent,
 )
 
 
@@ -56,10 +57,12 @@ def init_db() -> None:
         PlatformLedgerEntry,
         TelegramConnection,
         PortalAd,
+        PortalAdEvent,
     )
     SQLModel.metadata.create_all(engine)
     _ensure_staff_columns()
     _ensure_router_columns()
+    _ensure_portal_ad_columns()
 
     # Seed ticket categories
     with Session(engine) as session:
@@ -156,3 +159,23 @@ def _ensure_router_columns() -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_router_mac_address_unique "
             "ON router (mac_address) WHERE mac_address IS NOT NULL"
         ))
+
+
+def _ensure_portal_ad_columns() -> None:
+    inspector = sa.inspect(engine)
+    if not inspector.has_table("portalad"):
+        return
+    columns = {column["name"] for column in inspector.get_columns("portalad")}
+    column_types = {
+        "advertiser_name": "VARCHAR DEFAULT '' NOT NULL",
+        "business_type": "VARCHAR DEFAULT 'other' NOT NULL",
+        "sort_order": "INTEGER DEFAULT 0 NOT NULL",
+    }
+    with engine.begin() as conn:
+        if engine.dialect.name == "postgresql":
+            conn.execute(sa.text(
+                "ALTER TABLE portalad DROP CONSTRAINT IF EXISTS uq_portal_ad_router_id"
+            ))
+        for name, sql_type in column_types.items():
+            if name not in columns:
+                conn.execute(sa.text(f"ALTER TABLE portalad ADD COLUMN {name} {sql_type}"))
