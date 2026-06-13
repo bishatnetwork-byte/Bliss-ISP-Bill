@@ -1,7 +1,8 @@
 import posixpath
+import re
 from functools import lru_cache
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -85,3 +86,29 @@ def delete_object(key: str) -> None:
 
 
 STORAGE_ERRORS = (BotoCoreError, ClientError, StorageConfigurationError)
+
+_R2_OBJECT_KEY_RE = re.compile(r"(users/[^/]+/[^?]+)")
+
+
+def refresh_logo_url(url: str | None) -> str | None:
+    """Re-sign a stored R2 logo URL so it doesn't expire.
+
+    Uploaded logos are saved with a presigned URL that is only valid for an
+    hour. Re-deriving the object key from that URL and re-presigning it on
+    every read means the captive portal always gets a link that is fresh for
+    the lifetime of the page load, without needing a public R2 bucket.
+    """
+    if not url:
+        return url
+    is_r2_url = "r2.cloudflarestorage.com" in url or (
+        settings.r2_public_base_url and settings.r2_public_base_url in url
+    )
+    if not is_r2_url:
+        return url
+    match = _R2_OBJECT_KEY_RE.search(unquote(url))
+    if not match:
+        return url
+    try:
+        return object_url(match.group(1))
+    except STORAGE_ERRORS:
+        return url

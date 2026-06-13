@@ -27,7 +27,7 @@ from app.services import renult_pay
 from app.services import wallet as wallet_svc
 from app.services.routers.Packages import get_router_packages
 from app.services.routers.routeros import router_connection
-from app.services.storage import STORAGE_ERRORS, object_url, upload_bytes
+from app.services.storage import STORAGE_ERRORS, object_url, refresh_logo_url, upload_bytes
 
 
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ def get_public_captive_config(session: Session, router_name: str) -> dict[str, A
         "description": captive.description,
         "phone_one": captive.phone_one,
         "phone_two": captive.phone_two,
-        "logo_url": captive.logo_url,
+        "logo_url": refresh_logo_url(captive.logo_url),
         "portal_template": captive.portal_template,
         "last_pushed_at": captive.last_pushed_at,
     }

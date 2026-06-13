@@ -34,6 +34,7 @@ from app.services.portal import (
     refresh_portal_payment,
 )
 from app.services.routers.Packages import get_router_packages
+from app.services.storage import refresh_logo_url
 
 router = APIRouter(tags=["Portal"])
 
@@ -67,7 +68,7 @@ def serialize_captive(captive: CaptivePortal) -> CaptivePortalResponse:
         description=captive.description,
         phone_one=captive.phone_one,
         phone_two=captive.phone_two,
-        logo_url=captive.logo_url,
+        logo_url=refresh_logo_url(captive.logo_url),
         portal_template=captive.portal_template,
         last_pushed_at=captive.last_pushed_at,
     )
