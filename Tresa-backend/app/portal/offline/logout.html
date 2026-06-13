@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="-1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>__ROUTER_NAME__ | Disconnected</title>
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+  <main class="portal-card">
+    <header class="portal-head"><h1>Disconnected</h1><p>Your internet session has ended.</p></header>
+    <section class="portal-body">
+      <h2>Connect again</h2>
+      <p>Your voucher remains saved for automatic reconnection unless you remove it.</p>
+      <a class="portal-button" href="$(link-login)">Reconnect</a>
+      <button class="clear-button" onclick="forgetSavedVoucher()">Forget saved voucher</button>
+    </section>
+  </main>
+  <script>
+    function forgetSavedVoucher() {
+      try {
+        localStorage.removeItem("renult-offline-voucher-__ROUTER_PUBLIC_ID__");
+        localStorage.removeItem("renult-offline-voucher-__ROUTER_PUBLIC_ID__-mode");
+      } catch (e) {}
+      location.href = "$(link-login)";
+    }
+  </script>
+</body>
+</html>

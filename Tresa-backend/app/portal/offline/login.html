@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="-1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f766e">
+  <title>__ROUTER_NAME__ | Voucher WiFi</title>
+  <style>
+    :root {
+      --ink: #10211f;
+      --muted: #61706e;
+      --line: #dbe5e3;
+      --surface: #fff;
+      --soft: #f1f7f6;
+      --brand: #0f766e;
+      --brand-dark: #0b514c;
+      --accent: #f59e0b;
+      --danger: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: linear-gradient(145deg, #e8f4f2, #f8faf9 45%, #e5efed);
+      color: var(--ink);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input { font: inherit; }
+    .shell { width: min(100%, 760px); min-height: 100vh; margin: auto; background: var(--surface); box-shadow: 0 0 50px rgba(15,118,110,.12); }
+    .hero { position: relative; overflow: hidden; padding: 32px 22px 28px; background: linear-gradient(135deg, #083b37, var(--brand)); color: #fff; }
+    .hero:after { content: ""; position: absolute; width: 220px; height: 220px; right: -80px; top: -90px; border-radius: 50%; background: rgba(255,255,255,.1); }
+    .eyebrow { font-size: .68rem; font-weight: 900; letter-spacing: .18em; text-transform: uppercase; color: #99f6e4; }
+    h1 { position: relative; z-index: 1; margin: 8px 0 4px; font-size: clamp(1.5rem, 6vw, 2.25rem); }
+    .hero p { position: relative; z-index: 1; margin: 0; max-width: 560px; color: rgba(255,255,255,.78); font-size: .88rem; }
+    .content { display: grid; gap: 18px; padding: 18px; }
+    .card { border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 8px 22px rgba(16,33,31,.06); }
+    .card-body { padding: 18px; }
+    .purchase { border-left: 4px solid var(--accent); background: #fffbeb; }
+    .purchase strong { display: block; color: #92400e; }
+    .purchase p { margin: 5px 0 0; color: #785b26; font-size: .82rem; }
+    .contacts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .contacts a { padding: 6px 9px; border-radius: 6px; background: #fff; color: #92400e; font-size: .75rem; font-weight: 800; text-decoration: none; }
+    .section-title { margin: 0 0 12px; font-size: 1rem; }
+    .error { display: none; margin-bottom: 12px; padding: 10px; border: 1px solid #fecaca; border-radius: 8px; background: #fef2f2; color: var(--danger); font-size: .8rem; font-weight: 700; }
+    .field { display: flex; gap: 8px; }
+    .field input { min-width: 0; flex: 1; height: 46px; padding: 0 13px; border: 1px solid #b9cbc8; border-radius: 8px; color: var(--ink); text-transform: uppercase; outline: none; }
+    .field input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(15,118,110,.12); }
+    .connect { height: 46px; padding: 0 18px; border: 0; border-radius: 8px; background: var(--brand); color: #fff; font-weight: 900; cursor: pointer; }
+    .connect:disabled { opacity: .6; cursor: wait; }
+    .remember { display: flex; align-items: center; gap: 8px; margin-top: 11px; color: var(--muted); font-size: .76rem; }
+    .remember input { accent-color: var(--brand); }
+    .saved { display: none; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; padding: 9px 10px; border-radius: 8px; background: var(--soft); color: var(--brand-dark); font-size: .75rem; }
+    .saved button { border: 0; background: transparent; color: var(--danger); font-size: .72rem; font-weight: 800; cursor: pointer; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .76rem; }
+    th { padding: 10px 9px; background: var(--soft); color: var(--muted); text-align: left; text-transform: uppercase; letter-spacing: .05em; font-size: .63rem; }
+    td { padding: 11px 9px; border-top: 1px solid var(--line); }
+    td:last-child { color: var(--brand); font-weight: 900; white-space: nowrap; }
+    .empty { padding: 22px; color: var(--muted); text-align: center; font-size: .8rem; }
+    .footer { padding: 0 18px 22px; color: #81908e; text-align: center; font-size: .68rem; }
+    @media (min-width: 680px) {
+      .content { grid-template-columns: .9fr 1.1fr; align-items: start; padding: 24px; }
+      .purchase { grid-column: 1 / -1; }
+      .footer { padding-bottom: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <form name="sendin" action="$(link-login-only)" method="post" style="display:none">
+    <input type="hidden" name="username">
+    <input type="hidden" name="password">
+    <input type="hidden" name="dst" value="$(link-orig)">
+    <input type="hidden" name="popup" value="true">
+  </form>
+  <script src="md5.js"></script>
+
+  <main class="shell">
+    <header class="hero">
+      <div class="eyebrow">Offline voucher access</div>
+      <h1 id="portalTitle">__ROUTER_NAME__</h1>
+      <p id="portalSubtitle">Connect with a prepaid WiFi voucher. No mobile-money payment is required on this page.</p>
+    </header>
+
+    <section class="content">
+      <div class="card purchase">
+        <div class="card-body">
+          <strong>Where to buy vouchers</strong>
+          <p id="purchaseDescription">Buy your voucher from the cashier, reception, shop attendant, or authorized WiFi agent.</p>
+          <div class="contacts" id="supportContacts"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body">
+          <h2 class="section-title">Enter voucher code</h2>
+          <div class="error" id="routerError">$(error)</div>
+          <form name="login" action="$(link-login-only)" method="post" onsubmit="return connectVoucher()">
+            <input type="hidden" name="dst" value="$(link-orig)">
+            <input type="hidden" name="popup" value="true">
+            <input type="hidden" name="password" id="password">
+            <div class="field">
+              <input id="voucher" name="username" autocomplete="username" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="VOUCHER CODE" required>
+              <button class="connect" id="connectButton" type="submit">Connect</button>
+            </div>
+            <label class="remember">
+              <input id="rememberVoucher" type="checkbox" checked>
+              Remember and reconnect automatically on this device
+            </label>
+          </form>
+          <div class="saved" id="savedVoucher">
+            <span>Saved voucher: <strong id="savedVoucherCode"></strong></span>
+            <button type="button" onclick="forgetVoucher()">Forget</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body">
+          <h2 class="section-title">Available packages</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Package</th><th>Validity</th><th>Speed / Data</th><th>Devices</th><th>Price</th></tr></thead>
+              <tbody id="packageRows"><tr><td colspan="5" class="empty">Loading available packages...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+    <footer class="footer">Voucher-only hotspot powered by Renult Billing System</footer>
+  </main>
+
+  <script>
+    var API_BASE = "__PORTAL_API_BASE__";
+    var ROUTER_ID = "__ROUTER_PUBLIC_ID__";
+    var template = {
+      loginOnly: "$(link-login-only)",
+      chapId: "$(chap-id)",
+      chapChallenge: "$(chap-challenge)"
+    };
+    var storageKey = "renult-offline-voucher-" + ROUTER_ID;
+    var modeKey = storageKey + "-mode";
+
+    function routerValue(value) {
+      return value && value.indexOf("$(") === -1;
+    }
+
+    function stored(key) {
+      try { return localStorage.getItem(key); } catch (e) { return null; }
+    }
+
+    function save(key, value) {
+      try { localStorage.setItem(key, value); } catch (e) {}
+    }
+
+    function remove(key) {
+      try { localStorage.removeItem(key); } catch (e) {}
+    }
+
+    function forgetVoucher() {
+      remove(storageKey);
+      remove(modeKey);
+      document.getElementById("savedVoucher").style.display = "none";
+      document.getElementById("voucher").value = "";
+    }
+
+    function showSavedVoucher(code) {
+      if (!code) return;
+      document.getElementById("savedVoucherCode").textContent = code;
+      document.getElementById("savedVoucher").style.display = "flex";
+    }
+
+    function submitVoucher(mode) {
+      var voucher = document.getElementById("voucher").value.trim().toUpperCase();
+      if (!voucher) return false;
+      var password = mode === "voucher-password" ? voucher : "";
+      document.getElementById("password").value = password;
+      if (document.getElementById("rememberVoucher").checked) {
+        save(storageKey, voucher);
+        save(modeKey, mode);
+      }
+      document.getElementById("connectButton").disabled = true;
+      document.getElementById("connectButton").textContent = "Connecting...";
+      if (routerValue(template.chapId) && routerValue(template.chapChallenge)) {
+        document.sendin.username.value = voucher;
+        document.sendin.password.value = hexMD5(template.chapId + password + template.chapChallenge);
+        document.sendin.submit();
+      } else if (routerValue(template.loginOnly)) {
+        document.forms.login.submit();
+      } else {
+        document.getElementById("connectButton").disabled = false;
+        document.getElementById("connectButton").textContent = "Connect";
+      }
+      return false;
+    }
+
+    function connectVoucher() {
+      return submitVoucher(stored(modeKey) || "blank-password");
+    }
+
+    function safeText(value) {
+      return String(value == null ? "" : value);
+    }
+
+    function packagePrice(value) {
+      var amount = parseInt(String(value || "0").replace(/[^\d]/g, ""), 10);
+      return "UGX " + (isNaN(amount) ? "0" : amount.toLocaleString());
+    }
+
+    function renderPackages(packages) {
+      var rows = document.getElementById("packageRows");
+      if (!packages || !packages.length) {
+        rows.innerHTML = '<tr><td colspan="5" class="empty">Ask the voucher seller for currently available packages.</td></tr>';
+        return;
+      }
+      rows.innerHTML = "";
+      packages.forEach(function (pkg) {
+        var row = document.createElement("tr");
+        [pkg.profile, pkg.limit, pkg.rate_limit || pkg.data, pkg.devices, packagePrice(pkg.total)].forEach(function (value) {
+          var cell = document.createElement("td");
+          cell.textContent = safeText(value || "-");
+          row.appendChild(cell);
+        });
+        rows.appendChild(row);
+      });
+    }
+
+    function loadPackages() {
+      var xhr = new XMLHttpRequest();
+      xhr.open("GET", API_BASE + "/portal/" + encodeURIComponent(ROUTER_ID) + "/packages", true);
+      xhr.timeout = 12000;
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4) return;
+        if (xhr.status === 200) {
+          try {
+            var response = JSON.parse(xhr.responseText);
+            renderPackages(response.success && response.data ? response.data.voucher : []);
+            return;
+          } catch (e) {}
+        }
+        renderPackages([]);
+      };
+      xhr.ontimeout = xhr.onerror = function () { renderPackages([]); };
+      xhr.send();
+    }
+
+    function loadPortalConfig() {
+      var xhr = new XMLHttpRequest();
+      xhr.open("GET", API_BASE + "/portal/" + encodeURIComponent(ROUTER_ID), true);
+      xhr.timeout = 12000;
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4 || xhr.status !== 200) return;
+        try {
+          var config = JSON.parse(xhr.responseText);
+          if (config.title) document.getElementById("portalTitle").textContent = config.title;
+          document.getElementById("purchaseDescription").textContent =
+            config.description || "Buy your voucher from the cashier, reception, shop attendant, or authorized WiFi agent.";
+          var contacts = document.getElementById("supportContacts");
+          [config.phone_one, config.phone_two].forEach(function (phone) {
+            if (!phone) return;
+            var link = document.createElement("a");
+            link.href = "tel:" + String(phone).replace(/[^\d+]/g, "");
+            link.textContent = "Call " + phone;
+            contacts.appendChild(link);
+          });
+        } catch (e) {}
+      };
+      xhr.send();
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      var error = document.getElementById("routerError");
+      var errorText = error.textContent.trim();
+      var hasError = routerValue(errorText);
+      if (hasError) {
+        error.style.display = "block";
+      }
+      var voucher = stored(storageKey);
+      var mode = stored(modeKey) || "blank-password";
+      if (voucher) {
+        document.getElementById("voucher").value = voucher;
+        showSavedVoucher(voucher);
+      }
+
+      // MikroTik deployments differ: some voucher users have no password,
+      // while others use the voucher as both username and password.
+      if (hasError && voucher && mode === "blank-password") {
+        save(modeKey, "voucher-password");
+        window.setTimeout(function () { submitVoucher("voucher-password"); }, 500);
+      } else if (hasError && voucher && mode === "voucher-password") {
+        forgetVoucher();
+      } else if (!hasError && voucher) {
+        window.setTimeout(function () { submitVoucher(mode); }, 700);
+      }
+      loadPortalConfig();
+      loadPackages();
+    });
+  </script>
+</body>
+</html>

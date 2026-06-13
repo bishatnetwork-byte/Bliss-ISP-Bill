@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="-1">
+  <meta http-equiv="refresh" content="60">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>__ROUTER_NAME__ | Status</title>
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+  <main class="portal-card">
+    <header class="portal-head"><h1>You're online</h1><p>Voucher connection status</p></header>
+    <section class="portal-body">
+      <h2>$(username)</h2>
+      <div class="stats">
+        <div class="stat"><span>IP address</span><strong>$(ip)</strong></div>
+        <div class="stat"><span>Connected</span><strong>$(uptime)</strong></div>
+        <div class="stat"><span>Downloaded</span><strong>$(bytes-out-nice)</strong></div>
+        <div class="stat"><span>Uploaded</span><strong>$(bytes-in-nice)</strong></div>
+        $(if session-time-left)<div class="stat"><span>Time remaining</span><strong>$(session-time-left)</strong></div>$(endif)
+        $(if remain-bytes-total)<div class="stat"><span>Data remaining</span><strong>$(remain-bytes-total-nice)</strong></div>$(endif)
+      </div>
+      <form action="$(link-logout)" method="post"><button class="portal-button" type="submit">Disconnect</button></form>
+      <button class="clear-button" onclick="forgetSavedVoucher()">Forget saved voucher</button>
+    </section>
+  </main>
+  <script>
+    function forgetSavedVoucher() {
+      try {
+        localStorage.removeItem("renult-offline-voucher-__ROUTER_PUBLIC_ID__");
+        localStorage.removeItem("renult-offline-voucher-__ROUTER_PUBLIC_ID__-mode");
+      } catch (e) {}
+      alert("Saved voucher removed from this device.");
+    }
+  </script>
+</body>
+</html>

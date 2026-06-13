@@ -9,10 +9,21 @@ import {
     Layout,
     ArrowRight,
     Eye,
-    Megaphone
+    Megaphone,
+    TicketCheck
 } from "lucide-react";
 
 const TEMPLATES = [
+    {
+        id: "offline",
+        title: "Offline Voucher Portal",
+        description: "Voucher-only captive portal with package pricing and automatic reconnect.",
+        icon: <TicketCheck className="w-8 h-8 text-emerald-500" />,
+        badge: "No Mobile Money",
+        badgeColor: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+        gradient: "from-emerald-500/10 via-teal-500/5 to-transparent",
+        borderHover: "hover:border-emerald-500 hover:shadow-emerald-500/10"
+    },
     {
         id: "adsmob",
         title: "AdsMob Portal",

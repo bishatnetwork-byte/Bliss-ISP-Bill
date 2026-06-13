@@ -1,0 +1,13 @@
+internal-error = internal error ($(error-orig))
+config-error = configuration error ($(error-orig))
+not-logged-in = you are not logged in
+ippool-empty = cannot assign ip address - no more free addresses from pool
+shutting-down = hotspot service is shutting down
+user-session-limit = no more sessions are allowed for user
+license-session-limit = session limit reached
+wrong-mac-username = invalid username or password
+chap-missing = web browser did not send challenge response
+invalid-username = invalid username or password
+invalid-password = invalid username or password
+simultaneous-session-limit = simultaneous session limit reached
+trial-denied = trial access is not available

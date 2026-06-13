@@ -468,6 +468,7 @@ export default function CaptiveIndex() {
                                                     <SelectItem value="blue_modern">Blue Modern (Carousel Ads Support)</SelectItem>
                                                     <SelectItem value="brown_cards">Brown Cards (Warm Earth Tones)</SelectItem>
                                                     <SelectItem value="adsmob">AdsMob Portal (Banner, Flash & Video Ads)</SelectItem>
+                                                    <SelectItem value="offline">Offline Voucher Portal (No Mobile Money)</SelectItem>
                                                     <SelectItem value="renault">Renault Custom Portal (UGX Mobile Money & Voucher)</SelectItem>
                                                     <SelectItem value="auroaa">Auroraa RouterOS Portal (Full Hotspot Bundle)</SelectItem>
                                                     <SelectItem value="light">Classic Clean (Light)</SelectItem>

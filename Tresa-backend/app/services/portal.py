@@ -924,7 +924,7 @@ def _ordered_portal_files(files: dict[str, str]) -> list[tuple[str, str]]:
 
 def _essential_portal_files(template: str) -> set[str]:
     required = {"login.html", "index.html", "alogin.html", "error.html"}
-    if template in {"renault", "adsmob", "classic", "modern", "blue_modern", "brown_cards"}:
+    if template in {"renault", "adsmob", "offline", "classic", "modern", "blue_modern", "brown_cards"}:
         required.add("md5.js")
     return required
 
@@ -965,7 +965,7 @@ def _portal_backend_file_url(router: Router, remote_name: str) -> str:
 
 def _validate_portal_template(template_dir: Path, template: str) -> str | None:
     required = {"login.html", "alogin.html", "error.html", "logout.html", "status.html"}
-    if template in {"renault", "adsmob", "classic", "modern", "blue_modern", "brown_cards"}:
+    if template in {"renault", "adsmob", "offline", "classic", "modern", "blue_modern", "brown_cards"}:
         required.update({"md5.js", "portal.css"})
     missing = sorted(name for name in required if not (template_dir / name).is_file())
     if missing:

@@ -36,7 +36,7 @@ function MetricCard({ label, value, detail, icon: Icon }: {
   icon: typeof Eye;
 }) {
   return (
-    <Card>
+    <Card className="border-none shadow-sm rounded">
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div>
@@ -86,7 +86,7 @@ export default function AdsAnalyticsPage() {
             <button onClick={() => navigate("/settings/adsmob")} className="mb-3 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground">
               <ArrowLeft className="h-3.5 w-3.5" /> Campaign Studio
             </button>
-            <div className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" /><h1 className="text-2xl font-bold">Ads Analytics</h1></div>
+            <div className="flex items-center gap-2"><h1 className="text-2xl font-bold">Ads Analytics</h1></div>
             <p className="mt-1 text-sm text-muted-foreground">Measured captive impressions, qualified views, unique visitors, clicks, growth, and areas.</p>
           </div>
           <div className="flex gap-2">
@@ -121,7 +121,7 @@ export default function AdsAnalyticsPage() {
             </div>
 
             <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-              <Card>
+              <Card className="border-none shadow-sm rounded">
                 <CardHeader>
                   <CardTitle className="text-base">Campaign growth</CardTitle>
                   <CardDescription>Daily impressions, qualified views, and clicks.</CardDescription>
@@ -147,9 +147,9 @@ export default function AdsAnalyticsPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="border-none shadow-sm rounded">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base"><MapPin className="h-4 w-4 text-primary" />Audience areas</CardTitle>
+                  <CardTitle className="flex items-center gap-2 text-base">Audience areas</CardTitle>
                   <CardDescription>Location headers supplied by the hosting edge.</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -170,7 +170,7 @@ export default function AdsAnalyticsPage() {
               </Card>
             </div>
 
-            <Card>
+            <Card className="border-none shadow-sm rounded">
               <CardHeader>
                 <CardTitle className="text-base">Performance by ad</CardTitle>
                 <CardDescription>Each campaign keeps its own metrics for the selected period.</CardDescription>

@@ -24,11 +24,11 @@
 
     /* ── CSS Variables ── */
     :root {
-      --or: #2563EB;
-      --or-mid: #3B82F6;
-      --or-light: #60A5FA;
-      --or-pale: #EFF6FF;
-      --or-dark: #1E40AF;
+      --or: #1597f4;
+      --or-mid: #38bdf8;
+      --or-light: #7dd3fc;
+      --or-pale: #effaff;
+      --or-dark: #0284c7;
       --white: #ffffff;
       --gray-50: #f9f9f9;
       --gray-100: #f2f2f2;
@@ -65,21 +65,6 @@
       --shadow-lg: 0 10px 40px rgba(0, 0, 0, .15);
     }
 
-    [data-theme="dark"] {
-      --bg: #000000;
-      --surface: #111111;
-      --surface2: #1a1a1a;
-      --border: #2a2a2a;
-      --text: #f0f0f0;
-      --text-2: #bbbbbb;
-      --text-muted: #777777;
-      --text-light: #444444;
-      --primary: #2563EB;
-      --primary-mid: #FF7A1A;
-      --primary-lt: #FF9940;
-      --primary-pale: #1f0e00;
-    }
-
     body {
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
       background: var(--bg);
@@ -102,7 +87,7 @@
     /* ── Hero Banner ── */
     .hero-banner {
       width: 100%;
-      background: linear-gradient(160deg, #1a1a1a 0%, #0d0d0d 60%, #000000 100%);
+      background: linear-gradient(150deg, #38bdf8 0%, #1597f4 52%, #0ea5e9 100%);
       padding: 0;
       position: relative;
       overflow: hidden;
@@ -130,7 +115,7 @@
       width: 260px;
       height: 260px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(255, 96, 0, .35) 0%, rgba(255, 96, 0, 0) 70%);
+      background: radial-gradient(circle, rgba(255, 255, 255, .34) 0%, rgba(255, 255, 255, 0) 70%);
       top: -60px;
       right: -60px;
       pointer-events: none;
@@ -315,7 +300,7 @@
 
     .connect-bar:focus-within {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(255, 96, 0, .15);
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, .15);
     }
 
     .connect-input {
@@ -349,7 +334,7 @@
       align-items: center;
       gap: 6px;
       transition: opacity .2s, transform .1s;
-      box-shadow: 0 3px 10px rgba(255, 96, 0, .4);
+      box-shadow: 0 3px 10px rgba(14, 165, 233, .28);
     }
 
     .connect-btn:hover {
@@ -469,7 +454,7 @@
     .speed-tab.active {
       background: linear-gradient(135deg, var(--or) 0%, var(--or-mid) 100%);
       color: #fff;
-      box-shadow: 0 2px 8px rgba(255, 96, 0, .35);
+      box-shadow: 0 2px 8px rgba(14, 165, 233, .24);
     }
 
     /* ── Package tiles ── */
@@ -486,7 +471,7 @@
       gap: 12px;
       padding: 13px 14px;
       background: var(--surface);
-      border: 1px solid rgba(255, 96, 0, .15);
+      border: 1px solid rgba(14, 165, 233, .15);
       border-radius: 4px;
       box-shadow: 0 4px 14px rgba(0, 0, 0, .06);
       cursor: pointer;
@@ -499,7 +484,7 @@
     }
 
     [data-theme="dark"] .pkg-tile {
-      border-color: rgba(255, 96, 0, .18);
+      border-color: rgba(14, 165, 233, .18);
       background: #111111;
     }
 
@@ -517,8 +502,8 @@
 
     .pkg-tile:hover {
       transform: translateY(-2px);
-      box-shadow: 0 10px 24px rgba(255, 96, 0, .15);
-      border-color: rgba(255, 96, 0, .4);
+      box-shadow: 0 10px 24px rgba(14, 165, 233, .15);
+      border-color: rgba(14, 165, 233, .4);
     }
 
 
@@ -578,7 +563,7 @@
       text-transform: uppercase;
       cursor: pointer;
       white-space: nowrap;
-      box-shadow: 0 3px 10px rgba(255, 96, 0, .35);
+      box-shadow: 0 3px 10px rgba(14, 165, 233, .24);
       transition: opacity .2s, transform .1s;
     }
 
@@ -601,7 +586,7 @@
     }
 
     .support-header {
-      background: linear-gradient(100deg, #1a1a1a 0%, #2a2a2a 100%);
+      background: linear-gradient(100deg, #38bdf8 0%, #1597f4 100%);
       padding: 12px 16px;
       display: flex;
       align-items: center;
@@ -792,7 +777,7 @@
     }
 
     .modal-header {
-      background: linear-gradient(135deg, #1a1a1a 0%, #111111 60%, #0d0d0d 100%);
+      background: linear-gradient(135deg, #38bdf8 0%, #1597f4 60%, #0ea5e9 100%);
       border-bottom: 3px solid var(--or);
       padding: 16px 16px 48px;
       position: relative;
@@ -960,7 +945,7 @@
 
     .form-input:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(255, 96, 0, .15);
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, .15);
       background: var(--surface);
     }
 
@@ -1016,7 +1001,7 @@
     .btn-primary {
       background: linear-gradient(135deg, var(--or) 0%, var(--or-mid) 100%);
       color: #fff;
-      box-shadow: 0 4px 14px rgba(255, 96, 0, .35);
+      box-shadow: 0 4px 14px rgba(14, 165, 233, .24);
     }
 
     .btn-success {
@@ -1173,6 +1158,57 @@
       /* flex-direction: column; */
       gap: 4px;
       margin-top: 10px;
+    }
+
+    /* Light blue, soft surfaces, no visible divider lines. */
+    .connect-card,
+    .connect-bar,
+    .pkg-tile,
+    .modal-sheet,
+    .bottom-sheet,
+    .voucher-float,
+    .form-input,
+    .note-box,
+    .result-card,
+    .speed-tab,
+    .theme-btn,
+    .modal-back,
+    .bottom-sheet-close,
+    .btn-outline {
+      border: none !important;
+    }
+
+    .connect-card,
+    .pkg-tile,
+    .voucher-float,
+    .result-card {
+      box-shadow: 0 12px 30px rgba(14, 165, 233, .10);
+    }
+
+    .connect-bar,
+    .form-input,
+    .note-box {
+      background: #f0f9ff;
+    }
+
+    .pkg-tile:hover,
+    .pkg-tile:focus-visible {
+      border: none !important;
+      box-shadow: 0 16px 36px rgba(14, 165, 233, .18);
+    }
+
+    .support-card,
+    .support-row,
+    .modal-header,
+    .modal-header-plain,
+    .bottom-sheet-header,
+    .voucher-float hr {
+      border-color: transparent !important;
+    }
+
+    .support-header,
+    .modal-header {
+      background: linear-gradient(135deg, #38bdf8, #1597f4) !important;
     }
 
     /* ── Mobile fine-tuning for smaller phones ── */
@@ -1342,24 +1378,6 @@
               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          </button>
-          <button class="theme-btn" id="themeToggle" aria-label="Toggle dark mode">
-            <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-            </svg>
-            <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="5" />
-              <line x1="12" y1="1" x2="12" y2="3" />
-              <line x1="12" y1="21" x2="12" y2="23" />
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-              <line x1="1" y1="12" x2="3" y2="12" />
-              <line x1="21" y1="12" x2="23" y2="12" />
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
             </svg>
           </button>
         </div>
@@ -1549,15 +1567,6 @@
 
   <!-- ════════════════════════════════════════  JS  ═══════════════════════════════════════ -->
   <script>
-    /* ── Theme ── */
-    var html = document.documentElement;
-    html.setAttribute('data-theme', localStorage.getItem('cp_theme') || 'light');
-    document.getElementById('themeToggle').addEventListener('click', function () {
-      var next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      html.setAttribute('data-theme', next);
-      localStorage.setItem('cp_theme', next);
-    });
-
     /* ── Toast ── */
     function showToast(msg, dur) {
       dur = dur || 3000;
@@ -1764,7 +1773,7 @@
       document.getElementById('packageListHome').innerHTML = loadingHtml;
       document.getElementById('packageListModal').innerHTML = loadingHtml;
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', API_BASE + '/packages?router_id=' + encodeURIComponent(ROUTER_ID), true);
+      xhr.open('GET', API_BASE + '/portal/' + encodeURIComponent(ROUTER_ID) + '/packages', true);
       xhr.timeout = 15000;
       xhr.onreadystatechange = function () {
         if (xhr.readyState !== 4) return;
