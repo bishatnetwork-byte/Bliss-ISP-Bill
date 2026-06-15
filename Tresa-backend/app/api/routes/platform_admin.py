@@ -928,7 +928,7 @@ def health(
         "configured" if dns_is_configured() else "not configured",
         "configured" if settings.resend_key else "not configured",
         "configured" if settings.africastalking_api_key else "not configured",
-        "configured" if settings.renult_pay_api_key else "not configured",
+        "configured" if settings.marz_api_credentials else "not configured",
     ]
     return PlatformHealthResponse(
         status="healthy" if database == "online" else "degraded",

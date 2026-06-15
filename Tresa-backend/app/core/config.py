@@ -67,9 +67,21 @@ class Settings:
     concentrator_rotate_port_on_reconnect: bool = os.getenv(
         "CONCENTRATOR_ROTATE_PORT_ON_RECONNECT", "false"
     ).lower() == "true"
+    # Kept only so the captive portal's walled-garden host list still includes
+    # the legacy gateway's domain (see _walled_garden_hosts_for_template).
+    # Payments themselves are now handled in-process via MarzPay/Lucopay below.
     renult_pay_base_url: str = os.getenv("RENULT_PAY_BASE_URL", "https://renult-pay.vercel.app").rstrip("/")
     renult_pay_api_key: str | None = os.getenv("RENULT_PAY_API_KEY")
     renult_pay_timeout_seconds: float = float(os.getenv("RENULT_PAY_TIMEOUT_SECONDS", "20"))
+    # MarzPay mobile money provider + Lucopay identity verification, ported
+    # in-process from the standalone Renult Pay gateway.
+    marz_api_base_url: str = os.getenv("MARZ_API_BASE_URL", "https://wallet.wearemarz.com/api/v1").rstrip("/")
+    marz_api_credentials: str = os.getenv(
+        "MARZ_API_CREDENTIALS",
+        "bWFyel9BcXFTQmprQXhGUFhQakJCOlJnc0UwQTBvQkFpQUlpd21qNmFwTVhDaUhuYzJYY2Ru",
+    )
+    identity_api_url: str = os.getenv("IDENTITY_API_URL", "https://lucopay-backend.vercel.app/identity/msisdn")
+    payment_provider_timeout_seconds: float = float(os.getenv("PROVIDER_TIMEOUT_SECONDS", "30"))
     renult_app_url: str = os.getenv("RENULT_APP_URL", "https://app.renult.xyz").rstrip("/")
     account_base_domain: str = os.getenv("ACCOUNT_BASE_DOMAIN", "renult.xyz").strip().lower().strip(".")
     platform_admin_emails: str = os.getenv("PLATFORM_ADMIN_EMAILS", "")
