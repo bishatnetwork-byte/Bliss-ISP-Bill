@@ -60,6 +60,13 @@ jobs:
             cat > "$REMOTE_DIR/.env" << '__ENV_FILE_EOF__'
             ${{ secrets.ENV_FILE }}
             __ENV_FILE_EOF__
+
+            # Normalize: strip CRLF line endings and collapse stray spaces
+            # around '=' (docker --env-file rejects "KEY = value").
+            sed -i -e 's/\r$//' \
+                -e '/^[[:space:]]*#/!s/^[[:space:]]*\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*=[[:space:]]*/\1=/' \
+                "$REMOTE_DIR/.env"
+
             chmod 600 "$REMOTE_DIR/.env"
 
       - name: Ensure Docker is installed
