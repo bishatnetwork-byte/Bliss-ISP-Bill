@@ -125,11 +125,17 @@ def _ensure_user_platform_columns() -> None:
         "allowed_sections": "TEXT",
         "platform_role": "VARCHAR",
         "platform_permissions": "TEXT",
+        "account_subdomain": "VARCHAR",
+        "subdomain_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
     }
     with engine.begin() as conn:
         for name, sql_type in column_types.items():
             if name not in columns:
                 conn.execute(sa.text(f'ALTER TABLE "user" ADD COLUMN {name} {sql_type}'))
+        conn.execute(sa.text(
+            'CREATE UNIQUE INDEX IF NOT EXISTS ix_user_account_subdomain '
+            'ON "user" (account_subdomain) WHERE account_subdomain IS NOT NULL'
+        ))
 
 
 def _bootstrap_platform_admins() -> None:

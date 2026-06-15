@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { renultApi } from "@/api/foreform";
+import { redirectToAccountSubdomain, renultApi } from "@/api/foreform";
 import { useAuth } from "@/lib/auth";
 import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { Loader2 } from "lucide-react";
@@ -71,7 +71,9 @@ export default function Signup() {
       const auth = await renultApi.auth.verifyEmail({ email, code });
       login(auth);
       toast.success("Account verified");
-      navigate("/", { replace: true });
+      if (!redirectToAccountSubdomain(auth)) {
+        navigate("/", { replace: true });
+      }
     } catch (err: any) {
       toast.error(err.message || "Failed to verify account");
     } finally {
@@ -94,7 +96,10 @@ export default function Signup() {
     try {
       const auth = await renultApi.auth.google({ id_token: credentialResponse.credential });
       login(auth);
-      navigate(auth.user.auth_provider === "google" ? "/set-password" : "/", { replace: true });
+      const target = auth.user.auth_provider === "google" ? "/set-password" : "/";
+      if (!redirectToAccountSubdomain(auth, target)) {
+        navigate(target, { replace: true });
+      }
     } catch (err: any) {
       toast.error(err.message || "Google sign up failed");
     } finally {

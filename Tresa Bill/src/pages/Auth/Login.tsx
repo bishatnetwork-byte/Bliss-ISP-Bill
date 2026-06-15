@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { renultApi } from "@/api/foreform";
+import { redirectToAccountSubdomain, renultApi } from "@/api/foreform";
 import { useAuth } from "@/lib/auth";
 import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { Loader2 } from "lucide-react";
@@ -20,13 +20,18 @@ export default function Login() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const from = (location.state as any)?.from?.pathname || "/";
 
+  const finishLogin = (auth: Awaited<ReturnType<typeof renultApi.auth.login>>, targetPath = from) => {
+    login(auth);
+    if (redirectToAccountSubdomain(auth, targetPath)) return;
+    navigate(targetPath, { replace: true });
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setIsLoading(true);
     try {
       const auth = await renultApi.auth.login({ email, password });
-      login(auth);
-      navigate(from, { replace: true });
+      finishLogin(auth);
     } catch (err: any) {
       toast.error(err.message || "Failed to log in");
     } finally {
@@ -42,11 +47,10 @@ export default function Login() {
     setIsGoogleLoading(true);
     try {
       const auth = await renultApi.auth.google({ id_token: credentialResponse.credential });
-      login(auth);
       if (auth.user.auth_provider === "google") {
-        navigate("/set-password", { replace: true, state: { from } });
+        finishLogin(auth, "/set-password");
       } else {
-        navigate(from, { replace: true });
+        finishLogin(auth);
       }
     } catch (err: any) {
       toast.error(err.message || "Google sign in failed");

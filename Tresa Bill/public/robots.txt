@@ -13,4 +13,4 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://form.pitbox.fun/sitemap.xml
+Sitemap: https://renult.app/sitemap.xml

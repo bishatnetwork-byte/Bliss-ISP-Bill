@@ -1,7 +1,7 @@
 {
-  "name": "Foreform - Free Online Form Builder",
-  "short_name": "Foreform",
-  "description": "Create forms, surveys, and quizzes in minutes. Free, fast, no code.",
+  "name": "Renault - MikroTik Hotspot Billing",
+  "short_name": "Renault",
+  "description": "Manage MikroTik routers, WiFi vouchers, captive portals, payments, and hotspot branches.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

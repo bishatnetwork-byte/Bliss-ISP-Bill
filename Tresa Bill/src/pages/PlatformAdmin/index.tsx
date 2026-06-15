@@ -3,14 +3,11 @@ import {
   PlatformUserResponse,
   renultApi,
 } from "@/api/foreform";
-import AppHeader from "@/components/Header/AppHeader";
-import SEO from "@/components/SEO";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -35,7 +32,9 @@ import {
   Wifi,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import PlatformAdminLayout, { PlatformAdminSection } from "./PlatformAdminLayout";
 
 const ADMIN_TABS = [
   ["overview", "Overview"],
@@ -74,21 +73,26 @@ export default function PlatformAdminPage() {
     [user],
   );
   const visibleTabs = ADMIN_TABS.filter(([permission]) => permissions.has(permission));
-  const [activeTab, setActiveTab] = useState(visibleTabs[0]?.[0] || "overview");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => localStorage.getItem("sidebar-collapsed") === "true",
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedSection = searchParams.get("section") as PlatformAdminSection | null;
+  const [activeTab, setActiveTab] = useState<PlatformAdminSection>(
+    requestedSection || visibleTabs[0]?.[0] || "overview",
   );
 
   useEffect(() => {
-    const handler = (event: Event) =>
-      setSidebarCollapsed((event as CustomEvent<{ collapsed: boolean }>).detail.collapsed);
-    window.addEventListener("sidebar-collapse-change", handler);
-    return () => window.removeEventListener("sidebar-collapse-change", handler);
-  }, []);
+    const next = requestedSection && permissions.has(requestedSection)
+      ? requestedSection
+      : visibleTabs[0]?.[0] || "overview";
+    if (!permissions.has(activeTab) || (requestedSection && requestedSection !== activeTab)) {
+      setActiveTab(next);
+    }
+  }, [activeTab, permissions, requestedSection, visibleTabs]);
 
-  useEffect(() => {
-    if (!permissions.has(activeTab)) setActiveTab(visibleTabs[0]?.[0] || "overview");
-  }, [activeTab, permissions, visibleTabs]);
+  const changeSection = (section: PlatformAdminSection) => {
+    setActiveTab(section);
+    setSearchParams({ section });
+  };
 
   const overview = useQuery({
     queryKey: ["platformAdmin", "overview"],
@@ -202,10 +206,8 @@ export default function PlatformAdminPage() {
   });
 
   return (
-    <div className={cn("min-h-screen bg-background transition-all", sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[280px]")}>
-      <SEO title="Platform Admin" />
-      <AppHeader onCreateForm={() => undefined} />
-      <main className="px-4 py-6 sm:px-6 space-y-5">
+    <PlatformAdminLayout activeSection={activeTab} onSectionChange={changeSection}>
+      <div className="space-y-5 px-4 py-6 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -221,24 +223,20 @@ export default function PlatformAdminPage() {
           </Badge>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="h-auto w-full justify-start overflow-x-auto rounded border bg-card p-1">
-            {visibleTabs.map(([key, label]) => <TabsTrigger key={key} value={key} className="text-xs">{label}</TabsTrigger>)}
-          </TabsList>
-
-          <TabsContent value="overview">
+        {activeTab === "overview" && (
             <Overview data={overview.data} loading={overview.isLoading} />
-          </TabsContent>
-          <TabsContent value="users">
+        )}
+        {activeTab === "users" && (
             <UsersPanel
               users={usersQuery.data || []}
               loading={usersQuery.isLoading}
               search={userSearch}
               onSearch={setUserSearch}
               onUpdate={(id, payload) => updateUser.mutate({ id, payload })}
+              onView={(id) => navigate(`/platform-admin/users/${id}`)}
             />
-          </TabsContent>
-          <TabsContent value="finance">
+        )}
+        {activeTab === "finance" && (
             <FinancePanel
               initial={settingsQuery.data}
               wallets={walletsQuery.data || []}
@@ -246,34 +244,33 @@ export default function PlatformAdminPage() {
               onSaved={() => queryClient.invalidateQueries({ queryKey: ["platformAdmin", "settings"] })}
               onFreeze={(id, frozen) => freezeWallet.mutate({ id, frozen })}
             />
-          </TabsContent>
-          <TabsContent value="broadcasts">
+        )}
+        {activeTab === "broadcasts" && (
             <BroadcastPanel users={usersQuery.data || []} />
-          </TabsContent>
-          <TabsContent value="voucher_audit">
+        )}
+        {activeTab === "voucher_audit" && (
             <VoucherAuditPanel rows={voucherAudit.data || []} search={voucherSearch} onSearch={setVoucherSearch} loading={voucherAudit.isLoading} />
-          </TabsContent>
-          <TabsContent value="tunnels">
+        )}
+        {activeTab === "tunnels" && (
             <TunnelsPanel rows={tunnels.data || []} loading={tunnels.isLoading} onToggle={(id, active) => tunnelMutation.mutate({ id, active })} />
-          </TabsContent>
-          <TabsContent value="storage">
+        )}
+        {activeTab === "storage" && (
             <StoragePanel rows={storage.data || []} loading={storage.isLoading} error={storage.error} prefix={storagePrefix} onPrefix={setStoragePrefix} onDelete={(key) => deleteStorage.mutate(key)} />
-          </TabsContent>
-          <TabsContent value="dns">
+        )}
+        {activeTab === "dns" && (
             <DnsPanel zones={dnsZones.data || []} records={dnsRecords.data || []} error={dnsZones.error || dnsRecords.error} zoneId={zoneId} onZone={setZoneId} onDelete={(record) => deleteDns.mutate({ zone: zoneId, record })} />
-          </TabsContent>
-          <TabsContent value="subadmins">
+        )}
+        {activeTab === "subadmins" && (
             <SubadminsPanel users={usersQuery.data || []} onSave={(id, role, next) => updateSubadmin.mutate({ id, role, permissions: next })} />
-          </TabsContent>
-          <TabsContent value="system">
+        )}
+        {activeTab === "system" && (
             <HealthPanel data={health.data} loading={health.isLoading} onRefresh={() => health.refetch()} />
-          </TabsContent>
-          <TabsContent value="audit">
+        )}
+        {activeTab === "audit" && (
             <AdminAuditPanel rows={adminAudit.data || []} loading={adminAudit.isLoading} />
-          </TabsContent>
-        </Tabs>
-      </main>
-    </div>
+        )}
+      </div>
+    </PlatformAdminLayout>
   );
 }
 
@@ -306,27 +303,97 @@ function Overview({ data, loading }: { data: Awaited<ReturnType<typeof renultApi
   );
 }
 
-function UsersPanel({ users, loading, search, onSearch, onUpdate }: {
+function UsersPanel({ users, loading, search, onSearch, onUpdate, onView }: {
   users: PlatformUserResponse[]; loading: boolean; search: string; onSearch: (value: string) => void;
-  onUpdate: (id: string, payload: Partial<Pick<PlatformUserResponse, "is_active" | "is_verified" | "allowed_sections">>) => void;
+  onUpdate: (id: string, payload: Partial<Pick<PlatformUserResponse, "is_active" | "is_verified" | "allowed_sections" | "account_subdomain" | "subdomain_enabled">>) => void;
+  onView: (id: string) => void;
 }) {
   return <Panel title="Global Users" icon={Users} action={<Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Search name, email, phone" className="h-9 w-72" />}>
     {loading ? <Loading /> : <div className="overflow-x-auto"><table className="w-full text-xs">
-      <thead><tr className="border-b text-left">{["User", "Phone", "Assets", "Wallet", "Sections", "Status", "Actions"].map((x) => <th key={x} className="p-3">{x}</th>)}</tr></thead>
+      <thead><tr className="border-b text-left">{["User", "Phone", "Assets", "Wallet", "Sections", "Account Subdomain", "Status", "Actions"].map((x) => <th key={x} className="p-3">{x}</th>)}</tr></thead>
       <tbody>{users.map((item) => <tr key={item.id} className="border-b align-top">
         <td className="p-3"><p className="font-bold">{item.full_name}</p><p className="text-muted-foreground">{item.email}</p><p className="mt-1">{formatDate(item.created_at)}</p></td>
         <td className="p-3">{item.phone_number || "N/A"}</td>
         <td className="p-3">{item.branches} branches<br />{item.routers} routers<br />{item.vouchers} vouchers</td>
         <td className="p-3 font-bold">{money(item.wallet_balance)}</td>
         <td className="min-w-[280px] p-3"><CheckboxGrid values={item.allowed_sections} options={USER_SECTIONS} onChange={(next) => onUpdate(item.id, { allowed_sections: next })} emptyLabel="All sections" /></td>
+        <td className="min-w-[260px] p-3">
+          <UserSubdomainControl user={item} onUpdate={(payload) => onUpdate(item.id, payload)} />
+        </td>
         <td className="p-3"><Status label={item.is_active ? "Active" : "Suspended"} ok={item.is_active} /><div className="mt-2"><Status label={item.is_verified ? "Verified" : "Unverified"} ok={item.is_verified} /></div></td>
         <td className="p-3 space-y-2">
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onView(item.id)}>View Profile</Button>
           <Button size="sm" variant={item.is_active ? "destructive" : "outline"} className="h-8 text-xs" onClick={() => onUpdate(item.id, { is_active: !item.is_active })}>{item.is_active ? "Suspend" : "Activate"}</Button>
           {!item.is_verified && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onUpdate(item.id, { is_verified: true })}>Verify</Button>}
         </td>
       </tr>)}</tbody>
     </table></div>}
   </Panel>;
+}
+
+function UserSubdomainControl({
+  user,
+  onUpdate,
+}: {
+  user: PlatformUserResponse;
+  onUpdate: (payload: Partial<Pick<PlatformUserResponse, "account_subdomain" | "subdomain_enabled">>) => void;
+}) {
+  const [subdomain, setSubdomain] = useState(user.account_subdomain || "");
+
+  useEffect(() => {
+    setSubdomain(user.account_subdomain || "");
+  }, [user.account_subdomain]);
+
+  const normalized = subdomain.trim().toLowerCase();
+  const valid = /^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/.test(normalized);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center">
+        <Input
+          value={subdomain}
+          onChange={(event) => setSubdomain(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+          placeholder="customer-name"
+          className="h-8 rounded-r-none text-xs"
+        />
+        <span className="flex h-8 items-center rounded-r border border-l-0 bg-muted/40 px-2 text-[10px] text-muted-foreground">
+          .renult.app
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[10px]"
+            disabled={!valid || normalized === user.account_subdomain}
+            onClick={() => onUpdate({ account_subdomain: normalized })}
+          >
+            Assign
+          </Button>
+          {user.account_subdomain && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-[10px] text-destructive"
+              onClick={() => onUpdate({ account_subdomain: null, subdomain_enabled: false })}
+            >
+              Remove
+            </Button>
+          )}
+        </div>
+        <label className="flex items-center gap-1.5 text-[10px] font-semibold">
+          <input
+            type="checkbox"
+            checked={user.subdomain_enabled}
+            disabled={!user.account_subdomain}
+            onChange={(event) => onUpdate({ subdomain_enabled: event.target.checked })}
+          />
+          Allow login
+        </label>
+      </div>
+    </div>
+  );
 }
 
 function FinancePanel({ initial, wallets, loading, onSaved, onFreeze }: {
@@ -488,6 +555,9 @@ function CheckboxGrid({ values, options, labels, onChange, emptyLabel }: { value
 }
 
 function SimpleTable({ headers, rows }: { headers: string[]; rows: React.ReactNode[][] }) {
+  if (rows.length === 0) {
+    return <div className="rounded border border-dashed p-8 text-center text-sm text-muted-foreground">No records found.</div>;
+  }
   return <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b text-left">{headers.map((x) => <th key={x} className="p-3">{x}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index} className="border-b">{row.map((cell, cellIndex) => <td key={cellIndex} className="max-w-sm break-words p-3">{cell}</td>)}</tr>)}</tbody></table></div>;
 }
 

@@ -65,6 +65,8 @@ class UserResponse(BaseModel):
     allowed_sections: list[str] = Field(default_factory=list)
     platform_role: Optional[str] = None
     platform_permissions: list[str] = Field(default_factory=list)
+    account_subdomain: Optional[str] = None
+    subdomain_enabled: bool = False
     staff_branch_id: Optional[UUID] = None
     staff_role: Optional[str] = None
     staff_permissions: list[str] = Field(default_factory=list)

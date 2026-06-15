@@ -33,6 +33,8 @@ class PlatformUserResponse(BaseModel):
     allowed_sections: list[str]
     platform_role: Optional[str]
     platform_permissions: list[str]
+    account_subdomain: Optional[str]
+    subdomain_enabled: bool
     branches: int
     routers: int
     vouchers: int
@@ -44,6 +46,51 @@ class PlatformUserUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_verified: Optional[bool] = None
     allowed_sections: Optional[list[str]] = None
+    account_subdomain: Optional[str] = Field(default=None, min_length=3, max_length=63, pattern=r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
+    subdomain_enabled: Optional[bool] = None
+
+
+class PlatformUserBranchResponse(BaseModel):
+    id: UUID
+    name: str
+    avatar_url: str
+    routers: int
+    vouchers: int
+    wallet_balance: int
+    wallet_frozen: bool
+    created_at: datetime
+
+
+class PlatformUserRouterResponse(BaseModel):
+    id: UUID
+    branch_id: UUID
+    branch_name: str
+    name: str
+    location: Optional[str]
+    is_active: bool
+    status: str
+    last_seen: Optional[datetime]
+    created_at: datetime
+
+
+class PlatformUserVoucherResponse(BaseModel):
+    id: UUID
+    voucher_code: str
+    router_name: str
+    phone_number: str
+    profile: str
+    amount: int
+    status: str
+    created_at: datetime
+    activated_at: Optional[datetime]
+    expires_at: Optional[datetime]
+
+
+class PlatformUserDetailResponse(BaseModel):
+    user: PlatformUserResponse
+    branches: list[PlatformUserBranchResponse]
+    routers: list[PlatformUserRouterResponse]
+    recent_vouchers: list[PlatformUserVoucherResponse]
 
 
 class PlatformSubadminUpdate(BaseModel):

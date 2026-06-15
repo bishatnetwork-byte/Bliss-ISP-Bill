@@ -36,6 +36,7 @@ import SupportsIndex from './pages/Supports/index';
 import VouchersIndex from './pages/Vouchers/index';
 import ActiveUsersPage from './pages/Vouchers/ActiveUsers';
 import PlatformAdminPage from './pages/PlatformAdmin';
+import PlatformUserDetailsPage from './pages/PlatformAdmin/UserDetails';
 import { renultApi } from './api/foreform';
 
 /* ── settings sub-pages ── */
@@ -159,6 +160,7 @@ const AppRoutes = () => {
         <Route path="/branches" element={protectedElement(<OwnerRoute permission="branches"><BranchesPage /></OwnerRoute>)} />
         <Route path="/notifications" element={protectedElement(<NotificationsPage />)} />
         <Route path="/platform-admin" element={protectedElement(<PlatformAdminRoute><PlatformAdminPage /></PlatformAdminRoute>)} />
+        <Route path="/platform-admin/users/:userId" element={protectedElement(<PlatformAdminRoute><PlatformUserDetailsPage /></PlatformAdminRoute>)} />
 
         {/* ── settings routes ── */}
         <Route path="/settings" element={protectedElement(<OwnerRoute permission="settings"><MyDetailsPage /></OwnerRoute>)} />

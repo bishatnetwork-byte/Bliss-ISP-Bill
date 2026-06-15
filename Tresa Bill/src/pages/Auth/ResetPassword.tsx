@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { renultApi } from "@/api/foreform";
+import { redirectToAccountSubdomain, renultApi } from "@/api/foreform";
 import { useAuth } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 import React, { useState } from "react";
@@ -38,7 +38,9 @@ export default function ResetPassword() {
       const auth = await renultApi.auth.resetPassword({ email, code, new_password: password });
       login(auth);
       toast.success("Password reset");
-      navigate("/", { replace: true });
+      if (!redirectToAccountSubdomain(auth)) {
+        navigate("/", { replace: true });
+      }
     } catch (err: any) {
       toast.error(err.message || "Failed to reset password");
     } finally {

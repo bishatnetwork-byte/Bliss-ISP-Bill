@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { renultApi } from "@/api/foreform";
+import { redirectToAccountSubdomain, renultApi } from "@/api/foreform";
 import { useAuth } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 import { useEffect, useRef } from "react";
@@ -29,7 +29,10 @@ export default function GoogleCallback() {
       .then((auth) => {
         clearGoogleRedirectUri();
         login(auth);
-        navigate(auth.user.auth_provider === "google" ? "/set-password" : "/", { replace: true });
+        const target = auth.user.auth_provider === "google" ? "/set-password" : "/";
+        if (!redirectToAccountSubdomain(auth, target)) {
+          navigate(target, { replace: true });
+        }
       })
       .catch((err: any) => {
         toast.error(err.message || "Google sign in failed");

@@ -1,7 +1,7 @@
 import { Helmet } from 'react-helmet-async';
 
 interface SEOProps {
-    /** Page title – will be appended with "| Foreform" */
+    /** Page title – will be appended with "| Renault" */
     title?: string;
     /** Meta description – keep under 160 characters */
     description?: string;
@@ -17,13 +17,13 @@ interface SEOProps {
     noIndex?: boolean;
 }
 
-const SITE_NAME = 'Foreform';
-const BASE_URL = 'https://form.pitbox.fun';
+const SITE_NAME = 'Renault';
+const BASE_URL = 'https://renult.app';
 const DEFAULT_OG_IMAGE = `${BASE_URL}/og-image.png`;
 const DEFAULT_DESCRIPTION =
-    'Foreform is a free, fast online form builder. Create surveys, contact forms, registration forms, and quizzes in minutes — no coding needed.';
+    'Renault is a MikroTik hotspot billing and voucher management platform for internet providers in Uganda.';
 const DEFAULT_KEYWORDS =
-    'form builder, online form creator, free form builder, survey maker, contact form, Google Forms alternative, quiz builder, registration form';
+    'MikroTik billing system, hotspot billing Uganda, WiFi voucher management, router monitoring, captive portal, internet billing software';
 
 export default function SEO({
     title,
@@ -34,7 +34,7 @@ export default function SEO({
     ogType = 'website',
     noIndex = false,
 }: SEOProps) {
-    const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} – Free Online Form Builder | Create Forms in Minutes`;
+    const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} – MikroTik Hotspot Billing System`;
     const canonicalUrl = `${BASE_URL}${path}`;
 
     return (

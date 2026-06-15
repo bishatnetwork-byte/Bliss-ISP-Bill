@@ -34,8 +34,12 @@ from app.schemas.platform_admin import (
     PlatformStorageObjectResponse,
     PlatformSubadminUpdate,
     PlatformTunnelResponse,
+    PlatformUserBranchResponse,
+    PlatformUserDetailResponse,
     PlatformUserResponse,
+    PlatformUserRouterResponse,
     PlatformUserUpdate,
+    PlatformUserVoucherResponse,
     PlatformVoucherAuditResponse,
     PlatformWalletResponse,
 )
@@ -62,6 +66,11 @@ from app.services.storage import STORAGE_ERRORS, delete_object, list_objects
 from app.services.wallet import freeze_wallet
 
 router = APIRouter(prefix="/platform-admin", tags=["Platform Admin"])
+
+RESERVED_SUBDOMAINS = {
+    "admin", "api", "app", "auth", "billing", "dashboard", "help", "login",
+    "mail", "platform", "portal", "signup", "status", "support", "www",
+}
 
 
 def _admin(permission: str):
@@ -100,6 +109,8 @@ def _user_response(session: Session, user: User) -> PlatformUserResponse:
         allowed_sections=[item for item in (user.allowed_sections or "").split(",") if item],
         platform_role=user.platform_role,
         platform_permissions=sorted(permissions_for(user)),
+        account_subdomain=user.account_subdomain,
+        subdomain_enabled=user.subdomain_enabled,
         branches=len(branch_ids),
         routers=router_count,
         vouchers=voucher_count,
@@ -208,6 +219,8 @@ def users(
             allowed_sections=[item for item in (user.allowed_sections or "").split(",") if item],
             platform_role=user.platform_role,
             platform_permissions=sorted(permissions_for(user)),
+            account_subdomain=user.account_subdomain,
+            subdomain_enabled=user.subdomain_enabled,
             branches=int(branches),
             routers=int(routers),
             vouchers=int(vouchers),
@@ -239,12 +252,126 @@ def update_user(
         if invalid:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unsupported sections: {', '.join(sorted(invalid))}")
         target.allowed_sections = ",".join(sorted(set(payload.allowed_sections))) or None
+    if "account_subdomain" in payload.model_fields_set:
+        subdomain = (payload.account_subdomain or "").strip().lower() or None
+        if subdomain in RESERVED_SUBDOMAINS:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "That subdomain is reserved")
+        if subdomain:
+            existing = session.exec(
+                select(User)
+                .where(func.lower(User.account_subdomain) == subdomain)
+                .where(User.id != target.id)
+            ).first()
+            if existing:
+                raise HTTPException(status.HTTP_409_CONFLICT, "That subdomain is already assigned")
+        target.account_subdomain = subdomain
+        if not subdomain:
+            target.subdomain_enabled = False
+    if payload.subdomain_enabled is not None:
+        if payload.subdomain_enabled and not target.account_subdomain:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Assign a subdomain before enabling access")
+        target.subdomain_enabled = payload.subdomain_enabled
     target.updated_at = datetime.utcnow()
     session.add(target)
     session.commit()
     session.refresh(target)
     audit(session, admin, "user_updated", "user", str(target.id), payload.model_dump(exclude_none=True))
     return _user_response(session, target)
+
+
+@router.get("/users/{user_id}", response_model=PlatformUserDetailResponse)
+def user_detail(
+    user_id: UUID,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> PlatformUserDetailResponse:
+    del admin
+    target = session.get(User, user_id)
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+    branches = session.exec(
+        select(Branch).where(Branch.user_id == target.id).order_by(Branch.created_at.desc())
+    ).all()
+    branch_ids = [branch.id for branch in branches]
+    routers = session.exec(
+        select(Router, Branch)
+        .join(Branch, Router.branch_id == Branch.id)
+        .where(Branch.user_id == target.id)
+        .order_by(Router.created_at.desc())
+    ).all()
+    router_names = {router.name.strip().upper() for router, _ in routers}
+    vouchers = session.exec(
+        select(VoucherPurchase)
+        .where(col(VoucherPurchase.router_name).in_(router_names))
+        .order_by(VoucherPurchase.created_at.desc())
+        .limit(100)
+    ).all() if router_names else []
+    wallets = session.exec(
+        select(BranchWallet).where(col(BranchWallet.branch_id).in_(branch_ids))
+    ).all() if branch_ids else []
+
+    routers_by_branch: dict[UUID, list[Router]] = {}
+    for router_row, _ in routers:
+        routers_by_branch.setdefault(router_row.branch_id, []).append(router_row)
+    wallet_by_branch = {wallet.branch_id: wallet for wallet in wallets}
+    voucher_count_by_router: dict[str, int] = {}
+    if router_names:
+        voucher_counts = session.exec(
+            select(VoucherPurchase.router_name, func.count(VoucherPurchase.id))
+            .where(col(VoucherPurchase.router_name).in_(router_names))
+            .group_by(VoucherPurchase.router_name)
+        ).all()
+        voucher_count_by_router = {name: int(count) for name, count in voucher_counts}
+
+    return PlatformUserDetailResponse(
+        user=_user_response(session, target),
+        branches=[
+            PlatformUserBranchResponse(
+                id=branch.id,
+                name=branch.name,
+                avatar_url=branch.avatar_url,
+                routers=len(routers_by_branch.get(branch.id, [])),
+                vouchers=sum(
+                    voucher_count_by_router.get(router.name.strip().upper(), 0)
+                    for router in routers_by_branch.get(branch.id, [])
+                ),
+                wallet_balance=wallet_by_branch.get(branch.id).balance if branch.id in wallet_by_branch else 0,
+                wallet_frozen=wallet_by_branch.get(branch.id).is_frozen if branch.id in wallet_by_branch else False,
+                created_at=branch.created_at,
+            )
+            for branch in branches
+        ],
+        routers=[
+            PlatformUserRouterResponse(
+                id=router_row.id,
+                branch_id=branch.id,
+                branch_name=branch.name,
+                name=router_row.name,
+                location=router_row.location,
+                is_active=router_row.is_active,
+                status=router_row.status,
+                last_seen=router_row.last_seen,
+                created_at=router_row.created_at,
+            )
+            for router_row, branch in routers
+        ],
+        recent_vouchers=[
+            PlatformUserVoucherResponse(
+                id=voucher.id,
+                voucher_code=voucher.voucher_code,
+                router_name=voucher.router_name,
+                phone_number=voucher.phone_number,
+                profile=voucher.profile,
+                amount=voucher.amount,
+                status=voucher.status,
+                created_at=voucher.created_at,
+                activated_at=voucher.activated_at,
+                expires_at=voucher.expires_at,
+            )
+            for voucher in vouchers
+        ],
+    )
 
 
 @router.put("/subadmins/{user_id}", response_model=PlatformUserResponse)
@@ -383,15 +510,29 @@ def voucher_audit(
 ) -> list[PlatformVoucherAuditResponse]:
     del admin
     query = select(VoucherActivationAudit)
+    voucher_query = select(VoucherPurchase)
     if search and search.strip():
         pattern = f"%{search.strip()}%"
         query = query.where(sa.or_(
             col(VoucherActivationAudit.voucher_code).ilike(pattern),
             col(VoucherActivationAudit.router_name).ilike(pattern),
             col(VoucherActivationAudit.event).ilike(pattern),
+            col(VoucherActivationAudit.new_status).ilike(pattern),
         ))
-    rows = session.exec(query.order_by(VoucherActivationAudit.created_at.desc()).limit(limit)).all()
-    return [
+        voucher_query = voucher_query.where(sa.or_(
+            col(VoucherPurchase.voucher_code).ilike(pattern),
+            col(VoucherPurchase.router_name).ilike(pattern),
+            col(VoucherPurchase.status).ilike(pattern),
+            col(VoucherPurchase.phone_number).ilike(pattern),
+        ))
+    audit_rows = session.exec(
+        query.order_by(VoucherActivationAudit.created_at.desc()).limit(limit)
+    ).all()
+    audited_voucher_ids = {row.voucher_id for row in audit_rows if row.voucher_id}
+    voucher_rows = session.exec(
+        voucher_query.order_by(VoucherPurchase.created_at.desc()).limit(limit)
+    ).all()
+    results = [
         PlatformVoucherAuditResponse(
             id=row.id,
             voucher_code=row.voucher_code,
@@ -404,8 +545,30 @@ def voucher_audit(
             metadata=row.metadata_json,
             created_at=row.created_at,
         )
-        for row in rows
+        for row in audit_rows
     ]
+    results.extend(
+        PlatformVoucherAuditResponse(
+            id=row.id,
+            voucher_code=row.voucher_code,
+            router_name=row.router_name,
+            event="current_record",
+            previous_status=None,
+            new_status=row.status,
+            activated_at=row.activated_at,
+            expires_at=row.expires_at,
+            metadata={
+                "phone_number": row.phone_number,
+                "profile": row.profile,
+                "amount": row.amount,
+                "payment_reference": row.payment_reference,
+            },
+            created_at=row.created_at,
+        )
+        for row in voucher_rows
+        if row.id not in audited_voucher_ids
+    )
+    return sorted(results, key=lambda row: row.created_at, reverse=True)[:limit]
 
 
 @router.get("/audit", response_model=list[PlatformAuditResponse])

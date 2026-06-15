@@ -4,6 +4,50 @@ const API_BASE_URL = configuredApiUrl.replace(/^http:\/\/renult\.vercel\.app/i, 
 const LUCOPAY_API_BASE_URL = "https://lucopay-backend.vercel.app";
 const AUTH_TOKEN_KEY = "renult:auth-token";
 const AUTH_USER_KEY = "renult:auth-user";
+const ACCOUNT_BASE_DOMAIN = import.meta.env.VITE_ACCOUNT_BASE_DOMAIN || "renult.app";
+
+function consumeSubdomainAuthToken() {
+  if (typeof window === "undefined" || !window.location.hash) return;
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const token = params.get("renult_access_token");
+  if (!token) return;
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  params.delete("renult_access_token");
+  const nextHash = params.toString();
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ""}`,
+  );
+}
+
+consumeSubdomainAuthToken();
+
+export function getAccountSubdomainUrl(
+  subdomain: string,
+  accessToken: string,
+  path = "/",
+) {
+  const protocol = window.location.protocol === "http:" ? "http:" : "https:";
+  const port = window.location.port ? `:${window.location.port}` : "";
+  const domain = import.meta.env.DEV && !import.meta.env.VITE_ACCOUNT_BASE_DOMAIN
+    ? window.location.hostname
+    : ACCOUNT_BASE_DOMAIN;
+  const targetPath = path.startsWith("/") ? path : "/";
+  return `${protocol}//${subdomain}.${domain}${port}${targetPath}#renult_access_token=${encodeURIComponent(accessToken)}`;
+}
+
+export function redirectToAccountSubdomain(auth: AuthResponse, path = "/") {
+  if (!auth.user.subdomain_enabled || !auth.user.account_subdomain) return false;
+  const targetUrl = getAccountSubdomainUrl(
+    auth.user.account_subdomain,
+    auth.access_token,
+    path,
+  );
+  if (window.location.hostname === new URL(targetUrl).hostname) return false;
+  window.location.assign(targetUrl);
+  return true;
+}
 
 export interface UserResponse {
   id: string;
@@ -18,6 +62,8 @@ export interface UserResponse {
   allowed_sections: string[];
   platform_role: "superadmin" | "subadmin" | null;
   platform_permissions: string[];
+  account_subdomain: string | null;
+  subdomain_enabled: boolean;
   staff_branch_id: string | null;
   staff_role: string | null;
   staff_permissions: string[];
@@ -58,6 +104,8 @@ export interface PlatformUserResponse {
   allowed_sections: string[];
   platform_role: "superadmin" | "subadmin" | null;
   platform_permissions: string[];
+  account_subdomain: string | null;
+  subdomain_enabled: boolean;
   branches: number;
   routers: number;
   vouchers: number;
@@ -118,6 +166,43 @@ export interface PlatformVoucherAuditResponse {
   expires_at: string | null;
   metadata: unknown;
   created_at: string;
+}
+
+export interface PlatformUserDetailResponse {
+  user: PlatformUserResponse;
+  branches: Array<{
+    id: string;
+    name: string;
+    avatar_url: string;
+    routers: number;
+    vouchers: number;
+    wallet_balance: number;
+    wallet_frozen: boolean;
+    created_at: string;
+  }>;
+  routers: Array<{
+    id: string;
+    branch_id: string;
+    branch_name: string;
+    name: string;
+    location: string | null;
+    is_active: boolean;
+    status: string;
+    last_seen: string | null;
+    created_at: string;
+  }>;
+  recent_vouchers: Array<{
+    id: string;
+    voucher_code: string;
+    router_name: string;
+    phone_number: string;
+    profile: string;
+    amount: number;
+    status: string;
+    created_at: string;
+    activated_at: string | null;
+    expires_at: string | null;
+  }>;
 }
 
 export interface PlatformAuditResponse {
@@ -1322,7 +1407,9 @@ export const renultApi = {
   platformAdmin: {
     overview: () => apiRequest<PlatformOverviewResponse>("/platform-admin/overview"),
     users: (search = "") => apiRequest<PlatformUserResponse[]>("/platform-admin/users", { query: { search: search || undefined, limit: 500 } }),
-    updateUser: (userId: string, payload: Partial<Pick<PlatformUserResponse, "is_active" | "is_verified" | "allowed_sections">>) =>
+    user: (userId: string) =>
+      apiRequest<PlatformUserDetailResponse>(`/platform-admin/users/${userId}`),
+    updateUser: (userId: string, payload: Partial<Pick<PlatformUserResponse, "is_active" | "is_verified" | "allowed_sections" | "account_subdomain" | "subdomain_enabled">>) =>
       apiRequest<PlatformUserResponse>(`/platform-admin/users/${userId}`, { method: "PATCH", body: JSON.stringify(payload) }),
     updateSubadmin: (userId: string, payload: { role: "subadmin" | "none"; permissions: string[] }) =>
       apiRequest<PlatformUserResponse>(`/platform-admin/subadmins/${userId}`, { method: "PUT", body: JSON.stringify(payload) }),
