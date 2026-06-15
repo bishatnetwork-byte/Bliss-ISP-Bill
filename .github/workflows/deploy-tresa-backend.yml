@@ -156,6 +156,18 @@ jobs:
             # "CORS policy: No Access-Control-Allow-Origin" error instead of
             # the real HTTP status.
             cat > /etc/nginx/snippets/tresa-api.conf << 'PROXY_CONF'
+            # FastAPI's own CORSMiddleware already sets these same headers on
+            # proxied responses. If Nginx adds its own on top without
+            # stripping FastAPI's first, the browser sees the header TWICE
+            # (e.g. "Access-Control-Allow-Origin: https://app.renult.xyz,
+            # https://app.renult.xyz") and rejects it outright. Make Nginx
+            # the single source of truth by hiding upstream's copies first.
+            proxy_hide_header Access-Control-Allow-Origin;
+            proxy_hide_header Access-Control-Allow-Methods;
+            proxy_hide_header Access-Control-Allow-Headers;
+            proxy_hide_header Access-Control-Allow-Credentials;
+            proxy_hide_header Vary;
+
             add_header 'Access-Control-Allow-Origin' $http_origin always;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
             add_header 'Access-Control-Allow-Headers' $http_access_control_request_headers always;
