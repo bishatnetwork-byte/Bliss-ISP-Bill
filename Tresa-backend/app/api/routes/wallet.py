@@ -158,7 +158,7 @@ def request_withdrawal_challenge(
     if wallet.balance < payload.amount:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Insufficient wallet balance")
 
-    net_amount = wallet_svc.withdrawal_net_amount(payload.amount)
+    net_amount = wallet_svc.withdrawal_net_amount(payload.amount, session)
     if net_amount < wallet_svc.WITHDRAW_MIN_AMOUNT or net_amount > wallet_svc.WITHDRAW_MAX_AMOUNT:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -237,7 +237,7 @@ def confirm_withdrawal(
 
     try:
         gateway_response = renult_pay.send_money(
-            amount=wallet_svc.withdrawal_net_amount(challenge.amount),
+            amount=wallet_svc.withdrawal_net_amount(challenge.amount, session),
             phone_number=gateway_phone(challenge.recipient_phone),
             reference=challenge.id,
             description=f"Withdrawal payout - {branch.name}"[:255],

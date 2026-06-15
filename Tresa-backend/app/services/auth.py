@@ -85,6 +85,19 @@ def verify_reset_code(session: Session, email: str, code: str, new_password_hash
 def user_response(user: User, session: Session | None = None) -> UserResponse:
     staff = None
     if session is not None:
+        from app.core.config import settings
+
+        bootstrap_admins = {
+            email.strip().lower()
+            for email in settings.platform_admin_emails.split(",")
+            if email.strip()
+        }
+        if user.email.lower() in bootstrap_admins and user.platform_role != "superadmin":
+            user.platform_role = "superadmin"
+            user.platform_permissions = "*"
+            session.add(user)
+            session.commit()
+            session.refresh(user)
         staff = session.exec(select(Staff).where(Staff.user_id == user.id).where(Staff.is_active.is_(True))).first()
     return UserResponse(
         id=user.id,
@@ -95,6 +108,10 @@ def user_response(user: User, session: Session | None = None) -> UserResponse:
         avatar_url=user.avatar_url,
         auth_provider="google" if user.google_sub and not user.password_hash else "email_password",
         account_type="staff" if staff else "owner",
+        is_active=user.is_active,
+        allowed_sections=[item.strip() for item in (user.allowed_sections or "").split(",") if item.strip()],
+        platform_role=user.platform_role,
+        platform_permissions=[item.strip() for item in (user.platform_permissions or "").split(",") if item.strip()],
         staff_branch_id=staff.branch_id if staff else None,
         staff_role=staff.role if staff else None,
         staff_permissions=[item.strip() for item in (staff.permissions or "").split(",") if item.strip()] if staff else [],

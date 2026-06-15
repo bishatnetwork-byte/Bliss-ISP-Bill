@@ -71,6 +71,13 @@ class Settings:
     renult_pay_api_key: str | None = os.getenv("RENULT_PAY_API_KEY")
     renult_pay_timeout_seconds: float = float(os.getenv("RENULT_PAY_TIMEOUT_SECONDS", "20"))
     renult_app_url: str = os.getenv("RENULT_APP_URL", "https://renult.app").rstrip("/")
+    platform_admin_emails: str = os.getenv("PLATFORM_ADMIN_EMAILS", "")
+    cloudflare_api_token: str | None = os.getenv("CLOUDFLARE_API_TOKEN")
+    cloudflare_api_base_url: str = os.getenv(
+        "CLOUDFLARE_API_BASE_URL", "https://api.cloudflare.com/client/v4"
+    ).rstrip("/")
+    ionos_api_key: str | None = os.getenv("IONOS_API_KEY")
+    ionos_api_base_url: str = os.getenv("IONOS_API_BASE_URL", "https://api.hosting.ionos.com/dns/v1").rstrip("/")
 
 
 settings = Settings()

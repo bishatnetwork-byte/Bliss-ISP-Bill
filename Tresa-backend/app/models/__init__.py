@@ -20,6 +20,7 @@ from app.models.platform_ledger import PlatformLedgerEntry
 from app.models.telegram_connection import TelegramConnection
 from app.models.portal_ad import PortalAd
 from app.models.portal_ad_event import PortalAdEvent
+from app.models.platform_admin import PlatformAuditLog, PlatformSetting, VoucherActivationAudit
 
 __all__ = [
     "EmailVerification",
@@ -47,4 +48,7 @@ __all__ = [
     "TelegramConnection",
     "PortalAd",
     "PortalAdEvent",
+    "PlatformAuditLog",
+    "PlatformSetting",
+    "VoucherActivationAudit",
 ]

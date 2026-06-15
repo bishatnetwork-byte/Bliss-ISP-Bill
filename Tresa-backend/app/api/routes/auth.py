@@ -102,6 +102,8 @@ def login(payload: LoginRequest, session: SessionDep) -> AuthResponse:
     user = session.exec(select(User).where(User.email == email)).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is suspended")
     if not user.is_verified:
         code = create_verification_code(session, email)
         send_verification_email(email, user.full_name, code)
@@ -149,6 +151,8 @@ def authenticate_google_profile(
         session.add(default_branch)
         session.commit()
     else:
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is suspended")
         user.google_sub = user.google_sub or profile.get("sub")
         user.full_name = full_name or user.full_name or profile.get("name") or email.split("@")[0]
         user.phone_number = phone_number or user.phone_number

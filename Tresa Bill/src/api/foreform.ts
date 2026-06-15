@@ -14,6 +14,10 @@ export interface UserResponse {
   avatar_url: string | null;
   auth_provider: string;
   account_type: "owner" | "staff";
+  is_active: boolean;
+  allowed_sections: string[];
+  platform_role: "superadmin" | "subadmin" | null;
+  platform_permissions: string[];
   staff_branch_id: string | null;
   staff_role: string | null;
   staff_permissions: string[];
@@ -24,6 +28,147 @@ export interface AuthResponse {
   access_token: string;
   token_type?: string;
   user: UserResponse;
+}
+
+export interface PlatformOverviewResponse {
+  users: number;
+  active_users: number;
+  branches: number;
+  routers: number;
+  tunnels_online: number;
+  tunnels_offline: number;
+  vouchers: number;
+  activated_vouchers: number;
+  expired_vouchers: number;
+  wallet_balance: number;
+  platform_fees: number;
+  r2_configured: boolean;
+  dns_configured: boolean;
+  dns_provider: "cloudflare" | "ionos" | "unconfigured";
+  telegram_admins: number;
+}
+
+export interface PlatformUserResponse {
+  id: string;
+  email: string;
+  full_name: string;
+  phone_number: string | null;
+  is_verified: boolean;
+  is_active: boolean;
+  allowed_sections: string[];
+  platform_role: "superadmin" | "subadmin" | null;
+  platform_permissions: string[];
+  branches: number;
+  routers: number;
+  vouchers: number;
+  wallet_balance: number;
+  created_at: string;
+}
+
+export interface PlatformSettingsResponse {
+  voucher_fee_type: "fixed" | "percentage";
+  voucher_fee_value: number;
+  deposit_fee_percentage: number;
+  withdrawal_fee_percentage: number;
+  voucher_prefix: string;
+  voucher_prefix_order: "prefix-first" | "prefix-last";
+  telegram_access_alerts: boolean;
+}
+
+export interface PlatformWalletResponse {
+  id: string;
+  user_id: string;
+  owner_name: string;
+  branch_id: string;
+  branch_name: string;
+  balance: number;
+  total_deposited: number;
+  total_withdrawn: number;
+  total_fees_paid: number;
+  is_frozen: boolean;
+  updated_at: string;
+}
+
+export interface PlatformTunnelResponse {
+  id: string;
+  router_name: string;
+  owner_name: string;
+  branch_name: string;
+  is_active: boolean;
+  status: string;
+  heartbeat_status: string;
+  snmp_status: string;
+  tunnel_ip: string | null;
+  ppp_username: string | null;
+  nat_port: number | null;
+  winbox_nat_port: number | null;
+  connected_at: string | null;
+  disconnected_at: string | null;
+  last_seen: string | null;
+}
+
+export interface PlatformVoucherAuditResponse {
+  id: string;
+  voucher_code: string;
+  router_name: string;
+  event: string;
+  previous_status: string | null;
+  new_status: string;
+  activated_at: string | null;
+  expires_at: string | null;
+  metadata: unknown;
+  created_at: string;
+}
+
+export interface PlatformAuditResponse {
+  id: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  details: unknown;
+  created_at: string;
+}
+
+export interface PlatformStorageObjectResponse {
+  key: string;
+  size: number;
+  last_modified: string | null;
+  etag: string | null;
+  url: string;
+}
+
+export interface PlatformDnsZoneResponse {
+  id: string;
+  type: string | null;
+  name: string;
+  provider: "cloudflare" | "ionos";
+}
+
+export interface PlatformDnsRecordResponse {
+  id: string;
+  name: string;
+  type: string;
+  content: string;
+  ttl: number;
+  disabled: boolean;
+  proxied: boolean | null;
+}
+
+export interface PlatformHealthResponse {
+  status: string;
+  database: string;
+  concentrator_enabled: boolean;
+  snmp_monitor_enabled: boolean;
+  r2: string;
+  dns: string;
+  dns_provider: "cloudflare" | "ionos" | "unconfigured";
+  email: string;
+  sms: string;
+  payment_gateway: string;
+  router_errors_24h: number;
+  last_router_error: string | null;
 }
 
 export interface BranchResponse {
@@ -1173,6 +1318,39 @@ export const renultApi = {
       apiRequest<VoucherListResponse>(`/branches/${branchId}/vouchers`, { query }),
     supportSummary: (branchId: string) =>
       apiRequest<VoucherSupportSummaryResponse>(`/branches/${branchId}/voucher-support-summary`),
+  },
+  platformAdmin: {
+    overview: () => apiRequest<PlatformOverviewResponse>("/platform-admin/overview"),
+    users: (search = "") => apiRequest<PlatformUserResponse[]>("/platform-admin/users", { query: { search: search || undefined, limit: 500 } }),
+    updateUser: (userId: string, payload: Partial<Pick<PlatformUserResponse, "is_active" | "is_verified" | "allowed_sections">>) =>
+      apiRequest<PlatformUserResponse>(`/platform-admin/users/${userId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    updateSubadmin: (userId: string, payload: { role: "subadmin" | "none"; permissions: string[] }) =>
+      apiRequest<PlatformUserResponse>(`/platform-admin/subadmins/${userId}`, { method: "PUT", body: JSON.stringify(payload) }),
+    settings: () => apiRequest<PlatformSettingsResponse>("/platform-admin/settings"),
+    updateSettings: (payload: PlatformSettingsResponse) =>
+      apiRequest<PlatformSettingsResponse>("/platform-admin/settings", { method: "PUT", body: JSON.stringify(payload) }),
+    wallets: () => apiRequest<PlatformWalletResponse[]>("/platform-admin/wallets"),
+    freezeWallet: (walletId: string, frozen: boolean) =>
+      apiRequest<{ message: string }>(`/platform-admin/wallets/${walletId}/freeze`, { method: "POST", query: { frozen } }),
+    tunnels: () => apiRequest<PlatformTunnelResponse[]>("/platform-admin/tunnels"),
+    setTunnelActive: (routerId: string, active: boolean) =>
+      apiRequest<{ message: string }>(`/platform-admin/tunnels/${routerId}/active`, { method: "POST", query: { active } }),
+    voucherAudit: (search = "") =>
+      apiRequest<PlatformVoucherAuditResponse[]>("/platform-admin/voucher-audit", { query: { search: search || undefined, limit: 500 } }),
+    audit: () => apiRequest<PlatformAuditResponse[]>("/platform-admin/audit", { query: { limit: 500 } }),
+    storage: (prefix = "") =>
+      apiRequest<PlatformStorageObjectResponse[]>("/platform-admin/storage", { query: { prefix } }),
+    deleteStorage: (key: string) =>
+      apiRequest<{ message: string }>("/platform-admin/storage", { method: "DELETE", query: { key } }),
+    broadcast: (payload: { channels: string[]; user_ids: string[]; send_to_all: boolean; subject: string; message: string }) =>
+      apiRequest<{ recipients: number; email_sent: number; sms_sent: number; failed: number }>("/platform-admin/broadcasts", { method: "POST", body: JSON.stringify(payload) }),
+    dnsZones: () => apiRequest<PlatformDnsZoneResponse[]>("/platform-admin/dns/zones"),
+    dnsRecords: (zoneId: string) => apiRequest<PlatformDnsRecordResponse[]>(`/platform-admin/dns/zones/${zoneId}/records`),
+    createDnsRecord: (zoneId: string, payload: { name: string; type: string; content: string; ttl: number; disabled: boolean; proxied?: boolean }) =>
+      apiRequest<{ message: string }>(`/platform-admin/dns/zones/${zoneId}/records`, { method: "POST", body: JSON.stringify(payload) }),
+    deleteDnsRecord: (zoneId: string, recordId: string) =>
+      apiRequest<{ message: string }>(`/platform-admin/dns/zones/${zoneId}/records/${recordId}`, { method: "DELETE" }),
+    health: () => apiRequest<PlatformHealthResponse>("/platform-admin/health"),
   },
   messages: {
     contacts: (branchId: string, query?: { search?: string; limit?: number }) =>

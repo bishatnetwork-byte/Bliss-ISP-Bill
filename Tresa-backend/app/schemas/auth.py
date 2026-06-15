@@ -61,6 +61,10 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str]
     auth_provider: str
     account_type: str = "owner"
+    is_active: bool = True
+    allowed_sections: list[str] = Field(default_factory=list)
+    platform_role: Optional[str] = None
+    platform_permissions: list[str] = Field(default_factory=list)
     staff_branch_id: Optional[UUID] = None
     staff_role: Optional[str] = None
     staff_permissions: list[str] = Field(default_factory=list)

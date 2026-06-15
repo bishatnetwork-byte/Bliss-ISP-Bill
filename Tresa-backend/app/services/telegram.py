@@ -29,6 +29,7 @@ EVENT_TEMPLATES = {
     "router": {"emoji": "📡", "path": "/router", "button": "View routers"},
     "router_hourly": {"emoji": "🟢", "path": "/router", "button": "View router status"},
     "ads_publish": {"emoji": "📣", "path": "/settings/adsmob", "button": "Open AdsMob"},
+    "platform_admin": {"emoji": "🛡️", "path": "/platform-admin", "button": "Open platform admin"},
     "connection": {"emoji": "✅", "path": "/settings/telegram", "button": "Open Telegram settings"},
     "test": {"emoji": "🔔", "path": "/settings/telegram", "button": "Open Renult"},
 }

@@ -31,6 +31,7 @@ from app.services.routers.Packages import get_router_packages
 from app.services.routers.routeros import router_connection
 from app.services.storage import STORAGE_ERRORS, object_url, refresh_logo_url, upload_bytes
 from app.services.telegram import branch_has_event_connection, send_branch_event, verified_phone_name
+from app.services.platform_admin import get_setting
 
 
 logger = logging.getLogger(__name__)
@@ -379,12 +380,21 @@ def _create_and_provision_voucher(
     branch = session.get(Branch, router.branch_id)
     if branch:
         branch_wallet = wallet_svc.ensure_wallet(session, branch.id)
+        voucher_fee_type = str(get_setting(session, "voucher_fee_type", "percentage"))
+        voucher_fee_value = float(get_setting(session, "voucher_fee_value", 0))
+        voucher_fee = (
+            wallet_svc._calc_fee(amount, voucher_fee_value / 100)
+            if voucher_fee_type == "percentage"
+            else int(voucher_fee_value)
+        )
         wallet_svc.deposit(
             session=session,
             wallet_id=branch_wallet.id,
             amount=amount,
             user_id=branch.user_id,
             reference=payment_reference or voucher.voucher_code,
+            fee_amount_override=voucher_fee,
+            fee_type="VOUCHER_FEE",
         )
 
     try:

@@ -18,6 +18,7 @@ from app.models.staff import Staff
 from app.models.user import User
 from app.models.voucher_purchase import VoucherPurchase
 from app.models.voucher_job import VoucherJob
+from app.models.platform_admin import VoucherActivationAudit
 from app.schemas.package import (
     RouterPackageCreate,
     RouterPackageMutationResponse,
@@ -54,6 +55,7 @@ from app.services.routers.Packages import (
 )
 from app.services.telegram import send_branch_event
 from app.services.voucher_lifecycle import router_uptime_duration, update_voucher_lifecycle
+from app.services.platform_admin import get_setting
 
 router = APIRouter(tags=["Packages"])
 
@@ -203,7 +205,7 @@ def sync_router_packages(
     )
 
 
-def _voucher_code(length: int, code_format: str, prefix: str) -> str:
+def _voucher_code(length: int, code_format: str, prefix: str, prefix_order: str = "prefix-first") -> str:
     upper_alpha = "ABCDEFGHJKLMNPQRSTUVWXYZ"
     mixed_alpha = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     numeric = "0123456789"
@@ -213,13 +215,18 @@ def _voucher_code(length: int, code_format: str, prefix: str) -> str:
     elif code_format == "alphanumeric-mixed":
         charset = mixed_alpha
     token = "".join(secrets.choice(charset) for _ in range(length))
-    return f"{prefix}{token}"
+    return f"{token}{prefix}" if prefix_order == "prefix-last" else f"{prefix}{token}"
 
 
-def _unique_voucher_codes(session: SessionDep, payload: VoucherBatchCreate) -> list[str]:
+def _unique_voucher_codes(
+    session: SessionDep,
+    payload: VoucherBatchCreate,
+    prefix: str,
+    prefix_order: str,
+) -> list[str]:
     codes: set[str] = set()
     while len(codes) < payload.quantity:
-        codes.add(_voucher_code(payload.code_length, payload.code_format, payload.prefix))
+        codes.add(_voucher_code(payload.code_length, payload.code_format, prefix, prefix_order))
 
     while True:
         existing = set(
@@ -232,7 +239,7 @@ def _unique_voucher_codes(session: SessionDep, payload: VoucherBatchCreate) -> l
             return list(codes)
         codes.difference_update(existing)
         while len(codes) < payload.quantity:
-            codes.add(_voucher_code(payload.code_length, payload.code_format, payload.prefix))
+            codes.add(_voucher_code(payload.code_length, payload.code_format, prefix, prefix_order))
 
 
 def serialize_voucher(voucher: VoucherPurchase) -> VoucherBatchItemResponse:
@@ -291,8 +298,10 @@ def _create_router_vouchers(
     wallet = get_or_create_wallet(session, db_router.name, phone_number)
     vouchers: list[VoucherPurchase] = []
     package_dict = serialize_package(package)
+    effective_prefix = payload.prefix or str(get_setting(session, "voucher_prefix", ""))
+    prefix_order = str(get_setting(session, "voucher_prefix_order", "prefix-first"))
 
-    for code in _unique_voucher_codes(session, payload):
+    for code in _unique_voucher_codes(session, payload, effective_prefix, prefix_order):
         voucher = VoucherPurchase(
             wallet_id=wallet.id,
             router_name=normalize_router_name(db_router.name),
@@ -510,6 +519,36 @@ def _router_comment_metadata(comment: str) -> tuple[str, int | None, str | None]
     return phone, package_id, payment_reference
 
 
+def _record_voucher_lifecycle_audit(
+    session: Session,
+    voucher: VoucherPurchase,
+    previous_status: str | None,
+    was_activated: bool,
+    metadata: dict | None = None,
+) -> None:
+    if previous_status == voucher.status and was_activated == (voucher.activated_at is not None):
+        return
+    if not was_activated and voucher.activated_at is not None:
+        event = "ACTIVATED"
+    elif voucher.status == "EXPIRED":
+        event = "EXPIRED"
+    elif voucher.status in {"ONLINE", "OFFLINE"}:
+        event = f"SESSION_{voucher.status}"
+    else:
+        event = "STATUS_CHANGED"
+    session.add(VoucherActivationAudit(
+        voucher_id=voucher.id,
+        voucher_code=voucher.voucher_code,
+        router_name=voucher.router_name,
+        event=event,
+        previous_status=previous_status,
+        new_status=voucher.status,
+        activated_at=voucher.activated_at,
+        expires_at=voucher.expires_at,
+        metadata_json=metadata,
+    ))
+
+
 @router.post("/routers/{router_id}/vouchers/fetch", response_model=VoucherRouterSyncResponse)
 def fetch_router_vouchers_into_database(
     router_id: UUID,
@@ -553,6 +592,8 @@ def fetch_router_vouchers_into_database(
         has_router_usage = uptime is not None
         existing = session.exec(select(VoucherPurchase).where(VoucherPurchase.voucher_code == code)).first()
         if existing:
+            previous_status = existing.status
+            was_activated = existing.activated_at is not None
             existing.profile = profile
             update_voucher_lifecycle(
                 existing,
@@ -560,6 +601,13 @@ def fetch_router_vouchers_into_database(
                 is_online=is_online,
                 has_router_usage=has_router_usage,
                 router_uptime=uptime,
+            )
+            _record_voucher_lifecycle_audit(
+                session,
+                existing,
+                previous_status,
+                was_activated,
+                {"online": is_online, "router_uptime": str(item.get("uptime") or "")},
             )
             session.add(existing)
             updated += 1
@@ -586,6 +634,13 @@ def fetch_router_vouchers_into_database(
             is_online=is_online,
             has_router_usage=has_router_usage,
             router_uptime=uptime,
+        )
+        _record_voucher_lifecycle_audit(
+            session,
+            voucher,
+            None,
+            False,
+            {"source": "router_import", "online": is_online},
         )
         session.add(voucher)
         imported += 1
@@ -674,7 +729,15 @@ def _mark_expired_router_vouchers(session: Session, router_name: str) -> tuple[i
         if voucher.expires_at is not None and voucher.expires_at <= now
     ]
     for voucher in expired:
+        previous_status = voucher.status
         voucher.status = "EXPIRED"
+        _record_voucher_lifecycle_audit(
+            session,
+            voucher,
+            previous_status,
+            True,
+            {"source": "expiry_check"},
+        )
         session.add(voucher)
     if expired:
         session.commit()

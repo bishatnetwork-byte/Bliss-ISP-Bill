@@ -18,6 +18,7 @@ from app.models.branch import Branch
 from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
 from app.models.platform_ledger import PlatformLedgerEntry
 from app.models.user import User
+from app.services.platform_admin import get_setting
 
 # ── Fee rates ─────────────────────────────────────────────────────────
 DEPOSIT_FEE_RATE = 0.01   # 1 %
@@ -47,9 +48,14 @@ def _calc_fee(amount: int, rate: float) -> int:
     return math.ceil(amount * rate)
 
 
-def withdrawal_net_amount(amount: int) -> int:
+def _fee_rate(session: Session, key: str, fallback: float) -> float:
+    percentage = float(get_setting(session, key, fallback * 100))
+    return percentage / 100
+
+
+def withdrawal_net_amount(amount: int, session: Session) -> int:
     """The amount the recipient actually receives after the withdrawal fee."""
-    return amount - _calc_fee(amount, WITHDRAW_FEE_RATE)
+    return amount - _calc_fee(amount, _fee_rate(session, "withdrawal_fee_percentage", WITHDRAW_FEE_RATE))
 
 
 def validate_withdrawal(session: Session, wallet_id: UUID, amount: int) -> BranchWallet:
@@ -104,12 +110,16 @@ def deposit(
     amount: int,
     user_id: UUID,
     reference: str | None = None,
+    fee_amount_override: int | None = None,
+    fee_type: str = "DEPOSIT_FEE",
 ) -> tuple[BranchWalletTransaction, BranchWallet]:
     wallet = _lock_wallet(session, wallet_id)
     if wallet.is_frozen:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Wallet is frozen")
 
-    fee = _calc_fee(amount, DEPOSIT_FEE_RATE)
+    fee_rate = _fee_rate(session, "deposit_fee_percentage", DEPOSIT_FEE_RATE)
+    fee = fee_amount_override if fee_amount_override is not None else _calc_fee(amount, fee_rate)
+    fee = max(0, min(amount, fee))
     net = amount - fee
 
     wallet.balance += net
@@ -133,9 +143,9 @@ def deposit(
         branch_id=wallet.branch_id,
         user_id=user_id,
         amount=fee,
-        fee_type="DEPOSIT_FEE",
+        fee_type=fee_type,
         source_amount=amount,
-        fee_rate=DEPOSIT_FEE_RATE,
+        fee_rate=(fee / amount) if amount else 0,
         reference=reference,
     )
     session.add(ledger)
@@ -158,7 +168,8 @@ def withdraw(
     if wallet.is_frozen:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Wallet is frozen")
 
-    fee = _calc_fee(amount, WITHDRAW_FEE_RATE)
+    fee_rate = _fee_rate(session, "withdrawal_fee_percentage", WITHDRAW_FEE_RATE)
+    fee = _calc_fee(amount, fee_rate)
 
     if wallet.balance < amount:
         raise HTTPException(
@@ -191,7 +202,7 @@ def withdraw(
         amount=fee,
         fee_type="WITHDRAWAL_FEE",
         source_amount=amount,
-        fee_rate=WITHDRAW_FEE_RATE,
+        fee_rate=fee_rate,
         reference=reference,
     )
     session.add(ledger)

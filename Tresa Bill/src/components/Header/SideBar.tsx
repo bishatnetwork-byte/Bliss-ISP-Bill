@@ -29,6 +29,7 @@ import {
   PanelLeft,
   Plus,
   Settings,
+  ShieldCheck,
   Ticket,
   Users
 } from "lucide-react";
@@ -131,17 +132,21 @@ const secondaryNavItems: NavItem[] = [
 ];
 
 const PERMISSION_BY_PATH: Record<string, string> = {
+  "/": "dashboard",
   "/router": "routers",
   "/router/packages": "routers",
   "/sales": "sales",
   "/vouchers": "vouchers",
   "/vouchers/active-users": "vouchers",
   "/voucher-support": "support",
-  "/messages": "support",
+  "/messages": "messages",
   "/network": "network",
   "/remote-access": "network",
   "/captive-portals": "captive",
   "/campaigns": "support",
+  "/withdrawals": "withdrawals",
+  "/branches": "branches",
+  "/settings": "settings",
 };
 
 interface Workspace {
@@ -315,10 +320,12 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
 
   const renderNavItem = (item: NavItem) => {
     const permissions = user?.account_type === "staff"
-      ? new Set(user.staff_permissions || [])
-      : null;
+      ? new Set([...(user.staff_permissions || []), ...(user.staff_permissions?.includes("support") ? ["messages"] : [])])
+      : user?.allowed_sections?.length
+        ? new Set(user.allowed_sections)
+        : null;
     if (permissions) {
-      if (["/withdrawals", "/settings"].includes(item.path)) return null;
+      if (user?.account_type === "staff" && ["/withdrawals", "/settings", "/branches"].includes(item.path)) return null;
       const required = PERMISSION_BY_PATH[item.path];
       if (required && !permissions.has(required)) return null;
     }
@@ -455,6 +462,12 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
     }
 
     return buttonContent;
+  };
+
+  const platformAdminItem: NavItem = {
+    label: "Platform Admin",
+    icon: <ShieldCheck className="w-5 h-5" />,
+    path: "/platform-admin",
   };
 
   return (
@@ -602,6 +615,11 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
               {secondaryNavItems.map(renderNavItem)}
             </div>
           </nav>
+          {user?.platform_role && (
+            <nav className="py-3 px-2 border-t border-border/40">
+              <div className="space-y-0.5">{renderNavItem(platformAdminItem)}</div>
+            </nav>
+          )}
         </div>
 
         {/* Collapse / Expand Toggle at the bottom */}

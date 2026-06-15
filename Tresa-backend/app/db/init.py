@@ -28,6 +28,9 @@ from app.models import (
     TelegramConnection,
     PortalAd,
     PortalAdEvent,
+    PlatformAuditLog,
+    PlatformSetting,
+    VoucherActivationAudit,
 )
 
 
@@ -58,13 +61,18 @@ def init_db() -> None:
         TelegramConnection,
         PortalAd,
         PortalAdEvent,
+        PlatformAuditLog,
+        PlatformSetting,
+        VoucherActivationAudit,
     )
     SQLModel.metadata.create_all(engine)
     _ensure_staff_columns()
+    _ensure_user_platform_columns()
     _ensure_router_columns()
     _ensure_voucher_purchase_columns()
     _ensure_portal_ad_columns()
     _ensure_branch_wallet_transaction_columns()
+    _bootstrap_platform_admins()
 
     # Seed ticket categories
     with Session(engine) as session:
@@ -105,6 +113,42 @@ def _ensure_staff_columns() -> None:
     with engine.begin() as conn:
         for statement in statements:
             conn.execute(sa.text(statement))
+
+
+def _ensure_user_platform_columns() -> None:
+    inspector = sa.inspect(engine)
+    if not inspector.has_table("user"):
+        return
+    columns = {column["name"] for column in inspector.get_columns("user")}
+    column_types = {
+        "is_active": "BOOLEAN DEFAULT TRUE NOT NULL",
+        "allowed_sections": "TEXT",
+        "platform_role": "VARCHAR",
+        "platform_permissions": "TEXT",
+    }
+    with engine.begin() as conn:
+        for name, sql_type in column_types.items():
+            if name not in columns:
+                conn.execute(sa.text(f'ALTER TABLE "user" ADD COLUMN {name} {sql_type}'))
+
+
+def _bootstrap_platform_admins() -> None:
+    from app.core.config import settings
+
+    emails = {
+        email.strip().lower()
+        for email in settings.platform_admin_emails.split(",")
+        if email.strip()
+    }
+    if not emails:
+        return
+    with Session(engine) as session:
+        users = session.exec(select(User).where(sa.func.lower(User.email).in_(emails))).all()
+        for user in users:
+            user.platform_role = "superadmin"
+            user.platform_permissions = "*"
+            session.add(user)
+        session.commit()
 
 
 def _ensure_router_columns() -> None:

@@ -88,18 +88,32 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-export function OwnerRoute({ children }: { children: React.ReactNode }) {
+export function OwnerRoute({ children, permission }: { children: React.ReactNode; permission?: string }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
   if (user?.account_type === "staff") return <Navigate to="/" replace />;
+  if (permission && user?.allowed_sections?.length > 0 && !user.allowed_sections.includes(permission)) {
+    return <Navigate to="/" replace />;
+  }
   return <>{children}</>;
 }
 
 export function PermissionRoute({ permission, children }: { permission: string; children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
-  if (user?.account_type === "staff" && !user.staff_permissions?.includes(permission)) {
+  const staffPermission = permission === "messages" ? "support" : permission;
+  if (user?.account_type === "staff" && !user.staff_permissions?.includes(staffPermission)) {
     return <Navigate to="/" replace />;
   }
+  if (user?.account_type === "owner" && user.allowed_sections?.length > 0 && !user.allowed_sections.includes(permission)) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+}
+
+export function PlatformAdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!user?.platform_role) return <Navigate to="/" replace />;
   return <>{children}</>;
 }

@@ -6,7 +6,7 @@ import type React from 'react';
 import { useEffect } from 'react';
 import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import { Toaster as SonnerToaster } from "sonner";
-import { AuthProvider, OwnerRoute, PermissionRoute, ProtectedRoute, useAuth } from './lib/auth';
+import { AuthProvider, OwnerRoute, PermissionRoute, PlatformAdminRoute, ProtectedRoute, useAuth } from './lib/auth';
 import PageNotFound from './lib/PageNotFound';
 
 import ForgotPassword from './pages/Auth/ForgotPassword';
@@ -35,6 +35,7 @@ import Withdrawal from './pages/Sales/Withdrawal';
 import SupportsIndex from './pages/Supports/index';
 import VouchersIndex from './pages/Vouchers/index';
 import ActiveUsersPage from './pages/Vouchers/ActiveUsers';
+import PlatformAdminPage from './pages/PlatformAdmin';
 import { renultApi } from './api/foreform';
 
 /* ── settings sub-pages ── */
@@ -136,14 +137,14 @@ const AppRoutes = () => {
         <Route path="/auth/google/callback" element={<GoogleCallback />} />
         <Route path="/google/callback" element={<GoogleCallback />} />
 
-        <Route path="/" element={protectedElement(<Dashboard />)} />
+        <Route path="/" element={protectedElement(<PermissionRoute permission="dashboard"><Dashboard /></PermissionRoute>)} />
         <Route path="/profile" element={protectedElement(<ProfilePage />)} />
         <Route path="/captive-portals" element={protectedElement(<PermissionRoute permission="captive"><HotspotPages /></PermissionRoute>)} />
         <Route path="/captive-portals/customize" element={protectedElement(<PermissionRoute permission="captive"><CaptiveIndex /></PermissionRoute>)} />
         <Route path="/captive-portals/preview" element={protectedElement(<PermissionRoute permission="captive"><CaptivePreview /></PermissionRoute>)} />
         <Route path="/network" element={protectedElement(<PermissionRoute permission="network"><Networks /></PermissionRoute>)} />
         <Route path="/voucher-support" element={protectedElement(<PermissionRoute permission="support"><SupportsIndex /></PermissionRoute>)} />
-        <Route path="/messages" element={protectedElement(<PermissionRoute permission="support"><MessagesPage /></PermissionRoute>)} />
+        <Route path="/messages" element={protectedElement(<PermissionRoute permission="messages"><MessagesPage /></PermissionRoute>)} />
         <Route path="/sales" element={protectedElement(<PermissionRoute permission="sales"><SalesIndex /></PermissionRoute>)} />
         <Route path="/sales/customer/:phone" element={protectedElement(<PermissionRoute permission="sales"><CustomerDetail /></PermissionRoute>)} />
         <Route path="/vouchers" element={protectedElement(<PermissionRoute permission="vouchers"><VouchersIndex /></PermissionRoute>)} />
@@ -152,24 +153,25 @@ const AppRoutes = () => {
         <Route path="/router/configure" element={protectedElement(<PermissionRoute permission="routers"><ConfigureRouter /></PermissionRoute>)} />
         <Route path="/router/setup" element={protectedElement(<PermissionRoute permission="routers"><SetUpProvison /></PermissionRoute>)} />
         <Route path="/packages" element={protectedElement(<PermissionRoute permission="routers"><RouterPackages /></PermissionRoute>)} />
-        <Route path="/withdraw" element={protectedElement(<OwnerRoute><Withdrawal /></OwnerRoute>)} />
-        <Route path="/withdrawals" element={protectedElement(<OwnerRoute><Withdrawal /></OwnerRoute>)} />
+        <Route path="/withdraw" element={protectedElement(<OwnerRoute permission="withdrawals"><Withdrawal /></OwnerRoute>)} />
+        <Route path="/withdrawals" element={protectedElement(<OwnerRoute permission="withdrawals"><Withdrawal /></OwnerRoute>)} />
         <Route path="/remote-access" element={protectedElement(<PermissionRoute permission="network"><RemoteAccess /></PermissionRoute>)} />
-        <Route path="/branches" element={protectedElement(<OwnerRoute><BranchesPage /></OwnerRoute>)} />
+        <Route path="/branches" element={protectedElement(<OwnerRoute permission="branches"><BranchesPage /></OwnerRoute>)} />
         <Route path="/notifications" element={protectedElement(<NotificationsPage />)} />
+        <Route path="/platform-admin" element={protectedElement(<PlatformAdminRoute><PlatformAdminPage /></PlatformAdminRoute>)} />
 
         {/* ── settings routes ── */}
-        <Route path="/settings" element={protectedElement(<OwnerRoute><MyDetailsPage /></OwnerRoute>)} />
-        <Route path="/settings/password" element={protectedElement(<OwnerRoute><PasswordPage /></OwnerRoute>)} />
+        <Route path="/settings" element={protectedElement(<OwnerRoute permission="settings"><MyDetailsPage /></OwnerRoute>)} />
+        <Route path="/settings/password" element={protectedElement(<OwnerRoute permission="settings"><PasswordPage /></OwnerRoute>)} />
 
-        <Route path="/settings/billing" element={protectedElement(<OwnerRoute><BillingPage /></OwnerRoute>)} />
-        <Route path="/settings/wallet" element={protectedElement(<OwnerRoute><WalletManagementPage /></OwnerRoute>)} />
-        <Route path="/settings/router-logs" element={protectedElement(<OwnerRoute><RouterLogsPage /></OwnerRoute>)} />
-        <Route path="/settings/notifications" element={protectedElement(<OwnerRoute><SettingsPage /></OwnerRoute>)} />
-        <Route path="/settings/telegram" element={protectedElement(<OwnerRoute><TelegramConnectPage /></OwnerRoute>)} />
-        <Route path="/settings/adsmob" element={protectedElement(<OwnerRoute><AdsMobPage /></OwnerRoute>)} />
-        <Route path="/settings/adsmob/analytics" element={protectedElement(<OwnerRoute><AdsAnalyticsPage /></OwnerRoute>)} />
-        <Route path="/settings/support" element={protectedElement(<OwnerRoute><Campign /></OwnerRoute>)} />
+        <Route path="/settings/billing" element={protectedElement(<OwnerRoute permission="settings"><BillingPage /></OwnerRoute>)} />
+        <Route path="/settings/wallet" element={protectedElement(<OwnerRoute permission="settings"><WalletManagementPage /></OwnerRoute>)} />
+        <Route path="/settings/router-logs" element={protectedElement(<OwnerRoute permission="settings"><RouterLogsPage /></OwnerRoute>)} />
+        <Route path="/settings/notifications" element={protectedElement(<OwnerRoute permission="settings"><SettingsPage /></OwnerRoute>)} />
+        <Route path="/settings/telegram" element={protectedElement(<OwnerRoute permission="settings"><TelegramConnectPage /></OwnerRoute>)} />
+        <Route path="/settings/adsmob" element={protectedElement(<OwnerRoute permission="settings"><AdsMobPage /></OwnerRoute>)} />
+        <Route path="/settings/adsmob/analytics" element={protectedElement(<OwnerRoute permission="settings"><AdsAnalyticsPage /></OwnerRoute>)} />
+        <Route path="/settings/support" element={protectedElement(<OwnerRoute permission="settings"><Campign /></OwnerRoute>)} />
         <Route path="/campaigns" element={protectedElement(<Campign />)} />
 
         <Route path="*" element={<PageNotFound />} />
