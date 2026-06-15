@@ -1,10 +1,13 @@
 """Wallet API routes — branch wallets & platform admin views."""
 
 import hmac
+import logging
 import secrets
 from datetime import datetime, timedelta
 from html import escape
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from sqlalchemy import func
@@ -243,6 +246,11 @@ def confirm_withdrawal(
             description=f"Withdrawal payout - {branch.name}"[:255],
         )
     except renult_pay.RenultPayError as exc:
+        logger.error(
+            "send_money failed [branch=%s challenge=%s phone=%s amount=%s]: %s",
+            branch_id, payload.challenge_id, challenge.recipient_phone,
+            wallet_svc.withdrawal_net_amount(challenge.amount, session), exc,
+        )
         session.rollback()
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Payment could not be sent: {exc}")
 

@@ -142,73 +142,51 @@ jobs:
 
             mkdir -p /etc/nginx/snippets
 
-            # CORS + proxy tuning lives in its own snippet, `include`d from
-            # the `location /` block below, and is rewritten on every
-            # deploy - so config fixes land here without touching certbot's
-            # SSL block in sites-available/api.renult.xyz.
+            # CORS + proxy tuning snippet - rewritten on every deploy so
+            # config fixes take effect without touching certbot's SSL block.
             #
-            # CORS: FastAPI already sets allow_origins=["*"] +
-            # allow_credentials, which Starlette implements by reflecting the
-            # request's Origin back. Mirror that here too, with `always` so
-            # it also applies to error pages Nginx generates itself (502,
-            # 504, 413, etc. - which never reach FastAPI's CORSMiddleware).
-            # Without `always`, those show up in the browser as a misleading
-            # "CORS policy: No Access-Control-Allow-Origin" error instead of
-            # the real HTTP status.
+            # CORS design: FastAPI's CORSMiddleware (Starlette) handles CORS
+            # for all responses it generates, including 4xx/5xx.  Nginx's job
+            # is to strip the upstream header first (so the browser never sees
+            # it twice) then add its own with `always` so the header is also
+            # present on error pages Nginx generates before the request even
+            # reaches FastAPI (e.g. 413 body-too-large, 502 container-down).
+            #
+            # IMPORTANT: Do NOT put any `add_header` directives inside an
+            # `if` block in this file.  Nginx inherits `add_header` into the
+            # outer location context, but the moment an `if` block also uses
+            # `add_header`, Nginx silently drops the outer directives for
+            # every non-matching request (the notorious "if is evil"
+            # add_header inheritance bug).  OPTIONS preflights are delegated
+            # to FastAPI's CORSMiddleware instead.
             cat > /etc/nginx/snippets/tresa-api.conf << 'PROXY_CONF'
-            # FastAPI's own CORSMiddleware already sets these same headers on
-            # proxied responses. If Nginx adds its own on top without
-            # stripping FastAPI's first, the browser sees the header TWICE
-            # (e.g. "Access-Control-Allow-Origin: https://app.renult.xyz,
-            # https://app.renult.xyz") and rejects it outright. Make Nginx
-            # the single source of truth by hiding upstream's copies first.
             proxy_hide_header Access-Control-Allow-Origin;
             proxy_hide_header Access-Control-Allow-Methods;
             proxy_hide_header Access-Control-Allow-Headers;
             proxy_hide_header Access-Control-Allow-Credentials;
+            proxy_hide_header Access-Control-Max-Age;
             proxy_hide_header Vary;
 
-            add_header 'Access-Control-Allow-Origin' $http_origin always;
-            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-            add_header 'Access-Control-Allow-Headers' $http_access_control_request_headers always;
+            add_header 'Access-Control-Allow-Origin'      $http_origin always;
+            add_header 'Access-Control-Allow-Methods'     'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+            add_header 'Access-Control-Allow-Headers'     'Authorization, Content-Type, Accept, Origin, X-Requested-With' always;
             add_header 'Access-Control-Allow-Credentials' 'true' always;
-            add_header 'Vary' 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers' always;
+            add_header 'Access-Control-Max-Age'           '86400' always;
+            add_header 'Vary'                             'Origin' always;
 
-            if ($request_method = 'OPTIONS') {
-                add_header 'Access-Control-Allow-Origin' $http_origin always;
-                add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-                add_header 'Access-Control-Allow-Headers' $http_access_control_request_headers always;
-                add_header 'Access-Control-Allow-Credentials' 'true' always;
-                add_header 'Access-Control-Max-Age' 86400 always;
-                add_header 'Vary' 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers' always;
-                add_header 'Content-Length' 0;
-                add_header 'Content-Type' 'text/plain';
-                return 204;
-            }
-
-            # Captive-portal logo/asset uploads can exceed Nginx's 1m
-            # default - match the backend's UPLOAD_MAX_BYTES (20 MiB) with
-            # headroom, otherwise Nginx itself rejects the upload with a
-            # CORS-less 413 before it ever reaches FastAPI.
             client_max_body_size 25m;
 
-            # Voucher fetches and other router-facing calls go out over the
-            # CHR VPN tunnel to the customer's MikroTik and can take a
-            # while. Give them more headroom than Nginx's 60s defaults so a
-            # slow router produces a real response/timeout from FastAPI
-            # instead of Nginx dropping the connection (which the browser
-            # reports as a CORS error with no status code).
             proxy_connect_timeout 75s;
-            proxy_send_timeout 120s;
-            proxy_read_timeout 120s;
+            proxy_send_timeout    120s;
+            proxy_read_timeout    120s;
 
             proxy_pass http://127.0.0.1:8000;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
             proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Upgrade    $http_upgrade;
             proxy_set_header Connection "upgrade";
             PROXY_CONF
 
