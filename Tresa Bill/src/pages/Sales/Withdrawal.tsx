@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 const FEE_RATE = 0.02;
+const MIN_WITHDRAWAL_AMOUNT = 5000;
 
 function normalizeUgandanPhone(value: string): string | null {
   const digits = value.replace(/\D/g, "");
@@ -67,7 +68,12 @@ export default function Withdrawal() {
   const availableBalance = wallet?.balance || 0;
   const transaction = receipt?.transaction;
 
-  const formValid = Boolean(normalizedPhone && recipientName && numericAmount > 0 && numericAmount <= availableBalance);
+  const formValid = Boolean(
+    normalizedPhone &&
+    recipientName &&
+    numericAmount >= MIN_WITHDRAWAL_AMOUNT &&
+    numericAmount <= availableBalance
+  );
   const receiptText = useMemo(() => {
     if (!transaction) return "";
     return [
@@ -87,9 +93,11 @@ export default function Withdrawal() {
     if (!formValid) {
       const message = numericAmount > availableBalance
         ? "Insufficient wallet balance."
-        : phoneVerification.isFetching
-          ? "Wait for the phone number to be verified."
-          : "Enter a valid verified phone number and amount.";
+        : numericAmount < MIN_WITHDRAWAL_AMOUNT
+          ? `Minimum withdrawal amount is UGX ${MIN_WITHDRAWAL_AMOUNT.toLocaleString()}.`
+          : phoneVerification.isFetching
+            ? "Wait for the phone number to be verified."
+            : "Enter a valid verified phone number and amount.";
       toast.error(message);
       return;
     }
@@ -166,6 +174,10 @@ export default function Withdrawal() {
               <div className="space-y-2">
                 <Label htmlFor="amount">Withdrawal amount (UGX)</Label>
                 <Input id="amount" inputMode="numeric" value={amount} onChange={(event) => setAmount(event.target.value.replace(/\D/g, ""))} placeholder="50000" />
+                {numericAmount > 0 && numericAmount < MIN_WITHDRAWAL_AMOUNT && (
+                  <p className="text-[12px] text-destructive">Minimum withdrawal is UGX {MIN_WITHDRAWAL_AMOUNT.toLocaleString()}.</p>
+                )}
+                <p className="text-[11px] text-muted-foreground">Minimum withdrawal amount is UGX {MIN_WITHDRAWAL_AMOUNT.toLocaleString()}. The 2% platform fee is deducted from this amount.</p>
               </div>
               <div className="rounded border p-4 space-y-2 text-xs">
                 <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><strong>UGX {numericAmount.toLocaleString()}</strong></div>
