@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class PlatformOverviewResponse(BaseModel):
@@ -103,6 +103,8 @@ class PlatformSettingsResponse(BaseModel):
     voucher_fee_value: float
     deposit_fee_percentage: float
     withdrawal_fee_percentage: float
+    withdrawal_min_amount: int
+    withdrawal_max_amount: int
     voucher_prefix: str
     voucher_prefix_order: str
     telegram_access_alerts: bool
@@ -113,9 +115,17 @@ class PlatformSettingsUpdate(BaseModel):
     voucher_fee_value: float = Field(ge=0)
     deposit_fee_percentage: float = Field(ge=0, le=100)
     withdrawal_fee_percentage: float = Field(ge=0, le=100)
+    withdrawal_min_amount: int = Field(ge=1)
+    withdrawal_max_amount: int = Field(ge=1)
     voucher_prefix: str = Field(min_length=0, max_length=20)
     voucher_prefix_order: str = Field(pattern="^(prefix-first|prefix-last)$")
     telegram_access_alerts: bool = False
+
+    @model_validator(mode="after")
+    def _check_withdrawal_range(self) -> "PlatformSettingsUpdate":
+        if self.withdrawal_min_amount > self.withdrawal_max_amount:
+            raise ValueError("withdrawal_min_amount cannot be greater than withdrawal_max_amount")
+        return self
 
 
 class PlatformWalletResponse(BaseModel):

@@ -128,6 +128,8 @@ export interface PlatformSettingsResponse {
   voucher_fee_value: number;
   deposit_fee_percentage: number;
   withdrawal_fee_percentage: number;
+  withdrawal_min_amount: number;
+  withdrawal_max_amount: number;
   voucher_prefix: string;
   voucher_prefix_order: "prefix-first" | "prefix-last";
   telegram_access_alerts: boolean;

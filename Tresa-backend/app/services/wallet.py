@@ -58,6 +58,16 @@ def withdrawal_net_amount(amount: int, session: Session) -> int:
     return amount - _calc_fee(amount, _fee_rate(session, "withdrawal_fee_percentage", WITHDRAW_FEE_RATE))
 
 
+def withdrawal_min_amount(session: Session) -> int:
+    """Admin-configurable floor on the net payout, in UGX."""
+    return int(get_setting(session, "withdrawal_min_amount", WITHDRAW_MIN_AMOUNT))
+
+
+def withdrawal_max_amount(session: Session) -> int:
+    """Admin-configurable ceiling on the net payout, in UGX (gateway limit by default)."""
+    return int(get_setting(session, "withdrawal_max_amount", WITHDRAW_MAX_AMOUNT))
+
+
 def validate_withdrawal(session: Session, wallet_id: UUID, amount: int) -> BranchWallet:
     """Lock the wallet and check it can cover this withdrawal, without mutating it.
 

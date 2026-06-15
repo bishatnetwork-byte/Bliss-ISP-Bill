@@ -212,6 +212,19 @@ def extract_collection_uuid(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def extract_recipient_identity_name(payload: dict[str, Any]) -> str | None:
+    """The recipient's verified mobile-money name, already fetched by `send_money`'s
+    identity check - reuse it instead of paying for a second lookup."""
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return None
+    identity = data.get("recipient_identity")
+    if not isinstance(identity, dict) or not identity.get("success"):
+        return None
+    name = str(identity.get("identityname") or "").strip()
+    return name or None
+
+
 def normalize_status(raw: str | None) -> str:
     """Collapse the gateway's many possible status spellings to PENDING/SUCCESS/FAILED."""
     value = (raw or "").strip().upper().replace("-", "_").replace(" ", "_")

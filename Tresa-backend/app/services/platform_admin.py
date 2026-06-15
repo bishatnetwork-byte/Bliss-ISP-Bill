@@ -13,6 +13,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "voucher_fee_value": 0,
     "deposit_fee_percentage": 1,
     "withdrawal_fee_percentage": 2,
+    "withdrawal_min_amount": 500,
+    "withdrawal_max_amount": 10_000_000,
     "voucher_prefix": "",
     "voucher_prefix_order": "prefix-first",
     "telegram_access_alerts": False,

@@ -6,12 +6,13 @@ from datetime import datetime, timedelta
 from html import escape
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from sqlalchemy import func
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from app.api.deps import CurrentUser
-from app.db.session import SessionDep
+from app.core.config import settings
+from app.db.session import SessionDep, engine
 from app.models.branch import Branch
 from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
 from app.models.withdrawal_challenge import WithdrawalChallenge
@@ -33,11 +34,7 @@ from app.services import wallet as wallet_svc
 from app.services.email import send_withdrawal_code_email, send_withdrawal_receipt_email
 from app.services.portal import gateway_phone
 from app.services.security import hash_code
-from app.services.telegram import (
-    send_user_event,
-    user_has_event_connection,
-    verified_phone_name,
-)
+from app.services.telegram import send_user_event
 
 router = APIRouter(prefix="/wallets", tags=["Wallets"])
 
@@ -159,11 +156,13 @@ def request_withdrawal_challenge(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Insufficient wallet balance")
 
     net_amount = wallet_svc.withdrawal_net_amount(payload.amount, session)
-    if net_amount < wallet_svc.WITHDRAW_MIN_AMOUNT or net_amount > wallet_svc.WITHDRAW_MAX_AMOUNT:
+    min_amount = wallet_svc.withdrawal_min_amount(session)
+    max_amount = wallet_svc.withdrawal_max_amount(session)
+    if net_amount < min_amount or net_amount > max_amount:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             f"Withdrawal amount must result in a net payout between "
-            f"UGX {wallet_svc.WITHDRAW_MIN_AMOUNT:,} and UGX {wallet_svc.WITHDRAW_MAX_AMOUNT:,}",
+            f"UGX {min_amount:,} and UGX {max_amount:,}",
         )
 
     recent_count = session.exec(
@@ -204,6 +203,7 @@ def confirm_withdrawal(
     payload: WithdrawalConfirmRequest,
     user: CurrentUser,
     session: SessionDep,
+    background_tasks: BackgroundTasks,
 ) -> WithdrawalConfirmResponse:
     branch = _assert_branch_owner(session, branch_id, user.id)
     challenge = session.exec(
@@ -253,6 +253,7 @@ def confirm_withdrawal(
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Payment gateway declined this withdrawal")
 
     gateway_reference = renult_pay.extract_collection_uuid(gateway_response) or str(challenge.id)
+    verified_recipient = renult_pay.extract_recipient_identity_name(gateway_response)
 
     txn, updated_wallet = wallet_svc.withdraw(
         session,
@@ -271,51 +272,87 @@ def confirm_withdrawal(
     session.commit()
     session.refresh(txn)
 
-    receipt_email_sent = True
-    try:
-        send_withdrawal_receipt_email(
-            user.email,
-            str(txn.id),
-            challenge.recipient_name,
-            challenge.recipient_phone,
-            challenge.provider,
-            txn.amount,
-            txn.fee_amount,
-            txn.net_amount,
-            txn.created_at.isoformat(),
-            branch.name,
-        )
-    except Exception:
-        receipt_email_sent = False
-
-    verified_recipient = (
-        verified_phone_name(challenge.recipient_phone)
-        if user_has_event_connection(session, user.id, "withdrawal")
-        else None
-    )
-    send_user_event(
-        session,
-        user.id,
-        "withdrawal",
-        (
-            "<b>Withdrawal receipt</b>\n"
-            f"Branch: {escape(branch.name)}\n"
-            f"Recipient: {escape(verified_recipient or challenge.recipient_name)}\n"
-            f"Identity: {'✅ Verified subscriber name' if verified_recipient else '⚠️ Name could not be verified'}\n"
-            f"Phone: {escape(challenge.recipient_phone)}\n"
-            f"Provider: {escape(challenge.provider)}\n"
-            f"Amount: UGX {txn.amount:,}\n"
-            f"Fee: UGX {txn.fee_amount:,}\n"
-            f"Net: UGX {txn.net_amount:,}\n"
-            f"Transaction: <code>{txn.id}</code>"
-        ),
+    # Email + Telegram are sent after the response goes out - a slow SMTP or
+    # Telegram API call here used to add to the gateway's own latency, and the
+    # combined time could exceed Cloudflare's/Nginx's proxy timeout, turning
+    # an otherwise-successful withdrawal into a CORS-less 502 in the browser.
+    background_tasks.add_task(
+        _notify_withdrawal_complete,
+        user_id=user.id,
+        user_email=user.email,
+        branch_name=branch.name,
+        txn_id=txn.id,
+        recipient_name=challenge.recipient_name,
+        recipient_phone=challenge.recipient_phone,
+        provider=challenge.provider,
+        amount=txn.amount,
+        fee_amount=txn.fee_amount,
+        net_amount=txn.net_amount,
+        created_at_iso=txn.created_at.isoformat(),
+        verified_recipient_name=verified_recipient,
     )
 
     return WithdrawalConfirmResponse(
         transaction=_txn_response(txn),
         wallet=_wallet_response(updated_wallet, branch.name),
-        receipt_email_sent=receipt_email_sent,
+        receipt_email_sent=bool(settings.resend_key),
     )
+
+
+def _notify_withdrawal_complete(
+    *,
+    user_id: UUID,
+    user_email: str,
+    branch_name: str,
+    txn_id: UUID,
+    recipient_name: str,
+    recipient_phone: str,
+    provider: str,
+    amount: int,
+    fee_amount: int,
+    net_amount: int,
+    created_at_iso: str,
+    verified_recipient_name: str | None,
+) -> None:
+    """Send the withdrawal receipt email and Telegram notification.
+
+    Runs as a background task after the HTTP response has already been sent,
+    using its own DB session since the request-scoped one is gone by then.
+    """
+    try:
+        send_withdrawal_receipt_email(
+            user_email,
+            str(txn_id),
+            recipient_name,
+            recipient_phone,
+            provider,
+            amount,
+            fee_amount,
+            net_amount,
+            created_at_iso,
+            branch_name,
+        )
+    except Exception:
+        pass
+
+    with Session(engine) as session:
+        send_user_event(
+            session,
+            user_id,
+            "withdrawal",
+            (
+                "<b>Withdrawal receipt</b>\n"
+                f"Branch: {escape(branch_name)}\n"
+                f"Recipient: {escape(verified_recipient_name or recipient_name)}\n"
+                f"Identity: {'✅ Verified subscriber name' if verified_recipient_name else '⚠️ Name could not be verified'}\n"
+                f"Phone: {escape(recipient_phone)}\n"
+                f"Provider: {escape(provider)}\n"
+                f"Amount: UGX {amount:,}\n"
+                f"Fee: UGX {fee_amount:,}\n"
+                f"Net: UGX {net_amount:,}\n"
+                f"Transaction: <code>{txn_id}</code>"
+            ),
+        )
 
 
 @router.get("/branch/{branch_id}/withdrawals/{transaction_id}/status", response_model=WalletTransactionResponse)

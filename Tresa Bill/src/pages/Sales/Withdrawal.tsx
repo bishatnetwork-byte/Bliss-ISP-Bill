@@ -133,8 +133,8 @@ export default function Withdrawal() {
       const result = await confirmWithdrawal.mutateAsync({ challenge_id: challengeId, code });
       setReceipt(result);
       setStep("success");
-      if (result.receipt_email_sent) toast.success("Withdrawal complete. Receipt sent to your email.");
-      else toast.warning("Withdrawal complete, but the email receipt could not be delivered.");
+      if (result.receipt_email_sent) toast.success("Withdrawal complete. A receipt is on its way to your email.");
+      else toast.success("Withdrawal complete.");
     } catch (error) {
       setStep("code");
       toast.error(error instanceof Error ? error.message : "Withdrawal verification failed.");
@@ -237,7 +237,7 @@ export default function Withdrawal() {
             <DialogFooter><Button variant="outline" onClick={() => setStep("closed")}>Cancel</Button><Button onClick={verifyAndWithdraw} disabled={code.length !== 6}>Verify and withdraw</Button></DialogFooter>
           </>}
           {step === "processing" && <div className="py-10 text-center space-y-4"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /><div><h3 className="font-bold">Processing secured withdrawal</h3><p className="text-xs text-muted-foreground mt-1">The wallet is locked while the transaction is committed.</p></div></div>}
-          {step === "success" && <div className="py-6 text-center space-y-5"><CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" /><div><h3 className="text-lg font-bold">Withdrawal complete</h3><p className="text-xs text-muted-foreground mt-1">{receipt?.receipt_email_sent ? "The receipt was sent to your account email." : "The transaction succeeded, but receipt email delivery failed."}</p></div><Button className="w-full" onClick={reset}>Done</Button></div>}
+          {step === "success" && <div className="py-6 text-center space-y-5"><CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" /><div><h3 className="text-lg font-bold">Withdrawal complete</h3><p className="text-xs text-muted-foreground mt-1">{receipt?.receipt_email_sent ? "A receipt is on its way to your account email." : "The transaction succeeded. Email receipts are not configured for this account."}</p></div><Button className="w-full" onClick={reset}>Done</Button></div>}
         </DialogContent>
       </Dialog>
     </div>
