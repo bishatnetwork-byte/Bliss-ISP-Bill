@@ -155,6 +155,45 @@ interface Workspace {
   avatar_url?: string;
 }
 
+interface PingStatus {
+  reachable: boolean;
+  checking: boolean;
+}
+
+interface RouterStatusCache {
+  cachedAt: number;
+  monitoring: RouterMonitorSummary;
+  pingStatuses: Record<string, PingStatus>;
+}
+
+const ROUTER_STATUS_CACHE_TTL = 30000;
+const routerStatusCacheKey = (branchId: string) =>
+  `renult-router-status:${branchId}`;
+
+const readRouterStatusCache = (branchId: string): RouterStatusCache | null => {
+  try {
+    const cached = sessionStorage.getItem(routerStatusCacheKey(branchId));
+    return cached ? JSON.parse(cached) as RouterStatusCache : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeRouterStatusCache = (
+  branchId: string,
+  monitoring: RouterMonitorSummary,
+  pingStatuses: Record<string, PingStatus>,
+) => {
+  try {
+    sessionStorage.setItem(
+      routerStatusCacheKey(branchId),
+      JSON.stringify({ cachedAt: Date.now(), monitoring, pingStatuses }),
+    );
+  } catch {
+    // Status caching is optional when browser storage is unavailable.
+  }
+};
+
 export default function SideBar({ isOpen, onClose }: SideBarProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -165,6 +204,7 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace>();
   const [monitoring, setMonitoring] = useState<RouterMonitorSummary | null>(null);
+  const [pingStatuses, setPingStatuses] = useState<Record<string, PingStatus>>({});
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
 
   const handleSelectWorkspace = (workspace: Workspace) => {
@@ -248,20 +288,74 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
 
   useEffect(() => {
     if (!selectedWorkspace?.id) return;
+    const branchId = selectedWorkspace.id;
     let mounted = true;
+    let refreshTimer: number | undefined;
+    const cached = readRouterStatusCache(branchId);
+    const cacheAge = cached ? Date.now() - cached.cachedAt : Infinity;
+
+    setMonitoring(cached?.monitoring ?? null);
+    setPingStatuses(cached?.pingStatuses ?? {});
+
     const loadMonitoring = async () => {
       try {
-        const summary = await renultApi.monitoring.summary(selectedWorkspace.id);
-        if (mounted) setMonitoring(summary);
+        const summary = await renultApi.monitoring.summary(branchId);
+        if (!mounted) return;
+        setMonitoring(summary);
+
+        const needsPing = summary.routers.filter((router) => router.status !== "online");
+        if (needsPing.length === 0) {
+          setPingStatuses({});
+          writeRouterStatusCache(branchId, summary, {});
+          return;
+        }
+
+        setPingStatuses((previous) => {
+          const next = { ...previous };
+          needsPing.forEach((router) => {
+            next[router.router_id] = { reachable: false, checking: true };
+          });
+          return next;
+        });
+
+        const results = await Promise.allSettled(
+          needsPing.map((router) =>
+            renultApi.routers.ping(router.router_id, { timeout_seconds: 5 }),
+          ),
+        );
+        if (!mounted) return;
+
+        const resolvedPingStatuses = results.reduce<Record<string, PingStatus>>((next, result, index) => {
+          next[needsPing[index].router_id] = {
+            reachable: result.status === "fulfilled" && result.value.reachable,
+            checking: false,
+          };
+          return next;
+        }, {});
+        setPingStatuses(resolvedPingStatuses);
+        writeRouterStatusCache(branchId, summary, resolvedPingStatuses);
       } catch {
-        if (mounted) setMonitoring(null);
+        if (!mounted || cached) return;
+        setMonitoring(null);
       }
     };
-    loadMonitoring();
-    const interval = window.setInterval(loadMonitoring, 60000);
+
+    const scheduleRefresh = (delay: number) => {
+      refreshTimer = window.setTimeout(async () => {
+        await loadMonitoring();
+        if (mounted) scheduleRefresh(60000);
+      }, delay);
+    };
+
+    scheduleRefresh(
+      cacheAge < ROUTER_STATUS_CACHE_TTL
+        ? ROUTER_STATUS_CACHE_TTL - cacheAge
+        : 0,
+    );
+
     return () => {
       mounted = false;
-      window.clearInterval(interval);
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
     };
   }, [selectedWorkspace?.id]);
 
@@ -317,6 +411,29 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
   const selectedWorkspaceInitials = selectedWorkspace?.name
     ? selectedWorkspace.name.slice(0, 2).toUpperCase()
     : "BR";
+  const monitoredRouters = monitoring?.routers ?? [];
+  const routerStatusGridClass =
+    monitoredRouters.length >= 4 ? "grid-cols-2" : "grid-cols-1";
+  const getEffectiveRouterStatus = (
+    routerId: string,
+    monitoringStatus: "online" | "offline" | "unknown",
+  ): "online" | "offline" | "unknown" | "checking" => {
+    if (monitoringStatus === "online") return "online";
+    const pingStatus = pingStatuses[routerId];
+    if (!pingStatus) return monitoringStatus;
+    if (pingStatus.checking) return "checking";
+    return pingStatus.reachable ? "online" : "offline";
+  };
+  const effectiveRouterCounts = monitoredRouters.reduce(
+    (counts, router) => {
+      const status = getEffectiveRouterStatus(router.router_id, router.status);
+      if (status === "online") counts.online += 1;
+      else if (status === "offline") counts.offline += 1;
+      else counts.unknown += 1;
+      return counts;
+    },
+    { online: 0, offline: 0, unknown: 0 },
+  );
 
   const renderNavItem = (item: NavItem) => {
     const permissions = user?.account_type === "staff"
@@ -341,9 +458,9 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
     const isExpanded = expandedMenu === item.label;
     const iconClassName = `shrink-0 ${active ? "text-primary" : item.iconColor || "text-muted-foreground"}`;
     const routerAvailability =
-      monitoring?.online && monitoring.online > 0
+      effectiveRouterCounts.online > 0
         ? "online"
-        : monitoring?.offline && monitoring.offline > 0
+        : effectiveRouterCounts.offline > 0
           ? "offline"
           : "unknown";
     const routerBadgeColor =
@@ -363,7 +480,7 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
     const routerCountBadge = item.label === "Mikrotiks" && monitoring && monitoring.total > 0 ? (
       <span
         className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${routerBadgeColor}`}
-        title={`${monitoring.online} online, ${monitoring.offline} offline`}
+        title={`${effectiveRouterCounts.online} online, ${effectiveRouterCounts.offline} offline`}
       >
         {monitoring.total}
       </span>
@@ -389,7 +506,7 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
             {item.label === "Mikrotiks" && monitoring && monitoring.total > 0 && (
               <span
                 className={`absolute right-0 top-0 inline-flex min-w-4 items-center justify-center rounded-full border border-white px-1 text-[9px] font-bold leading-4 ${routerBadgeColor}`}
-                title={`${monitoring.online} online, ${monitoring.offline} offline`}
+                title={`${effectiveRouterCounts.online} online, ${effectiveRouterCounts.offline} offline`}
               >
                 {monitoring.total}
               </span>
@@ -593,6 +710,59 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
               </div>
             </PopoverContent>
           </Popover>
+          {!isCollapsed && monitoredRouters.length > 0 && (
+            <div
+              className={`mt-2 grid gap-1.5 ${routerStatusGridClass}`}
+              aria-label="Router connection statuses"
+            >
+              {monitoredRouters.map((router) => {
+                const effectiveStatus = getEffectiveRouterStatus(
+                  router.router_id,
+                  router.status,
+                );
+                const isOnline = effectiveStatus === "online";
+                const statusLabel =
+                  effectiveStatus === "checking"
+                    ? "Checking"
+                    : effectiveStatus === "unknown"
+                      ? "Unknown"
+                      : isOnline
+                        ? "Online"
+                        : "Offline";
+                const statusColor = isOnline
+                  ? "text-emerald-600"
+                  : effectiveStatus === "offline"
+                    ? "text-rose-600"
+                    : "text-amber-600";
+                const dotColor = isOnline
+                  ? "bg-emerald-500"
+                  : effectiveStatus === "offline"
+                    ? "bg-rose-500"
+                    : "bg-amber-500";
+                const borderColor = isOnline
+                  ? "border-emerald-400"
+                  : effectiveStatus === "offline"
+                    ? "border-rose-400"
+                    : "border-amber-400";
+
+                return (
+                  <div
+                    key={router.router_id}
+                    className={`flex min-w-0 items-center justify-between gap-2 rounded border bg-muted/20 px-2.5 py-1.5 ${borderColor}`}
+                    title={`${router.router_name}: ${statusLabel}`}
+                  >
+                    <span className="truncate text-[11px] font-semibold text-foreground/75">
+                      {router.router_name}
+                    </span>
+                    <span className={`flex shrink-0 items-center gap-1 text-[9px] font-bold uppercase ${statusColor}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${dotColor} ${effectiveStatus === "checking" ? "animate-pulse" : ""}`} />
+                      {statusLabel}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Navigation Groups Container */}
