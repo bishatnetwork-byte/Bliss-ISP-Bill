@@ -20,9 +20,9 @@ export default function Login() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const from = (location.state as any)?.from?.pathname || "/";
 
-  const finishLogin = (auth: Awaited<ReturnType<typeof renultApi.auth.login>>, targetPath = from) => {
+  const finishLogin = async (auth: Awaited<ReturnType<typeof renultApi.auth.login>>, targetPath = from) => {
     login(auth);
-    if (redirectToAccountSubdomain(auth, targetPath)) return;
+    if (await redirectToAccountSubdomain(auth, targetPath)) return;
     navigate(targetPath, { replace: true });
   };
 
@@ -31,7 +31,7 @@ export default function Login() {
     setIsLoading(true);
     try {
       const auth = await renultApi.auth.login({ email, password });
-      finishLogin(auth);
+      await finishLogin(auth);
     } catch (err: any) {
       toast.error(err.message || "Failed to log in");
     } finally {
@@ -48,9 +48,9 @@ export default function Login() {
     try {
       const auth = await renultApi.auth.google({ id_token: credentialResponse.credential });
       if (auth.user.auth_provider === "google") {
-        finishLogin(auth, "/set-password");
+        await finishLogin(auth, "/set-password");
       } else {
-        finishLogin(auth);
+        await finishLogin(auth);
       }
     } catch (err: any) {
       toast.error(err.message || "Google sign in failed");

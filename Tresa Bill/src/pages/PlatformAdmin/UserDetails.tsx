@@ -1,4 +1,4 @@
-import { renultApi } from "@/api/foreform";
+import { getAccountBaseDomain, renultApi } from "@/api/foreform";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,7 +68,7 @@ function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platf
             <Status label={user.is_verified ? "Verified" : "Unverified"} ok={user.is_verified} />
             {user.account_subdomain && (
               <Badge variant="outline">
-                {user.account_subdomain}.renult.app · {user.subdomain_enabled ? "Enabled" : "Disabled"}
+                {user.account_subdomain}.{getAccountBaseDomain()} · {user.subdomain_enabled ? "Enabled" : "Disabled"}
               </Badge>
             )}
           </div>

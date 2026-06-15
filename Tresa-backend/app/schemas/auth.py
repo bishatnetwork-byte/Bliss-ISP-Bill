@@ -52,6 +52,17 @@ class GoogleLoginUrlResponse(BaseModel):
     authorization_url: str
 
 
+class SubdomainHandoffRequest(BaseModel):
+    code: str = Field(min_length=20)
+    subdomain: str = Field(min_length=3, max_length=63)
+
+
+class SubdomainHandoffResponse(BaseModel):
+    code: str
+    subdomain: str
+    expires_in: int = 60
+
+
 class UserResponse(BaseModel):
     id: UUID
     email: EmailStr

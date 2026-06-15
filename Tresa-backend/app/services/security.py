@@ -71,7 +71,33 @@ def create_access_token(user: User) -> str:
     return f"{signing_input}.{b64url_encode(signature)}"
 
 
-def decode_access_token(token: str) -> dict:
+def create_subdomain_handoff_token(user: User) -> str:
+    if not user.subdomain_enabled or not user.account_subdomain:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account subdomain access is not enabled",
+        )
+    now = datetime.utcnow()
+    header = {"alg": "HS256", "typ": "JWT"}
+    payload = {
+        "iss": settings.jwt_issuer,
+        "sub": str(user.id),
+        "purpose": "subdomain_handoff",
+        "subdomain": user.account_subdomain,
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(seconds=60)).timestamp()),
+    }
+    signing_input = ".".join(
+        [
+            b64url_encode(json.dumps(header, separators=(",", ":")).encode()),
+            b64url_encode(json.dumps(payload, separators=(",", ":")).encode()),
+        ]
+    )
+    signature = hmac.new(settings.jwt_secret.encode(), signing_input.encode(), hashlib.sha256).digest()
+    return f"{signing_input}.{b64url_encode(signature)}"
+
+
+def _decode_signed_token(token: str) -> dict:
     try:
         header_b64, payload_b64, signature_b64 = token.split(".")
         signing_input = f"{header_b64}.{payload_b64}"
@@ -84,3 +110,17 @@ def decode_access_token(token: str) -> dict:
         return payload
     except (ValueError, json.JSONDecodeError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+
+
+def decode_access_token(token: str) -> dict:
+    payload = _decode_signed_token(token)
+    if payload.get("purpose"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid access token")
+    return payload
+
+
+def decode_subdomain_handoff_token(token: str) -> dict:
+    payload = _decode_signed_token(token)
+    if payload.get("purpose") != "subdomain_handoff" or not payload.get("subdomain"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid subdomain handoff")
+    return payload

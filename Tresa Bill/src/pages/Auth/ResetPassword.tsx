@@ -38,7 +38,7 @@ export default function ResetPassword() {
       const auth = await renultApi.auth.resetPassword({ email, code, new_password: password });
       login(auth);
       toast.success("Password reset");
-      if (!redirectToAccountSubdomain(auth)) {
+      if (!await redirectToAccountSubdomain(auth)) {
         navigate("/", { replace: true });
       }
     } catch (err: any) {

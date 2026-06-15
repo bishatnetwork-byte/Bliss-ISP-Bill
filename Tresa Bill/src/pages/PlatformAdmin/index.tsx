@@ -1,6 +1,7 @@
 import {
   PlatformSettingsResponse,
   PlatformUserResponse,
+  getAccountBaseDomain,
   renultApi,
 } from "@/api/foreform";
 import { Badge } from "@/components/ui/badge";
@@ -169,6 +170,11 @@ export default function PlatformAdminPage() {
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update user."),
   });
+  const syncUserSubdomain = useMutation({
+    mutationFn: renultApi.platformAdmin.syncUserSubdomain,
+    onSuccess: (result) => toast.success(result.message),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not provision account DNS."),
+  });
   const updateSubadmin = useMutation({
     mutationFn: ({ id, role, permissions: next }: { id: string; role: "subadmin" | "none"; permissions: string[] }) =>
       renultApi.platformAdmin.updateSubadmin(id, { role, permissions: next }),
@@ -233,6 +239,7 @@ export default function PlatformAdminPage() {
               search={userSearch}
               onSearch={setUserSearch}
               onUpdate={(id, payload) => updateUser.mutate({ id, payload })}
+              onSyncSubdomain={(id) => syncUserSubdomain.mutate(id)}
               onView={(id) => navigate(`/platform-admin/users/${id}`)}
             />
         )}
@@ -303,9 +310,10 @@ function Overview({ data, loading }: { data: Awaited<ReturnType<typeof renultApi
   );
 }
 
-function UsersPanel({ users, loading, search, onSearch, onUpdate, onView }: {
+function UsersPanel({ users, loading, search, onSearch, onUpdate, onSyncSubdomain, onView }: {
   users: PlatformUserResponse[]; loading: boolean; search: string; onSearch: (value: string) => void;
   onUpdate: (id: string, payload: Partial<Pick<PlatformUserResponse, "is_active" | "is_verified" | "allowed_sections" | "account_subdomain" | "subdomain_enabled">>) => void;
+  onSyncSubdomain: (id: string) => void;
   onView: (id: string) => void;
 }) {
   return <Panel title="Global Users" icon={Users} action={<Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Search name, email, phone" className="h-9 w-72" />}>
@@ -318,7 +326,11 @@ function UsersPanel({ users, loading, search, onSearch, onUpdate, onView }: {
         <td className="p-3 font-bold">{money(item.wallet_balance)}</td>
         <td className="min-w-[280px] p-3"><CheckboxGrid values={item.allowed_sections} options={USER_SECTIONS} onChange={(next) => onUpdate(item.id, { allowed_sections: next })} emptyLabel="All sections" /></td>
         <td className="min-w-[260px] p-3">
-          <UserSubdomainControl user={item} onUpdate={(payload) => onUpdate(item.id, payload)} />
+          <UserSubdomainControl
+            user={item}
+            onUpdate={(payload) => onUpdate(item.id, payload)}
+            onSync={() => onSyncSubdomain(item.id)}
+          />
         </td>
         <td className="p-3"><Status label={item.is_active ? "Active" : "Suspended"} ok={item.is_active} /><div className="mt-2"><Status label={item.is_verified ? "Verified" : "Unverified"} ok={item.is_verified} /></div></td>
         <td className="p-3 space-y-2">
@@ -334,9 +346,11 @@ function UsersPanel({ users, loading, search, onSearch, onUpdate, onView }: {
 function UserSubdomainControl({
   user,
   onUpdate,
+  onSync,
 }: {
   user: PlatformUserResponse;
   onUpdate: (payload: Partial<Pick<PlatformUserResponse, "account_subdomain" | "subdomain_enabled">>) => void;
+  onSync: () => void;
 }) {
   const [subdomain, setSubdomain] = useState(user.account_subdomain || "");
 
@@ -357,7 +371,7 @@ function UserSubdomainControl({
           className="h-8 rounded-r-none text-xs"
         />
         <span className="flex h-8 items-center rounded-r border border-l-0 bg-muted/40 px-2 text-[10px] text-muted-foreground">
-          .renult.app
+          .{getAccountBaseDomain()}
         </span>
       </div>
       <div className="flex items-center justify-between gap-2">
@@ -372,14 +386,24 @@ function UserSubdomainControl({
             Assign
           </Button>
           {user.account_subdomain && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-[10px] text-destructive"
-              onClick={() => onUpdate({ account_subdomain: null, subdomain_enabled: false })}
-            >
-              Remove
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[10px]"
+                onClick={onSync}
+              >
+                Sync DNS
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-[10px] text-destructive"
+                onClick={() => onUpdate({ account_subdomain: null, subdomain_enabled: false })}
+              >
+                Remove
+              </Button>
+            </>
           )}
         </div>
         <label className="flex items-center gap-1.5 text-[10px] font-semibold">

@@ -15,6 +15,7 @@ import Login from './pages/Auth/Login';
 import ResetPassword from './pages/Auth/ResetPassword';
 import SetPassword from './pages/Auth/SetPassword';
 import Signup from './pages/Auth/Signup';
+import SubdomainHandoff from './pages/Auth/SubdomainHandoff';
 import CaptiveIndex from './pages/CaptivePages/index';
 import CaptivePreview from './pages/CaptivePages/preview_page';
 import HotspotPages from './pages/CaptivePages/HotspotPages';
@@ -136,6 +137,7 @@ const AppRoutes = () => {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/set-password" element={<SetPassword />} />
         <Route path="/auth/google/callback" element={<GoogleCallback />} />
+        <Route path="/auth/subdomain" element={<SubdomainHandoff />} />
         <Route path="/google/callback" element={<GoogleCallback />} />
 
         <Route path="/" element={protectedElement(<PermissionRoute permission="dashboard"><Dashboard /></PermissionRoute>)} />

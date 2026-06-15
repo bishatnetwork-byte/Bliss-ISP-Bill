@@ -26,11 +26,11 @@ export default function GoogleCallback() {
 
     const redirectUri = readGoogleRedirectUri();
     renultApi.auth.google({ code, redirect_uri: redirectUri })
-      .then((auth) => {
+      .then(async (auth) => {
         clearGoogleRedirectUri();
         login(auth);
         const target = auth.user.auth_provider === "google" ? "/set-password" : "/";
-        if (!redirectToAccountSubdomain(auth, target)) {
+        if (!await redirectToAccountSubdomain(auth, target)) {
           navigate(target, { replace: true });
         }
       })

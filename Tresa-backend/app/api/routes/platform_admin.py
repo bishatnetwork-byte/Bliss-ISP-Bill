@@ -77,6 +77,49 @@ def _admin(permission: str):
     return Depends(platform_admin(permission))
 
 
+def _account_dns_context() -> tuple[str, str, list[dict]]:
+    zones = list_zones()
+    zone = next(
+        (item for item in zones if str(item.get("name", "")).rstrip(".").lower() == settings.account_base_domain),
+        None,
+    )
+    if not zone:
+        raise DnsProviderError(f"DNS zone {settings.account_base_domain} is not available")
+    return str(zone["id"]), settings.renult_app_url.split("://", 1)[-1].split("/", 1)[0], list_records(str(zone["id"]))
+
+
+def _provision_account_subdomain(subdomain: str) -> None:
+    zone_id, target, records = _account_dns_context()
+    hostname = f"{subdomain}.{settings.account_base_domain}"
+    existing = next(
+        (record for record in records if str(record.get("name", "")).rstrip(".").lower() == hostname),
+        None,
+    )
+    if existing:
+        if str(existing.get("type", "")).upper() == "CNAME" and str(existing.get("content", "")).rstrip(".").lower() == target.lower():
+            return
+        raise DnsProviderError(f"DNS record {hostname} already exists with different settings")
+    create_record(zone_id, {
+        "name": hostname,
+        "type": "CNAME",
+        "content": target,
+        "ttl": 600,
+        "disabled": False,
+        "proxied": False,
+    })
+
+
+def _remove_account_subdomain(subdomain: str) -> None:
+    zone_id, _, records = _account_dns_context()
+    hostname = f"{subdomain}.{settings.account_base_domain}"
+    existing = next(
+        (record for record in records if str(record.get("name", "")).rstrip(".").lower() == hostname),
+        None,
+    )
+    if existing:
+        delete_record(zone_id, str(existing["id"]))
+
+
 def _user_response(session: Session, user: User) -> PlatformUserResponse:
     branch_ids = list(session.exec(select(Branch.id).where(Branch.user_id == user.id)).all())
     router_count = 0
@@ -254,6 +297,7 @@ def update_user(
         target.allowed_sections = ",".join(sorted(set(payload.allowed_sections))) or None
     if "account_subdomain" in payload.model_fields_set:
         subdomain = (payload.account_subdomain or "").strip().lower() or None
+        previous_subdomain = target.account_subdomain
         if subdomain in RESERVED_SUBDOMAINS:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "That subdomain is reserved")
         if subdomain:
@@ -264,6 +308,13 @@ def update_user(
             ).first()
             if existing:
                 raise HTTPException(status.HTTP_409_CONFLICT, "That subdomain is already assigned")
+        try:
+            if subdomain:
+                _provision_account_subdomain(subdomain)
+            if previous_subdomain and previous_subdomain != subdomain:
+                _remove_account_subdomain(previous_subdomain)
+        except DnsProviderError as exc:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not provision account DNS: {exc}")
         target.account_subdomain = subdomain
         if not subdomain:
             target.subdomain_enabled = False
@@ -277,6 +328,34 @@ def update_user(
     session.refresh(target)
     audit(session, admin, "user_updated", "user", str(target.id), payload.model_dump(exclude_none=True))
     return _user_response(session, target)
+
+
+@router.post("/users/{user_id}/subdomain/sync", response_model=MessageResponse)
+def sync_user_subdomain(
+    user_id: UUID,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> MessageResponse:
+    target = session.get(User, user_id)
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if not target.account_subdomain:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Assign a subdomain first")
+    try:
+        _provision_account_subdomain(target.account_subdomain)
+    except DnsProviderError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not provision account DNS: {exc}")
+    audit(
+        session,
+        admin,
+        "user_subdomain_synced",
+        "user",
+        str(target.id),
+        {"subdomain": target.account_subdomain},
+    )
+    return MessageResponse(
+        message=f"{target.account_subdomain}.{settings.account_base_domain} is configured"
+    )
 
 
 @router.get("/users/{user_id}", response_model=PlatformUserDetailResponse)

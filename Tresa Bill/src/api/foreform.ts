@@ -4,47 +4,57 @@ const API_BASE_URL = configuredApiUrl.replace(/^http:\/\/renult\.vercel\.app/i, 
 const LUCOPAY_API_BASE_URL = "https://lucopay-backend.vercel.app";
 const AUTH_TOKEN_KEY = "renult:auth-token";
 const AUTH_USER_KEY = "renult:auth-user";
-const ACCOUNT_BASE_DOMAIN = import.meta.env.VITE_ACCOUNT_BASE_DOMAIN || "renult.app";
+const ACCOUNT_BASE_DOMAIN = import.meta.env.VITE_ACCOUNT_BASE_DOMAIN || "renult.xyz";
 
-function consumeSubdomainAuthToken() {
-  if (typeof window === "undefined" || !window.location.hash) return;
-  const params = new URLSearchParams(window.location.hash.slice(1));
-  const token = params.get("renult_access_token");
-  if (!token) return;
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
-  params.delete("renult_access_token");
-  const nextHash = params.toString();
-  window.history.replaceState(
-    null,
-    "",
-    `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ""}`,
-  );
+export function getAccountBaseDomain() {
+  return ACCOUNT_BASE_DOMAIN;
 }
-
-consumeSubdomainAuthToken();
 
 export function getAccountSubdomainUrl(
   subdomain: string,
-  accessToken: string,
+  handoffCode: string,
   path = "/",
 ) {
-  const protocol = window.location.protocol === "http:" ? "http:" : "https:";
-  const port = window.location.port ? `:${window.location.port}` : "";
-  const domain = import.meta.env.DEV && !import.meta.env.VITE_ACCOUNT_BASE_DOMAIN
+  const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  const protocol = isLocal ? window.location.protocol : "https:";
+  const port = isLocal && window.location.port ? `:${window.location.port}` : "";
+  const host = isLocal
     ? window.location.hostname
-    : ACCOUNT_BASE_DOMAIN;
+    : `${subdomain}.${ACCOUNT_BASE_DOMAIN}`;
   const targetPath = path.startsWith("/") ? path : "/";
-  return `${protocol}//${subdomain}.${domain}${port}${targetPath}#renult_access_token=${encodeURIComponent(accessToken)}`;
+  const params = new URLSearchParams({ code: handoffCode, next: targetPath });
+  return `${protocol}//${host}${port}/auth/subdomain#${params.toString()}`;
 }
 
-export function redirectToAccountSubdomain(auth: AuthResponse, path = "/") {
+export async function redirectToAccountSubdomain(auth: AuthResponse, path = "/") {
   if (!auth.user.subdomain_enabled || !auth.user.account_subdomain) return false;
+  if (["localhost", "127.0.0.1"].includes(window.location.hostname)) return false;
+  const handoff = await apiRequest<{ code: string; subdomain: string; expires_in: number }>(
+    "/auth/subdomain-handoff",
+    { method: "POST" },
+  );
   const targetUrl = getAccountSubdomainUrl(
-    auth.user.account_subdomain,
-    auth.access_token,
+    handoff.subdomain,
+    handoff.code,
     path,
   );
   if (window.location.hostname === new URL(targetUrl).hostname) return false;
+  const targetOrigin = new URL(targetUrl).origin;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 5000);
+  try {
+    await fetch(targetOrigin, {
+      method: "HEAD",
+      mode: "no-cors",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch {
+    console.warn(`Account subdomain is not reachable yet: ${targetOrigin}`);
+    return false;
+  } finally {
+    window.clearTimeout(timeout);
+  }
   window.location.assign(targetUrl);
   return true;
 }
@@ -1190,6 +1200,12 @@ export const renultApi = {
     setPassword: (payload: { current_password?: string | null; new_password: string }) =>
       apiRequest<{ message: string }>("/auth/set-password", { method: "POST", body: JSON.stringify(payload) }),
     me: () => apiRequest<UserResponse>("/auth/me"),
+    exchangeSubdomainHandoff: (payload: { code: string; subdomain: string }) =>
+      apiRequest<AuthResponse>("/auth/subdomain-handoff/exchange", {
+        method: "POST",
+        auth: false,
+        body: JSON.stringify(payload),
+      }),
   },
   branches: {
     list: (query?: { limit?: number; offset?: number }) => apiRequest<BranchResponse[]>("/branches", { query }),
@@ -1411,6 +1427,8 @@ export const renultApi = {
       apiRequest<PlatformUserDetailResponse>(`/platform-admin/users/${userId}`),
     updateUser: (userId: string, payload: Partial<Pick<PlatformUserResponse, "is_active" | "is_verified" | "allowed_sections" | "account_subdomain" | "subdomain_enabled">>) =>
       apiRequest<PlatformUserResponse>(`/platform-admin/users/${userId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    syncUserSubdomain: (userId: string) =>
+      apiRequest<{ message: string }>(`/platform-admin/users/${userId}/subdomain/sync`, { method: "POST" }),
     updateSubadmin: (userId: string, payload: { role: "subadmin" | "none"; permissions: string[] }) =>
       apiRequest<PlatformUserResponse>(`/platform-admin/subadmins/${userId}`, { method: "PUT", body: JSON.stringify(payload) }),
     settings: () => apiRequest<PlatformSettingsResponse>("/platform-admin/settings"),

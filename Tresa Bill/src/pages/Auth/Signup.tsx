@@ -71,7 +71,7 @@ export default function Signup() {
       const auth = await renultApi.auth.verifyEmail({ email, code });
       login(auth);
       toast.success("Account verified");
-      if (!redirectToAccountSubdomain(auth)) {
+      if (!await redirectToAccountSubdomain(auth)) {
         navigate("/", { replace: true });
       }
     } catch (err: any) {
@@ -97,7 +97,7 @@ export default function Signup() {
       const auth = await renultApi.auth.google({ id_token: credentialResponse.credential });
       login(auth);
       const target = auth.user.auth_provider === "google" ? "/set-password" : "/";
-      if (!redirectToAccountSubdomain(auth, target)) {
+      if (!await redirectToAccountSubdomain(auth, target)) {
         navigate(target, { replace: true });
       }
     } catch (err: any) {

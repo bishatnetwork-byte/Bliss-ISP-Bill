@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, status
 from sqlmodel import select
@@ -18,6 +19,8 @@ from app.schemas.auth import (
     ResendCodeRequest,
     ResetPasswordRequest,
     SetPasswordRequest,
+    SubdomainHandoffRequest,
+    SubdomainHandoffResponse,
     UserResponse,
     VerifyEmailRequest,
 )
@@ -35,7 +38,13 @@ from app.services.notification import (
     notify_registration,
     notify_welcome,
 )
-from app.services.security import hash_password, normalize_email, verify_password
+from app.services.security import (
+    create_subdomain_handoff_token,
+    decode_subdomain_handoff_token,
+    hash_password,
+    normalize_email,
+    verify_password,
+)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -236,3 +245,33 @@ def reset_password(payload: ResetPasswordRequest, session: SessionDep) -> AuthRe
 @router.get("/me", response_model=UserResponse)
 def me(user: CurrentUser, session: SessionDep) -> UserResponse:
     return user_response(user, session)
+
+
+@router.post("/subdomain-handoff", response_model=SubdomainHandoffResponse)
+def create_subdomain_handoff(user: CurrentUser) -> SubdomainHandoffResponse:
+    return SubdomainHandoffResponse(
+        code=create_subdomain_handoff_token(user),
+        subdomain=user.account_subdomain or "",
+    )
+
+
+@router.post("/subdomain-handoff/exchange", response_model=AuthResponse)
+def exchange_subdomain_handoff(
+    payload: SubdomainHandoffRequest,
+    session: SessionDep,
+) -> AuthResponse:
+    claims = decode_subdomain_handoff_token(payload.code)
+    if claims["subdomain"] != payload.subdomain.strip().lower():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Subdomain handoff does not match this account")
+    try:
+        user_id = UUID(claims["sub"])
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid subdomain handoff")
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User no longer exists")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is suspended")
+    if not user.subdomain_enabled or user.account_subdomain != claims["subdomain"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Subdomain access is no longer enabled")
+    return auth_response(user, session)
