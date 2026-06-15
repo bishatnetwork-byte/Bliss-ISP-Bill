@@ -31,6 +31,7 @@ from app.schemas.wallet import (
     WithdrawalChallengeResponse,
     WithdrawalConfirmRequest,
     WithdrawalConfirmResponse,
+    WithdrawalConfigResponse,
 )
 from app.services import renult_pay
 from app.services import wallet as wallet_svc
@@ -91,6 +92,16 @@ def _txn_response(t) -> WalletTransactionResponse:
 
 
 # ── Branch wallet endpoints ─────────────────────────────────────────
+
+
+@router.get("/config", response_model=WithdrawalConfigResponse)
+def withdrawal_config(_: CurrentUser, session: SessionDep) -> WithdrawalConfigResponse:
+    """Return the current withdrawal fee rate and min/max limits."""
+    return WithdrawalConfigResponse(
+        fee_rate=wallet_svc.withdrawal_fee_rate(session),
+        min_amount=wallet_svc.withdrawal_min_amount(session),
+        max_amount=wallet_svc.withdrawal_max_amount(session),
+    )
 
 
 @router.get("/my-wallets", response_model=list[BranchWalletResponse])

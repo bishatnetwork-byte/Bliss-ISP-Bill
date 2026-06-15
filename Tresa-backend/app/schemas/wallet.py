@@ -70,6 +70,12 @@ class WithdrawalConfirmResponse(DepositWithdrawResponse):
     receipt_email_sent: bool
 
 
+class WithdrawalConfigResponse(BaseModel):
+    fee_rate: float
+    min_amount: int
+    max_amount: int
+
+
 class PlatformLedgerEntryResponse(BaseModel):
     id: UUID
     branch_wallet_id: UUID

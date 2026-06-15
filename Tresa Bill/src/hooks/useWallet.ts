@@ -72,6 +72,15 @@ export function useConfirmWithdrawal(branchId: string) {
     },
   });
 }
+export function useWithdrawalConfig() {
+  return useQuery({
+    queryKey: ["withdrawalConfig"],
+    queryFn: () => renultApi.wallets.config(),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
 export function usePlatformSummary() {
   return useQuery({
     queryKey: ["platformSummary"],

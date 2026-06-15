@@ -1195,6 +1195,12 @@ export interface WithdrawalConfirmResponse extends DepositWithdrawResponse {
   receipt_email_sent: boolean;
 }
 
+export interface WithdrawalConfigResponse {
+  fee_rate: number;
+  min_amount: number;
+  max_amount: number;
+}
+
 export interface PhoneIdentityResponse {
   identityname: string;
   message: string;
@@ -1540,6 +1546,8 @@ export const renultApi = {
       }),
   },
   wallets: {
+    config: () =>
+      apiRequest<WithdrawalConfigResponse>("/wallets/config"),
     myWallets: () =>
       apiRequest<BranchWalletResponse[]>("/wallets/my-wallets"),
     getBranchWallet: (branchId: string) =>

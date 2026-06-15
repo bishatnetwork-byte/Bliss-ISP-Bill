@@ -58,6 +58,11 @@ def withdrawal_net_amount(amount: int, session: Session) -> int:
     return amount - _calc_fee(amount, _fee_rate(session, "withdrawal_fee_percentage", WITHDRAW_FEE_RATE))
 
 
+def withdrawal_fee_rate(session: Session) -> float:
+    """Admin-configurable withdrawal fee as a decimal (e.g. 0.02 = 2%)."""
+    return _fee_rate(session, "withdrawal_fee_percentage", WITHDRAW_FEE_RATE)
+
+
 def withdrawal_min_amount(session: Session) -> int:
     """Admin-configurable floor on the net payout, in UGX."""
     return int(get_setting(session, "withdrawal_min_amount", WITHDRAW_MIN_AMOUNT))

@@ -6,15 +6,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usePhoneVerifed } from "@/hooks/usePhoneVerifed";
-import { useBranchWallet, useConfirmWithdrawal, useRequestWithdrawal } from "@/hooks/useWallet";
+import { useBranchWallet, useConfirmWithdrawal, useRequestWithdrawal, useWithdrawalConfig } from "@/hooks/useWallet";
 import type { WithdrawalConfirmResponse } from "@/api/foreform";
 import { cn } from "@/lib/utils";
 import { AlertCircle, CheckCircle2, Copy, Loader2, MailCheck, Printer, ShieldCheck, Verified, Wallet2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-const FEE_RATE = 0.02;
-const MIN_WITHDRAWAL_AMOUNT = 5000;
 
 function normalizeUgandanPhone(value: string): string | null {
   const digits = value.replace(/\D/g, "");
@@ -56,22 +54,26 @@ export default function Withdrawal() {
   }, []);
 
   const numericAmount = Number(amount) || 0;
-  const fee = Math.ceil(numericAmount * FEE_RATE);
-  const net = Math.max(0, numericAmount - fee);
   const normalizedPhone = normalizeUgandanPhone(phone);
   const provider = normalizedPhone ? providerFor(normalizedPhone) : "Mobile Money";
   const phoneVerification = usePhoneVerifed(normalizedPhone);
   const recipientName = phoneVerification.data?.success ? phoneVerification.data.identityname.trim() : "";
   const { data: wallet } = useBranchWallet(branchId);
+  const { data: wdConfig } = useWithdrawalConfig();
   const requestWithdrawal = useRequestWithdrawal(branchId);
   const confirmWithdrawal = useConfirmWithdrawal(branchId);
   const availableBalance = wallet?.balance || 0;
+  const feeRate = wdConfig?.fee_rate ?? 0.02;
+  const minAmount = wdConfig?.min_amount ?? 5000;
+  const feePercent = Math.round(feeRate * 100);
+  const fee = Math.ceil(numericAmount * feeRate);
+  const net = Math.max(0, numericAmount - fee);
   const transaction = receipt?.transaction;
 
   const formValid = Boolean(
     normalizedPhone &&
     recipientName &&
-    numericAmount >= MIN_WITHDRAWAL_AMOUNT &&
+    numericAmount >= minAmount &&
     numericAmount <= availableBalance
   );
   const receiptText = useMemo(() => {
@@ -93,8 +95,8 @@ export default function Withdrawal() {
     if (!formValid) {
       const message = numericAmount > availableBalance
         ? "Insufficient wallet balance."
-        : numericAmount < MIN_WITHDRAWAL_AMOUNT
-          ? `Minimum withdrawal amount is UGX ${MIN_WITHDRAWAL_AMOUNT.toLocaleString()}.`
+        : numericAmount < minAmount
+          ? `Minimum withdrawal amount is UGX ${minAmount.toLocaleString()}.`
           : phoneVerification.isFetching
             ? "Wait for the phone number to be verified."
             : "Enter a valid verified phone number and amount.";
@@ -174,14 +176,14 @@ export default function Withdrawal() {
               <div className="space-y-2">
                 <Label htmlFor="amount">Withdrawal amount (UGX)</Label>
                 <Input id="amount" inputMode="numeric" value={amount} onChange={(event) => setAmount(event.target.value.replace(/\D/g, ""))} placeholder="50000" />
-                {numericAmount > 0 && numericAmount < MIN_WITHDRAWAL_AMOUNT && (
-                  <p className="text-[12px] text-destructive">Minimum withdrawal is UGX {MIN_WITHDRAWAL_AMOUNT.toLocaleString()}.</p>
+                {numericAmount > 0 && numericAmount < minAmount && (
+                  <p className="text-[12px] text-destructive">Minimum withdrawal is UGX {minAmount.toLocaleString()}.</p>
                 )}
-                <p className="text-[11px] text-muted-foreground">Minimum withdrawal amount is UGX {MIN_WITHDRAWAL_AMOUNT.toLocaleString()}. The 2% platform fee is deducted from this amount.</p>
+                <p className="text-[11px] text-muted-foreground">Minimum withdrawal amount is UGX {minAmount.toLocaleString()}. The {feePercent}% platform fee is deducted from this amount.</p>
               </div>
               <div className="rounded border p-4 space-y-2 text-xs">
                 <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><strong>UGX {numericAmount.toLocaleString()}</strong></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Fee (2%)</span><strong>UGX {fee.toLocaleString()}</strong></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Fee ({feePercent}%)</span><strong>UGX {fee.toLocaleString()}</strong></div>
                 <div className="flex justify-between border-t pt-2 text-sm"><span className="font-bold">Recipient receives</span><strong className="text-emerald-600">UGX {net.toLocaleString()}</strong></div>
               </div>
               <Button className="w-full gap-2" disabled={!formValid} onClick={openReview}><ShieldCheck className="w-4 h-4" /> Review secure withdrawal</Button>
