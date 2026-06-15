@@ -1,0 +1,13 @@
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+.git
+.github
+.vercel
+tests
+.env
+.env.example
+*.rsc
+.gitignore
+README.md

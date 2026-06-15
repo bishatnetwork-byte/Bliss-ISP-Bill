@@ -1,0 +1,208 @@
+name: Build and Deploy Tresa Backend to VPS
+
+# Required repo secrets:
+#   VPS_IP        - VPS public IP / hostname
+#   VPS_USER      - SSH user (e.g. root)
+#   VPS_PASSWORD  - SSH password
+#   VPS_PORT      - SSH port (optional, defaults to 22)
+#   ENV_FILE      - full contents of the production .env file (paste the
+#                   whole file as a multi-line secret). This is written to
+#                   /opt/tresa-backend/.env on every deploy and loaded into
+#                   the container via --env-file.
+#
+# This VPS is separate from the MikroTik CHR (23.92.30.38). The backend only
+# makes OUTBOUND calls to the CHR (RouterOS API on 51847, NAT'd router ports
+# in 49152-65534) so none of the router-facing ports (winbox 8291, MikroTik
+# API 8728, L2TP/IPsec 1701+500+4500, etc.) need to be opened here - those
+# belong to the CHR's own firewall/NAT rules.
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "Tresa-backend/**"
+      - ".github/workflows/deploy-tresa-backend.yml"
+  workflow_dispatch:
+
+env:
+  REMOTE_DIR: /opt/tresa-backend
+  CONTAINER_NAME: tresa-backend
+  IMAGE_NAME: tresa-backend:latest
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy backend files to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          source: "Tresa-backend/Dockerfile,Tresa-backend/.dockerignore,Tresa-backend/pyproject.toml,Tresa-backend/uv.lock,Tresa-backend/main.py,Tresa-backend/app"
+          target: ${{ env.REMOTE_DIR }}
+          strip_components: 1
+
+      - name: Write production .env
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: REMOTE_DIR
+          script: |
+            mkdir -p "$REMOTE_DIR"
+            cat > "$REMOTE_DIR/.env" << '__ENV_FILE_EOF__'
+            ${{ secrets.ENV_FILE }}
+            __ENV_FILE_EOF__
+            chmod 600 "$REMOTE_DIR/.env"
+
+      - name: Build and run container
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: REMOTE_DIR,CONTAINER_NAME,IMAGE_NAME
+          script: |
+            set -e
+            cd "$REMOTE_DIR"
+
+            echo "Building image..."
+            DOCKER_BUILDKIT=1 docker build -t "$IMAGE_NAME" .
+
+            echo "Restarting container..."
+            docker stop "$CONTAINER_NAME" || true
+            docker rm "$CONTAINER_NAME" || true
+
+            # Bound to localhost only - Nginx proxies 443 -> 8000
+            docker run -d \
+              --name "$CONTAINER_NAME" \
+              --restart always \
+              -p 127.0.0.1:8000:8000 \
+              --env-file .env \
+              "$IMAGE_NAME"
+
+            docker image prune -f
+
+            echo "Waiting for health check..."
+            for i in $(seq 1 15); do
+              if curl -sf http://127.0.0.1:8000/health > /dev/null; then
+                echo "Backend is healthy"
+                exit 0
+              fi
+              sleep 2
+            done
+
+            echo "Backend failed health check - last logs:"
+            docker logs --tail 100 "$CONTAINER_NAME"
+            exit 1
+
+      - name: Configure Nginx reverse proxy for api.pitbox.fun
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            echo "Setting up Nginx reverse proxy..."
+
+            if ! command -v nginx &> /dev/null; then
+              apt-get update && apt-get install -y nginx ssl-cert
+            fi
+
+            # Only write config if SSL is not already configured - this
+            # prevents overwriting a working certbot/Let's Encrypt config.
+            if ! grep -q "listen 443 ssl" /etc/nginx/sites-available/api.pitbox.fun 2>/dev/null; then
+              echo "Writing Nginx config with SSL..."
+              cat > /etc/nginx/sites-available/api.pitbox.fun << 'NGINX_CONF'
+            server {
+                listen 80;
+                listen 443 ssl;
+                server_name api.pitbox.fun;
+
+                ssl_certificate /etc/ssl/certs/ssl-cert-snakeoil.pem;
+                ssl_certificate_key /etc/ssl/private/ssl-cert-snakeoil.key;
+
+                location / {
+                    set $cors_origin "";
+                    if ($http_origin ~* "^(https://(form\.pitbox\.fun|fore-form\.vercel\.app|pitbox\.fun)|http://(localhost|127\.0\.0\.1):(5173|3000))$") {
+                        set $cors_origin $http_origin;
+                    }
+
+                    # CORS preflight is handled here. Normal responses keep using FastAPI CORS.
+                    if ($request_method = 'OPTIONS') {
+                        add_header 'Access-Control-Allow-Origin' $cors_origin always;
+                        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+                        add_header 'Access-Control-Allow-Headers' $http_access_control_request_headers always;
+                        add_header 'Access-Control-Allow-Credentials' 'true' always;
+                        add_header 'Access-Control-Max-Age' 86400 always;
+                        add_header 'Vary' 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers' always;
+                        add_header 'Content-Length' 0;
+                        add_header 'Content-Type' 'text/plain';
+                        return 204;
+                    }
+
+                    proxy_pass http://127.0.0.1:8000;
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto https;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade $http_upgrade;
+                    proxy_set_header Connection "upgrade";
+                }
+            }
+            NGINX_CONF
+              echo "Nginx config written"
+            else
+              echo "Nginx SSL config already exists - skipping overwrite"
+            fi
+
+            # FastAPI owns normal-response CORS. Nginx only answers OPTIONS preflight.
+            # Strip any previously-injected CORS block, then re-insert the canonical one,
+            # so re-running this step keeps the block in sync without duplicating it.
+            perl -0pi -e 's/\n\s*set \$cors_origin "";\n\s*if \(\$http_origin ~\* "[^"]+"\) \{\n\s*set \$cors_origin \$http_origin;\n\s*\}\n//g; s/\n\s*# CORS preflight[^\n]*\n//g; s/\n\s*if \(\$request_method = '\''OPTIONS'\''\) \{\n(?:\s*add_header '\''Access-Control-[^'\'']+'\'' [^;]+;\n|\s*add_header '\''Content-[^'\'']+'\'' [^;]+;\n|\s*add_header '\''Vary'\'' [^;]+;\n|\s*return 204;\n)*\s*\}\n//g; s/\n\s*add_header '\''Access-Control-[^'\'']+'\'' [^;]+;\n//g' /etc/nginx/sites-available/api.pitbox.fun
+            perl -0pi -e 's@location / \{\n@location / {\n                    set \$cors_origin "";\n                    if (\$http_origin ~* "^(https://(form\\.pitbox\\.fun|fore-form\\.vercel\\.app|pitbox\\.fun)|http://(localhost|127\\.0\\.0\\.1):(5173|3000))\$") {\n                        set \$cors_origin \$http_origin;\n                    }\n\n                    # CORS preflight is handled here. Normal responses keep using FastAPI CORS.\n                    if (\$request_method = '\''OPTIONS'\'') {\n                        add_header '\''Access-Control-Allow-Origin'\'' \$cors_origin always;\n                        add_header '\''Access-Control-Allow-Methods'\'' '\''GET, POST, PUT, PATCH, DELETE, OPTIONS'\'' always;\n                        add_header '\''Access-Control-Allow-Headers'\'' \$http_access_control_request_headers always;\n                        add_header '\''Access-Control-Allow-Credentials'\'' '\''true'\'' always;\n                        add_header '\''Access-Control-Max-Age'\'' 86400 always;\n                        add_header '\''Vary'\'' '\''Origin, Access-Control-Request-Method, Access-Control-Request-Headers'\'' always;\n                        add_header '\''Content-Length'\'' 0;\n                        add_header '\''Content-Type'\'' '\''text/plain'\'';\n                        return 204;\n                    }\n\n@' /etc/nginx/sites-available/api.pitbox.fun
+
+            ln -sf /etc/nginx/sites-available/api.pitbox.fun /etc/nginx/sites-enabled/
+            rm -f /etc/nginx/sites-enabled/default
+
+            nginx -t && systemctl reload nginx
+            echo "Nginx configured for api.pitbox.fun"
+
+      - name: Configure firewall (UFW)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            echo "Configuring firewall..."
+
+            ufw default deny incoming
+            ufw default allow outgoing
+
+            ufw allow 22/tcp    # SSH
+            ufw allow 80/tcp    # HTTP (Nginx, redirects/ACME)
+            ufw allow 443/tcp   # HTTPS (Nginx -> backend)
+            ufw deny 8000       # FastAPI is bound to 127.0.0.1 only; deny external access defensively
+
+            # NOTE: this VPS does not host the MikroTik CHR, so the
+            # router/VPN ports (8291 winbox, 8728 mikrotik api, 51847 CHR
+            # api, 1701/500/4500 udp for L2TP+IPsec, etc. from the CHR's
+            # firewall/NAT rules) are NOT opened here. The backend reaches
+            # the CHR (23.92.30.38) via outbound connections, which UFW
+            # allows by default.
+
+            ufw --force enable
+            ufw status verbose
+            echo "Firewall configured!"
