@@ -472,11 +472,13 @@ export default function SetUpProvison() {
                         id="hotspot-dns-name"
                         value={hotspotDnsName}
                         onChange={(e) => setHotspotDnsName(e.target.value)}
-                        placeholder="e.g. wifi.renult.app"
+                        placeholder="e.g. wifi.renult.xyz"
                         className="border-slate-200 focus-visible:ring-primary h-10"
                       />
                       <p className="text-xs text-slate-400 mt-1">
-                        Optional  domain shown in the captive portal address bar.
+                        Optional domain shown in the captive portal address bar.
+                        Avoid .app, .dev, .page or .new domains - browsers force
+                        HTTPS for them and the login page (plain HTTP) won't load.
                       </p>
                     </div>
                   </div>

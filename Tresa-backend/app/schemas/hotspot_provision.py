@@ -1,7 +1,16 @@
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+# Top-level domains that Chrome/Android preload into HSTS, forcing every
+# subdomain to HTTPS on the very first request - before any response is ever
+# seen. RouterOS's hotspot captive-portal redirect (and its login page) are
+# plain HTTP, so a dns-name under one of these TLDs gets silently rewritten to
+# HTTPS by the client and connects to nothing on the router, surfacing as
+# "Web page not available ... net::ERR_CONNECTION_CLOSED".
+HSTS_PRELOADED_TLDS = {"app", "dev", "page", "new", "foo", "zip", "mov", "phd", "gle", "channel"}
 
 
 # ── Request schemas ──────────────────────────────────────────
@@ -79,8 +88,25 @@ class HotspotProvisionConfig(BaseModel):
     hotspot_dns_name: Optional[str] = Field(
         default=None,
         max_length=120,
-        description="Portal domain advertised by the hotspot server (e.g. wifi.renult.app).",
+        description="Portal domain advertised by the hotspot server (e.g. wifi.renult.xyz).",
     )
+
+    @field_validator("hotspot_dns_name")
+    @classmethod
+    def _validate_hotspot_dns_name(cls, value: Optional[str]) -> Optional[str]:
+        if not value:
+            return value
+        value = value.strip().lower()
+        tld = value.rsplit(".", 1)[-1]
+        if tld in HSTS_PRELOADED_TLDS:
+            raise ValueError(
+                f'"{value}" cannot be used as the hotspot portal domain: ".{tld}" is '
+                "HSTS-preloaded, so browsers force HTTPS for it and the captive "
+                "portal login page (served over plain HTTP by the router) becomes "
+                "unreachable (net::ERR_CONNECTION_CLOSED). Use a domain on a "
+                "different TLD, e.g. wifi.renult.xyz, or leave this blank."
+            )
+        return value
 
     # ── Anti-sharing (firewall mangle) ──────────────────────
     enable_anti_sharing: bool = Field(
