@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
+
 
 class RouterCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
@@ -192,7 +194,7 @@ class RouterHeartbeatResponse(BaseModel):
 
 
 class RouterDeployHeartbeatRequest(BaseModel):
-    api_base_url: str = Field(default="https://renult.vercel.app", min_length=8, max_length=500)
+    api_base_url: str = Field(default=settings.portal_public_api_url, min_length=8, max_length=500)
 
 
 class RouterDeployHeartbeatResponse(BaseModel):
@@ -250,7 +252,7 @@ class RouterTestConnectionResponse(BaseModel):
 
 
 class RouterPublishScriptRequest(BaseModel):
-    api_base_url: str = Field(default="https://renult.vercel.app", min_length=8, max_length=500)
+    api_base_url: str = Field(default=settings.portal_public_api_url, min_length=8, max_length=500)
     include_walled_garden: bool = True
 
 

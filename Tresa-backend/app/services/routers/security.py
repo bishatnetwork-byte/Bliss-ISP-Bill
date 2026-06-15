@@ -73,7 +73,7 @@ def build_secure_setup_script(
     api_base_url = api_base_url.rstrip("/")
     if not api_base_url.startswith(("http://", "https://")):
         raise ValueError("API base URL must start with http:// or https://")
-    portal_domain = _routeros_quote(urlparse(api_base_url).hostname or "renult.vercel.app")
+    portal_domain = _routeros_quote(urlparse(api_base_url).hostname or urlparse(settings.portal_public_api_url).hostname or "api.renult.xyz")
     token = registration_token(router.id)
     api_url = _routeros_quote(api_base_url)
     chr_host = _routeros_quote(settings.chr_public_host)

@@ -140,8 +140,70 @@ jobs:
               apt-get update && apt-get install -y nginx ssl-cert
             fi
 
-            # Only write config if SSL is not already configured - this
-            # prevents overwriting a working certbot/Let's Encrypt config.
+            mkdir -p /etc/nginx/snippets
+
+            # CORS + proxy tuning lives in its own snippet, `include`d from
+            # the `location /` block below, and is rewritten on every
+            # deploy - so config fixes land here without touching certbot's
+            # SSL block in sites-available/api.renult.xyz.
+            #
+            # CORS: FastAPI already sets allow_origins=["*"] +
+            # allow_credentials, which Starlette implements by reflecting the
+            # request's Origin back. Mirror that here too, with `always` so
+            # it also applies to error pages Nginx generates itself (502,
+            # 504, 413, etc. - which never reach FastAPI's CORSMiddleware).
+            # Without `always`, those show up in the browser as a misleading
+            # "CORS policy: No Access-Control-Allow-Origin" error instead of
+            # the real HTTP status.
+            cat > /etc/nginx/snippets/tresa-api.conf << 'PROXY_CONF'
+            add_header 'Access-Control-Allow-Origin' $http_origin always;
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+            add_header 'Access-Control-Allow-Headers' $http_access_control_request_headers always;
+            add_header 'Access-Control-Allow-Credentials' 'true' always;
+            add_header 'Vary' 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers' always;
+
+            if ($request_method = 'OPTIONS') {
+                add_header 'Access-Control-Allow-Origin' $http_origin always;
+                add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+                add_header 'Access-Control-Allow-Headers' $http_access_control_request_headers always;
+                add_header 'Access-Control-Allow-Credentials' 'true' always;
+                add_header 'Access-Control-Max-Age' 86400 always;
+                add_header 'Vary' 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers' always;
+                add_header 'Content-Length' 0;
+                add_header 'Content-Type' 'text/plain';
+                return 204;
+            }
+
+            # Captive-portal logo/asset uploads can exceed Nginx's 1m
+            # default - match the backend's UPLOAD_MAX_BYTES (20 MiB) with
+            # headroom, otherwise Nginx itself rejects the upload with a
+            # CORS-less 413 before it ever reaches FastAPI.
+            client_max_body_size 25m;
+
+            # Voucher fetches and other router-facing calls go out over the
+            # CHR VPN tunnel to the customer's MikroTik and can take a
+            # while. Give them more headroom than Nginx's 60s defaults so a
+            # slow router produces a real response/timeout from FastAPI
+            # instead of Nginx dropping the connection (which the browser
+            # reports as a CORS error with no status code).
+            proxy_connect_timeout 75s;
+            proxy_send_timeout 120s;
+            proxy_read_timeout 120s;
+
+            proxy_pass http://127.0.0.1:8000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            PROXY_CONF
+
+            # Only write the full server block if SSL is not already
+            # configured - this prevents overwriting a working
+            # certbot/Let's Encrypt config. Either way, the `location /`
+            # block ends up as a single `include` of the snippet above.
             if ! grep -q "listen 443 ssl" /etc/nginx/sites-available/api.renult.xyz 2>/dev/null; then
               echo "Writing Nginx config with SSL..."
               cat > /etc/nginx/sites-available/api.renult.xyz << 'NGINX_CONF'
@@ -154,40 +216,45 @@ jobs:
                 ssl_certificate_key /etc/ssl/private/ssl-cert-snakeoil.key;
 
                 location / {
-                    # CORS preflight is answered here; normal responses keep
-                    # using FastAPI's own CORSMiddleware. FastAPI is already
-                    # configured with allow_origins=["*"] + allow_credentials,
-                    # which Starlette implements by reflecting the request's
-                    # Origin back - so reflect it here too. That keeps every
-                    # frontend (app.renult.xyz, every per-account
-                    # *.renult.xyz captive-portal subdomain, local dev, etc.)
-                    # working without a brittle origin allowlist/regex.
-                    if ($request_method = 'OPTIONS') {
-                        add_header 'Access-Control-Allow-Origin' $http_origin always;
-                        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-                        add_header 'Access-Control-Allow-Headers' $http_access_control_request_headers always;
-                        add_header 'Access-Control-Allow-Credentials' 'true' always;
-                        add_header 'Access-Control-Max-Age' 86400 always;
-                        add_header 'Vary' 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers' always;
-                        add_header 'Content-Length' 0;
-                        add_header 'Content-Type' 'text/plain';
-                        return 204;
-                    }
-
-                    proxy_pass http://127.0.0.1:8000;
-                    proxy_set_header Host $host;
-                    proxy_set_header X-Real-IP $remote_addr;
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto https;
-                    proxy_http_version 1.1;
-                    proxy_set_header Upgrade $http_upgrade;
-                    proxy_set_header Connection "upgrade";
+                    include /etc/nginx/snippets/tresa-api.conf;
                 }
             }
             NGINX_CONF
               echo "Nginx config written"
             else
-              echo "Nginx SSL config already exists - skipping overwrite"
+              echo "Nginx SSL config already exists - ensuring location / includes the proxy snippet..."
+              cp /etc/nginx/sites-available/api.renult.xyz /etc/nginx/sites-available/api.renult.xyz.bak
+              python3 - << 'PYEOF'
+            path = "/etc/nginx/sites-available/api.renult.xyz"
+            src = open(path).read()
+            marker = "location / {"
+            start = src.find(marker)
+            if start == -1:
+                print("WARNING: could not find 'location / {' in api.renult.xyz - leaving config untouched")
+            elif "tresa-api.conf" in src:
+                print("tresa-api.conf already included - no change")
+            else:
+                body_start = start + len(marker)
+                depth = 1
+                i = body_start
+                while depth > 0:
+                    if src[i] == "{":
+                        depth += 1
+                    elif src[i] == "}":
+                        depth -= 1
+                    i += 1
+                end = i - 1
+                src = src[:body_start] + "\n        include /etc/nginx/snippets/tresa-api.conf;\n    " + src[end:]
+                open(path, "w").write(src)
+                print("Replaced location / body with include of tresa-api.conf")
+            PYEOF
+
+              if ! nginx -t; then
+                echo "Nginx config invalid after update - restoring previous config"
+                cp /etc/nginx/sites-available/api.renult.xyz.bak /etc/nginx/sites-available/api.renult.xyz
+                nginx -t
+                exit 1
+              fi
             fi
 
             ln -sf /etc/nginx/sites-available/api.renult.xyz /etc/nginx/sites-enabled/

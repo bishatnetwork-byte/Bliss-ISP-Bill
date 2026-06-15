@@ -166,7 +166,11 @@ interface RouterStatusCache {
   pingStatuses: Record<string, PingStatus>;
 }
 
-const ROUTER_STATUS_CACHE_TTL = 30000;
+// Routers are polled in the background every 30 minutes - frequent enough to
+// notice an outage without re-triggering the "checking..." pulse animation
+// (and the resulting sidebar flicker) on every navigation.
+const ROUTER_STATUS_REFRESH_INTERVAL = 30 * 60 * 1000;
+const ROUTER_STATUS_CACHE_TTL = ROUTER_STATUS_REFRESH_INTERVAL;
 const routerStatusCacheKey = (branchId: string) =>
   `renult-router-status:${branchId}`;
 
@@ -194,6 +198,34 @@ const writeRouterStatusCache = (
   }
 };
 
+// Cache the workspace list + selection so the workspace switcher (and the
+// router status grid beneath it) doesn't flash back to "Select branch" every
+// time the sidebar remounts on navigation - it renders the last-known state
+// immediately while the branch list re-validates in the background.
+const WORKSPACES_CACHE_KEY = "renult-workspaces-cache";
+
+interface WorkspacesCache {
+  workspaces: Workspace[];
+  selectedWorkspaceId: string;
+}
+
+const readWorkspacesCache = (): WorkspacesCache | null => {
+  try {
+    const cached = sessionStorage.getItem(WORKSPACES_CACHE_KEY);
+    return cached ? JSON.parse(cached) as WorkspacesCache : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeWorkspacesCache = (workspaces: Workspace[], selectedWorkspaceId: string) => {
+  try {
+    sessionStorage.setItem(WORKSPACES_CACHE_KEY, JSON.stringify({ workspaces, selectedWorkspaceId }));
+  } catch {
+    // Workspace caching is optional when browser storage is unavailable.
+  }
+};
+
 export default function SideBar({ isOpen, onClose }: SideBarProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -201,15 +233,24 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
   const [isCollapsed, setIsCollapsed] = useState(
     () => localStorage.getItem("sidebar-collapsed") === "true",
   );
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace>();
-  const [monitoring, setMonitoring] = useState<RouterMonitorSummary | null>(null);
-  const [pingStatuses, setPingStatuses] = useState<Record<string, PingStatus>>({});
+  const cachedWorkspaces = readWorkspacesCache();
+  const cachedSelected = cachedWorkspaces?.workspaces.find(
+    (workspace) => workspace.id === cachedWorkspaces.selectedWorkspaceId,
+  ) ?? cachedWorkspaces?.workspaces[0];
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(() => cachedWorkspaces?.workspaces ?? []);
+  const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | undefined>(() => cachedSelected);
+  const [monitoring, setMonitoring] = useState<RouterMonitorSummary | null>(() =>
+    cachedSelected ? readRouterStatusCache(cachedSelected.id)?.monitoring ?? null : null,
+  );
+  const [pingStatuses, setPingStatuses] = useState<Record<string, PingStatus>>(() =>
+    cachedSelected ? readRouterStatusCache(cachedSelected.id)?.pingStatuses ?? {} : {},
+  );
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
 
   const handleSelectWorkspace = (workspace: Workspace) => {
     setSelectedWorkspace(workspace);
     localStorage.setItem("selected-workspace", workspace.id);
+    writeWorkspacesCache(workspaces, workspace.id);
     window.dispatchEvent(
       new CustomEvent("renult-branch-change", {
         detail: { id: workspace.id, name: workspace.name },
@@ -244,6 +285,7 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
           nextWorkspaces[0];
         setSelectedWorkspace(selected);
         localStorage.setItem("selected-workspace", selected.id);
+        writeWorkspacesCache(nextWorkspaces, selected.id);
         window.dispatchEvent(
           new CustomEvent("renult-branch-change", {
             detail: {
@@ -271,11 +313,13 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
       };
       setWorkspaces((prev) => {
         const exists = prev.some((item) => item.id === workspace.id);
-        return exists
+        const next = exists
           ? prev.map((item) =>
             item.id === workspace.id ? { ...item, ...workspace } : item,
           )
           : [workspace, ...prev];
+        writeWorkspacesCache(next, workspace.id);
+        return next;
       });
       setSelectedWorkspace(workspace);
     };
@@ -343,7 +387,7 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
     const scheduleRefresh = (delay: number) => {
       refreshTimer = window.setTimeout(async () => {
         await loadMonitoring();
-        if (mounted) scheduleRefresh(60000);
+        if (mounted) scheduleRefresh(ROUTER_STATUS_REFRESH_INTERVAL);
       }, delay);
     };
 

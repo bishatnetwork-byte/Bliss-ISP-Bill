@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -7,6 +6,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlmodel import Session, select
 
 from app.api.deps import CurrentUser
+from app.core.config import settings
 from app.db.session import SessionDep
 from app.db.session import engine
 from app.models.branch import Branch
@@ -502,7 +502,7 @@ def router_secure_setup(
     user: CurrentUser,
     session: SessionDep,
     response: Response,
-    api_base_url: str = Query(default="https://renult.vercel.app", min_length=8, max_length=500),
+    api_base_url: str = Query(default=settings.portal_public_api_url, min_length=8, max_length=500),
 ) -> RouterSecureSetupResponse:
     db_router = get_router_with_ownership(session, router_id, user.id)
     response.headers["Cache-Control"] = "no-store"
@@ -680,7 +680,7 @@ def public_router_setup_script(token: str, session: SessionDep) -> PlainTextResp
     if db_router is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Router not found")
 
-    api_base_url = os.getenv("PORTAL_PUBLIC_API_URL", "https://renult.vercel.app").rstrip("/")
+    api_base_url = settings.portal_public_api_url
     try:
         script = build_secure_setup_script(db_router, api_base_url, include_walled_garden=True)
     except (RuntimeError, ValueError) as exc:

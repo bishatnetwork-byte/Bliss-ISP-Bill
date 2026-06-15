@@ -648,7 +648,7 @@ def _router_directory_name(router_name: str) -> str:
 
 
 def _portal_api_base() -> str:
-    return os.getenv("PORTAL_PUBLIC_API_URL", "https://renult.vercel.app").rstrip("/")
+    return settings.portal_public_api_url
 
 
 def _render_portal_file(path: Path, router: Router) -> bytes:

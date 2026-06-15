@@ -84,6 +84,11 @@ class Settings:
     payment_provider_timeout_seconds: float = float(os.getenv("PROVIDER_TIMEOUT_SECONDS", "30"))
     renult_app_url: str = os.getenv("RENULT_APP_URL", "https://app.renult.xyz").rstrip("/")
     account_base_domain: str = os.getenv("ACCOUNT_BASE_DOMAIN", "renult.xyz").strip().lower().strip(".")
+    # Public URL routers/captive-portal pages use to reach this API - baked
+    # into the captive portal templates (__PORTAL_API_BASE__), the router
+    # provisioning scripts, and the walled-garden allow-list so unauthenticated
+    # hotspot users can reach it.
+    portal_public_api_url: str = os.getenv("PORTAL_PUBLIC_API_URL", "https://api.renult.xyz").rstrip("/")
     platform_admin_emails: str = os.getenv("PLATFORM_ADMIN_EMAILS", "")
     cloudflare_api_token: str | None = os.getenv("CLOUDFLARE_API_TOKEN")
     cloudflare_api_base_url: str = os.getenv(
