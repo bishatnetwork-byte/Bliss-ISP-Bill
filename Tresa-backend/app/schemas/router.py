@@ -48,6 +48,7 @@ class RouterResponse(BaseModel):
     trial_enabled: bool = False
     trial_minutes: int = 30
     status: str = "pending"
+    hotspot_provisioned: bool = False
     last_seen: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime

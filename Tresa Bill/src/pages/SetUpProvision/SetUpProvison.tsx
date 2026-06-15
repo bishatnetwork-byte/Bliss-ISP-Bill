@@ -26,6 +26,7 @@ import {
   useDetectRouterHardware,
   usePublishSetupScript,
   useProvisionHotspot,
+  useRouter,
   useRouterSecureSetup,
   useRouterStatus,
 } from "@/hooks/useRouters";
@@ -51,7 +52,7 @@ import {
   Wifi,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -60,6 +61,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 export default function SetUpProvison() {
   const navigate = useNavigate();
+  const routeState = useLocation();
   const branchId = localStorage.getItem("selected-workspace") || "biltra";
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("sidebar-collapsed") === "true");
 
@@ -113,6 +115,11 @@ export default function SetUpProvison() {
   const [showConnectionDetails, setShowConnectionDetails] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
 
+  // ── Resume an incomplete setup (navigated here with a saved router id) ─
+  const resumeRouterId = (routeState.state as { resumeRouterId?: string } | null)?.resumeRouterId || "";
+  const [hasResumed, setHasResumed] = useState(false);
+  const resumeRouterQuery = useRouter(resumeRouterId);
+
   // ── Mutations / queries ──────────────────────────────────────
   const createRouter = useCreateRouter(branchId);
   const secureSetup = useRouterSecureSetup();
@@ -164,6 +171,32 @@ export default function SetUpProvison() {
       toast.success("Router connected successfully!");
     }
   }, [connected, pollConnection]);
+
+  // Resume an unfinished setup: prefill details, regenerate the connection
+  // script for the already-saved router, and jump straight to step 2.
+  useEffect(() => {
+    if (!resumeRouterId || hasResumed || !resumeRouterQuery.data) return;
+    const router = resumeRouterQuery.data;
+    setHasResumed(true);
+    setRouterName(router.name);
+    setLocation(router.location || "");
+    setDescription(router.description || "");
+    setSavedRouterId(router.id);
+
+    (async () => {
+      try {
+        const setup = await secureSetup.mutateAsync(router.id);
+        setConnectionInfo(setup);
+        const published = await publishSetupScript.mutateAsync(router.id);
+        setPublishedScript(published);
+        setStep(2);
+        toast.message("Resuming setup", { description: `Continue provisioning "${router.name}".` });
+      } catch (error) {
+        toast.error(getErrorMessage(error, "Failed to resume router setup."));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeRouterId, hasResumed, resumeRouterQuery.data]);
 
   // Auto-detect hardware the first time we land on the services step
   useEffect(() => {
@@ -321,6 +354,16 @@ export default function SetUpProvison() {
     setShowSecret(false);
   };
 
+  // Leaving mid-wizard abandons a saved-but-unconfigured router, so warn first.
+  const handleCancel = () => {
+    if (savedRouterId && !applySuccess) {
+      if (!window.confirm('This router has been saved but setup is not finished yet. It will stay in your Routers list with a "Finish Setup" prompt so you can come back to it. Leave anyway?')) {
+        return;
+      }
+    }
+    navigate('/router');
+  };
+
   return (
     <div
       className={cn(
@@ -342,7 +385,7 @@ export default function SetUpProvison() {
           </div>
           <Button
             variant="outline"
-            onClick={() => navigate('/router')}
+            onClick={handleCancel}
             className="border-slate-200 text-slate-700 bg-white hover:bg-slate-50 h-10 px-6 font-medium"
           >
             Cancel

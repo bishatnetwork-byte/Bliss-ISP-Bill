@@ -441,6 +441,7 @@ export interface RouterResponse {
   trial_enabled: boolean;
   trial_minutes: number;
   status: string;
+  hotspot_provisioned: boolean;
   last_seen: string | null;
   created_at: string;
   updated_at: string;

@@ -185,6 +185,14 @@ export default function RoutersIndex() {
         (router.description || "").toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    // Routers saved but never finished hotspot provisioning
+    const incompleteRouters = routers.filter(router => !router.hotspot_provisioned);
+
+    const handleFinishSetup = (router: RouterResponse, e: React.MouseEvent) => {
+        e.stopPropagation();
+        navigate('/router/setup', { state: { resumeRouterId: router.id } });
+    };
+
     // Selected Router Object
     const selectedRouter = routers.find(r => r.id === selectedRouterId) || routers[0];
 
@@ -322,10 +330,11 @@ export default function RoutersIndex() {
 
     const handleDeleteRouter = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (routers.length <= 1) {
-            toast.error("Cannot delete the last remaining router.");
-            return;
-        }
+        const target = routers.find(r => r.id === id);
+        const warning = target && !target.hotspot_provisioned
+            ? `Delete "${target.name}"? Setup for this router was never completed - it has no hotspot configuration to lose, so this just removes it from your list.`
+            : `Delete "${target?.name || "this router"}"? This removes its configuration, hotspot, and captive portal setup from the dashboard. This cannot be undone.`;
+        if (!window.confirm(warning)) return;
         try {
             await deleteRouterMutation.mutateAsync(id);
             if (selectedRouterId === id) {
@@ -356,6 +365,29 @@ export default function RoutersIndex() {
                 {/* ----------------- ROUTER LIST VIEW ----------------- */}
                 {view === 'list' && (
                     <div className="space-y-5 flex-1 flex flex-col min-h-0">
+
+                        {/* Incomplete setup banner */}
+                        {incompleteRouters.length > 0 && (
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+                                <div className="flex items-start gap-2.5">
+                                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                                    <p className="text-xs font-medium">
+                                        {incompleteRouters.length === 1
+                                            ? `"${incompleteRouters[0].name}" was saved but hotspot setup was never finished. It has no working internet or captive portal until provisioning is complete.`
+                                            : `${incompleteRouters.length} routers were saved but hotspot setup was never finished. They have no working internet or captive portal until provisioning is complete.`}
+                                    </p>
+                                </div>
+                                {incompleteRouters.length === 1 && (
+                                    <Button
+                                        size="sm"
+                                        onClick={(e) => handleFinishSetup(incompleteRouters[0], e)}
+                                        className="gap-1.5 text-xs font-semibold h-8 px-3 bg-amber-600 text-white hover:bg-amber-700 shrink-0"
+                                    >
+                                        Finish Setup
+                                    </Button>
+                                )}
+                            </div>
+                        )}
 
                         {/* Header Title & Stats & Create Trigger */}
                         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -427,6 +459,7 @@ export default function RoutersIndex() {
                                         onSelect={handleSelectRouter}
                                         onDelete={handleDeleteRouter}
                                         onEdit={handleOpenEdit}
+                                        onFinishSetup={handleFinishSetup}
                                     />
                                 ))
                             )}
@@ -943,13 +976,18 @@ function RouterCard({
     onSelect,
     onDelete,
     onEdit,
+    onFinishSetup,
 }: {
     router: RouterResponse;
     onSelect: (id: string) => void;
     onDelete: (id: string, e: React.MouseEvent) => void;
     onEdit: (router: RouterResponse, e: React.MouseEvent) => void;
+    onFinishSetup: (router: RouterResponse, e: React.MouseEvent) => void;
 }) {
-    const { data: statusData, isLoading: isStatusLoading } = useRouterStatus(router.id);
+    const isProvisioned = router.hotspot_provisioned;
+    // Unprovisioned routers have no real host/credentials yet, so polling
+    // their RouterOS status just spends a connection attempt on nothing.
+    const { data: statusData, isLoading: isStatusLoading } = useRouterStatus(router.id, isProvisioned);
 
     const isOnline = statusData?.connected ?? false;
     const cpuUsage = statusData?.system_resource?.['cpu-load'] ?? 0;
@@ -961,12 +999,12 @@ function RouterCard({
     const activeUsers = statusData?.dhcp_leases?.length ?? 0;
     const uptime = statusData?.system_resource?.uptime ?? 'Offline';
 
-    const status = isStatusLoading ? 'Connecting' : (isOnline ? 'Online' : 'Offline');
+    const status = !isProvisioned ? 'Setup Incomplete' : isStatusLoading ? 'Connecting' : (isOnline ? 'Online' : 'Offline');
 
     return (
         <Card
             onClick={() => onSelect(router.id)}
-            className={cn("border shadow-sm cursor-pointer transition-all duration-200 rounded flex flex-col justify-between", isOnline ? "border-emerald-400" : (status === 'Connecting') ? "border-amber-50 " : "border-rose-500")}
+            className={cn("border shadow-sm cursor-pointer transition-all duration-200 rounded flex flex-col justify-between", isOnline ? "border-emerald-400" : (status === 'Connecting') ? "border-amber-50 " : (status === 'Setup Incomplete') ? "border-amber-400" : "border-rose-500")}
         >
             <div className="p-4 space-y-3">
                 {/* Details Header */}
@@ -975,7 +1013,7 @@ function RouterCard({
                         <div className={cn(
                             "p-2 rounded",
                             isOnline ? "bg-emerald-50 text-emerald-600" :
-                                (status === 'Connecting') ? "bg-amber-50 text-amber-600" :
+                                (status === 'Connecting' || status === 'Setup Incomplete') ? "bg-amber-50 text-amber-600" :
                                     "bg-slate-50 text-slate-600"
                         )}>
                             <RouterIcon className="w-4 h-4" />
@@ -992,12 +1030,12 @@ function RouterCard({
                         <span className={cn(
                             "w-2 h-2 rounded-full",
                             isOnline ? "bg-emerald-500" :
-                                (status === 'Connecting') ? "bg-amber-500 animate-pulse" :
+                                (status === 'Connecting' || status === 'Setup Incomplete') ? "bg-amber-500 animate-pulse" :
                                     "bg-rose-500"
                         )} />
                         <span className={cn("text-[12px] font-bold",
                             isOnline ? "text-emerald-500" :
-                                (status === 'Connecting') ? "text-amber-500" :
+                                (status === 'Connecting' || status === 'Setup Incomplete') ? "text-amber-500" :
                                     "text-rose-500"
                         )}>{status}</span>
                     </div>
@@ -1008,6 +1046,12 @@ function RouterCard({
                     <div>IP: <span className="text-foreground font-semibold">{router.host}</span></div>
                     <div>Uptime: <span className="text-foreground font-semibold truncate block max-w-[90px]">{uptime}</span></div>
                 </div>
+
+                {!isProvisioned && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                        Hotspot provisioning was never completed - this router has no internet/captive portal yet.
+                    </p>
+                )}
 
                 {isOnline && (
                     <div className="grid grid-cols-3 gap-1 pt-2 border-t border-border/20 text-[11px]">
@@ -1028,8 +1072,17 @@ function RouterCard({
             </div>
 
             {/* Action Bar */}
-            <div className={cn("border-t border-border/50 px-4 py-2 flex items-center justify-between text-[10px] rounded-b", isOnline ? "bg-emerald-500" : (status === 'Connecting') ? "bg-amber-500" : " bg-rose-500")}>
-                <span className="text-white font-bold hover:underline">View Details &rarr;</span>
+            <div className={cn("border-t border-border/50 px-4 py-2 flex items-center justify-between text-[10px] rounded-b", isOnline ? "bg-emerald-500" : (status === 'Connecting' || status === 'Setup Incomplete') ? "bg-amber-500" : " bg-rose-500")}>
+                {!isProvisioned ? (
+                    <button
+                        onClick={(e) => onFinishSetup(router, e)}
+                        className="text-white font-bold hover:underline"
+                    >
+                        Finish Setup &rarr;
+                    </button>
+                ) : (
+                    <span className="text-white font-bold hover:underline">View Details &rarr;</span>
+                )}
                 <div className="flex items-center gap-1">
                     <Button
                         variant="ghost"

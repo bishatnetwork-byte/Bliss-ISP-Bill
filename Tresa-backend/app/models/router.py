@@ -48,6 +48,7 @@ class Router(SQLModel, table=True):
     trial_enabled: bool = Field(default=False)
     trial_minutes: int = Field(default=30)
     status: str = Field(default="pending", index=True)
+    hotspot_provisioned: bool = Field(default=False)
     snmp_status: str = Field(default="unknown", index=True)
     snmp_configured: bool = Field(default=False)
     snmp_checked_at: Optional[datetime] = Field(default=None)

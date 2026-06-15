@@ -154,6 +154,7 @@ def serialize_router(db_router: Router) -> RouterResponse:
         trial_enabled=db_router.trial_enabled,
         trial_minutes=db_router.trial_minutes,
         status=db_router.status,
+        hotspot_provisioned=db_router.hotspot_provisioned,
         last_seen=db_router.last_seen,
         created_at=db_router.created_at,
         updated_at=db_router.updated_at,
@@ -941,6 +942,11 @@ def router_provision_hotspot(
     """
     db_router = get_router_with_ownership(session, router_id, user.id)
     result = provision_hotspot(db_router, payload)
+    if result.get("success") and not db_router.hotspot_provisioned:
+        db_router.hotspot_provisioned = True
+        db_router.updated_at = datetime.utcnow()
+        session.add(db_router)
+        session.commit()
     return HotspotProvisionResponse(
         router_id=db_router.id,
         router_name=db_router.name,

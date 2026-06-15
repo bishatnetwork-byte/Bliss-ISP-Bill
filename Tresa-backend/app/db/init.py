@@ -210,6 +210,7 @@ def _ensure_router_columns() -> None:
         "last_seen": "TIMESTAMP",
         "trial_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
         "trial_minutes": "INTEGER DEFAULT 30 NOT NULL",
+        "hotspot_provisioned": "BOOLEAN DEFAULT FALSE NOT NULL",
     }
     with engine.begin() as conn:
         for name, sql_type in column_types.items():
