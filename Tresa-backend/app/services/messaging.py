@@ -69,3 +69,23 @@ def sms_was_accepted(response: dict[str, Any], phone_number: str) -> bool:
             "queued",
         }
     return False
+
+
+def sms_failure_reason(response: dict[str, Any], phone_number: str) -> str:
+    message_data = response.get("SMSMessageData")
+    recipients = message_data.get("Recipients") if isinstance(message_data, dict) else None
+    if not isinstance(recipients, list):
+        return "SMS provider did not return recipient delivery details"
+    normalized_target = normalize_sms_phone(phone_number)
+    for recipient in recipients:
+        if not isinstance(recipient, dict):
+            continue
+        try:
+            recipient_number = normalize_sms_phone(str(recipient.get("number", "")))
+        except ValueError:
+            continue
+        if recipient_number == normalized_target:
+            status_name = str(recipient.get("status") or "Rejected")
+            status_code = recipient.get("statusCode")
+            return f"{status_name}{f' (provider code {status_code})' if status_code is not None else ''}"
+    return "SMS provider omitted this recipient from its response"

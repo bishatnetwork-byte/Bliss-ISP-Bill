@@ -31,6 +31,8 @@ from app.models import (
     PlatformAuditLog,
     PlatformSetting,
     VoucherActivationAudit,
+    MessageDraft,
+    MessageLog,
 )
 
 
@@ -64,6 +66,8 @@ def init_db() -> None:
         PlatformAuditLog,
         PlatformSetting,
         VoucherActivationAudit,
+        MessageDraft,
+        MessageLog,
     )
     SQLModel.metadata.create_all(engine)
     _ensure_staff_columns()
@@ -72,6 +76,7 @@ def init_db() -> None:
     _ensure_voucher_purchase_columns()
     _ensure_portal_ad_columns()
     _ensure_branch_wallet_transaction_columns()
+    _ensure_telegram_connection_columns()
     _bootstrap_platform_admins()
 
     # Seed ticket categories
@@ -136,6 +141,21 @@ def _ensure_user_platform_columns() -> None:
             'CREATE UNIQUE INDEX IF NOT EXISTS ix_user_account_subdomain '
             'ON "user" (account_subdomain) WHERE account_subdomain IS NOT NULL'
         ))
+
+
+def _ensure_telegram_connection_columns() -> None:
+    inspector = sa.inspect(engine)
+    if not inspector.has_table("telegramconnection"):
+        return
+    columns = {column["name"] for column in inspector.get_columns("telegramconnection")}
+    column_types = {
+        "secondary_chat_id": "VARCHAR",
+        "secondary_chat_title": "VARCHAR",
+    }
+    with engine.begin() as conn:
+        for name, sql_type in column_types.items():
+            if name not in columns:
+                conn.execute(sa.text(f"ALTER TABLE telegramconnection ADD COLUMN {name} {sql_type}"))
 
 
 def _bootstrap_platform_admins() -> None:

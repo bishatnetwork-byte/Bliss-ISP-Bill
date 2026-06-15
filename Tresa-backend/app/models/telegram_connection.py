@@ -29,6 +29,8 @@ class TelegramConnection(SQLModel, table=True):
     bot_username: str
     chat_id: str = Field(index=True)
     chat_title: Optional[str] = Field(default=None)
+    secondary_chat_id: Optional[str] = Field(default=None, index=True)
+    secondary_chat_title: Optional[str] = Field(default=None)
     voucher_purchases: bool = Field(default=True)
     voucher_batches: bool = Field(default=True)
     withdrawal_receipts: bool = Field(default=True)
@@ -36,4 +38,3 @@ class TelegramConnection(SQLModel, table=True):
     hourly_router_ping: bool = Field(default=True)
     connected_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-

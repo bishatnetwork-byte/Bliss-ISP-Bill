@@ -25,6 +25,7 @@ ADMIN_PERMISSIONS = {
     "finance",
     "broadcasts",
     "voucher_audit",
+    "message_diagnostics",
     "tunnels",
     "storage",
     "dns",

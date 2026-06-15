@@ -78,10 +78,13 @@ def upsert_connection(
     bot_token: str,
     bot: dict[str, Any],
     chat: dict[str, Any],
+    slot: int = 1,
 ) -> TelegramConnection:
     connection = session.exec(
         select(TelegramConnection).where(TelegramConnection.user_id == user_id)
     ).first()
+    if not connection and slot == 2:
+        raise TelegramError("Connect the primary Telegram chat first")
     if not connection:
         connection = TelegramConnection(
             user_id=user_id,
@@ -91,13 +94,21 @@ def upsert_connection(
         )
     connection.bot_token_encrypted = encrypt_secret(bot_token)
     connection.bot_username = str(bot.get("username") or "")
-    connection.chat_id = str(chat["id"])
-    connection.chat_title = (
+    chat_id = str(chat["id"])
+    chat_title = (
         chat.get("title")
         or " ".join(filter(None, [chat.get("first_name"), chat.get("last_name")]))
         or chat.get("username")
         or "Telegram chat"
     )
+    if slot == 2:
+        if connection.chat_id == chat_id:
+            raise TelegramError("The secondary Telegram chat must be different from the primary chat")
+        connection.secondary_chat_id = chat_id
+        connection.secondary_chat_title = chat_title
+    else:
+        connection.chat_id = chat_id
+        connection.chat_title = chat_title
     connection.updated_at = datetime.utcnow()
     session.add(connection)
     session.commit()
@@ -135,19 +146,28 @@ def send_connection_message(
     text: str,
     reply_markup: dict[str, Any] | None = None,
 ) -> None:
-    payload: dict[str, Any] = {
-        "chat_id": connection.chat_id,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": True,
-    }
-    if reply_markup:
-        payload["reply_markup"] = reply_markup
-    _request(
-        decrypt_secret(connection.bot_token_encrypted),
-        "sendMessage",
-        payload,
-    )
+    token = decrypt_secret(connection.bot_token_encrypted)
+    destinations = [connection.chat_id]
+    if connection.secondary_chat_id and connection.secondary_chat_id not in destinations:
+        destinations.append(connection.secondary_chat_id)
+    errors: list[str] = []
+    sent = 0
+    for chat_id in destinations:
+        payload: dict[str, Any] = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        try:
+            _request(token, "sendMessage", payload)
+            sent += 1
+        except TelegramError as exc:
+            errors.append(f"{chat_id}: {exc}")
+    if sent == 0 and errors:
+        raise TelegramError("; ".join(errors))
 
 
 def send_connection_event(

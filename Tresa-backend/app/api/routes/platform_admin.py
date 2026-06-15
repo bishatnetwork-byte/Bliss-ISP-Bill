@@ -14,6 +14,7 @@ from app.models.branch import Branch
 from app.models.branch_wallet import BranchWallet
 from app.models.platform_admin import PlatformAuditLog, VoucherActivationAudit
 from app.models.platform_ledger import PlatformLedgerEntry
+from app.models.message import MessageLog
 from app.models.router import Router
 from app.models.router_event import RouterErrorLog
 from app.models.telegram_connection import TelegramConnection
@@ -28,6 +29,7 @@ from app.schemas.platform_admin import (
     PlatformDnsRecordCreate,
     PlatformDnsZoneResponse,
     PlatformHealthResponse,
+    PlatformMessageDiagnosticResponse,
     PlatformOverviewResponse,
     PlatformSettingsResponse,
     PlatformSettingsUpdate,
@@ -648,6 +650,59 @@ def voucher_audit(
         if row.id not in audited_voucher_ids
     )
     return sorted(results, key=lambda row: row.created_at, reverse=True)[:limit]
+
+
+@router.get("/message-diagnostics", response_model=list[PlatformMessageDiagnosticResponse])
+def message_diagnostics(
+    session: SessionDep,
+    admin: User = _admin("message_diagnostics"),
+    search: str | None = Query(default=None, max_length=120),
+    status_filter: str | None = Query(default=None, max_length=20),
+    limit: int = Query(default=200, ge=1, le=1000),
+) -> list[PlatformMessageDiagnosticResponse]:
+    del admin
+    query = (
+        select(MessageLog, Branch, User)
+        .join(Branch, MessageLog.branch_id == Branch.id)
+        .join(User, MessageLog.user_id == User.id)
+    )
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+        query = query.where(sa.or_(
+            col(Branch.name).ilike(pattern),
+            col(User.full_name).ilike(pattern),
+            col(User.email).ilike(pattern),
+            col(MessageLog.message).ilike(pattern),
+            col(MessageLog.error).ilike(pattern),
+        ))
+    if status_filter and status_filter != "all":
+        query = query.where(MessageLog.status == status_filter)
+    rows = session.exec(
+        query.order_by(MessageLog.created_at.desc()).limit(limit)
+    ).all()
+    return [
+        PlatformMessageDiagnosticResponse(
+            id=entry.id,
+            branch_id=branch.id,
+            branch_name=branch.name,
+            user_id=sender.id,
+            user_name=sender.full_name,
+            message=entry.message,
+            message_type=entry.message_type,
+            recipients=list(entry.recipients or []),
+            status=entry.status,
+            sent=entry.sent,
+            failed=entry.failed,
+            results=entry.results,
+            error=entry.error,
+            cost_per_sms=entry.cost_per_sms,
+            total_charged=entry.total_charged,
+            wallet_balance=entry.wallet_balance,
+            created_at=entry.created_at,
+            updated_at=entry.updated_at,
+        )
+        for entry, branch, sender in rows
+    ]
 
 
 @router.get("/audit", response_model=list[PlatformAuditResponse])

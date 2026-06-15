@@ -22,6 +22,7 @@ import {
   HardDrive,
   Loader2,
   Mail,
+  MessageSquareWarning,
   Network,
   RefreshCw,
   Save,
@@ -43,6 +44,7 @@ const ADMIN_TABS = [
   ["finance", "Fees"],
   ["broadcasts", "Broadcasts"],
   ["voucher_audit", "Voucher Audit"],
+  ["message_diagnostics", "Message Diagnostics"],
   ["tunnels", "Tunnels"],
   ["storage", "Cloud Files"],
   ["dns", "DNS"],
@@ -128,6 +130,17 @@ export default function PlatformAdminPage() {
     queryKey: ["platformAdmin", "voucherAudit", voucherSearch],
     queryFn: () => renultApi.platformAdmin.voucherAudit(voucherSearch),
     enabled: activeTab === "voucher_audit" && permissions.has("voucher_audit"),
+  });
+  const [messageSearch, setMessageSearch] = useState("");
+  const [messageStatus, setMessageStatus] = useState("all");
+  const messageDiagnostics = useQuery({
+    queryKey: ["platformAdmin", "messageDiagnostics", messageSearch, messageStatus],
+    queryFn: () => renultApi.platformAdmin.messageDiagnostics({
+      search: messageSearch || undefined,
+      status_filter: messageStatus,
+      limit: 500,
+    }),
+    enabled: activeTab === "message_diagnostics" && permissions.has("message_diagnostics"),
   });
   const [storagePrefix, setStoragePrefix] = useState("");
   const storage = useQuery({
@@ -257,6 +270,16 @@ export default function PlatformAdminPage() {
         )}
         {activeTab === "voucher_audit" && (
             <VoucherAuditPanel rows={voucherAudit.data || []} search={voucherSearch} onSearch={setVoucherSearch} loading={voucherAudit.isLoading} />
+        )}
+        {activeTab === "message_diagnostics" && (
+          <MessageDiagnosticsPanel
+            rows={messageDiagnostics.data || []}
+            loading={messageDiagnostics.isLoading}
+            search={messageSearch}
+            onSearch={setMessageSearch}
+            status={messageStatus}
+            onStatus={setMessageStatus}
+          />
         )}
         {activeTab === "tunnels" && (
             <TunnelsPanel rows={tunnels.data || []} loading={tunnels.isLoading} onToggle={(id, active) => tunnelMutation.mutate({ id, active })} />
@@ -492,6 +515,69 @@ function VoucherAuditPanel({ rows, search, onSearch, loading }: { rows: Awaited<
   return <Panel title="Voucher Activation Audit" icon={FileClock} action={<Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Voucher, router, event" className="h-9 w-64" />}>
     {loading ? <Loading /> : <SimpleTable headers={["Time", "Voucher", "Router", "Event", "Status", "Activated", "Expires"]} rows={rows.map((x) => [formatDate(x.created_at), x.voucher_code, x.router_name, x.event, `${x.previous_status || "NEW"} → ${x.new_status}`, formatDate(x.activated_at), formatDate(x.expires_at)])} />}
   </Panel>;
+}
+
+function MessageDiagnosticsPanel({
+  rows,
+  loading,
+  search,
+  onSearch,
+  status,
+  onStatus,
+}: {
+  rows: Awaited<ReturnType<typeof renultApi.platformAdmin.messageDiagnostics>>;
+  loading: boolean;
+  search: string;
+  onSearch: (value: string) => void;
+  status: string;
+  onStatus: (value: string) => void;
+}) {
+  const action = (
+    <div className="flex gap-2">
+      <Input
+        value={search}
+        onChange={(event) => onSearch(event.target.value)}
+        placeholder="Branch, sender, message, error"
+        className="h-9 w-64"
+      />
+      <select
+        value={status}
+        onChange={(event) => onStatus(event.target.value)}
+        className="h-9 rounded border bg-background px-3 text-xs"
+      >
+        <option value="all">All statuses</option>
+        <option value="completed">Completed</option>
+        <option value="partial">Partial</option>
+        <option value="failed">Failed</option>
+        <option value="sending">Sending</option>
+      </select>
+    </div>
+  );
+  return (
+    <Panel title="SMS Delivery Diagnostics" icon={MessageSquareWarning} action={action}>
+      {loading ? <Loading /> : (
+        <SimpleTable
+          headers={["Time", "Branch / Sender", "Message", "Recipients", "Delivery", "Charge", "Failure / Provider"]}
+          rows={rows.map((row) => [
+            formatDate(row.created_at),
+            <div key={`${row.id}-owner`}><b>{row.branch_name}</b><p className="text-muted-foreground">{row.user_name}</p></div>,
+            <div key={`${row.id}-message`} className="max-w-xs"><Badge variant="outline" className="mb-1 text-[9px]">{row.message_type}</Badge><p>{row.message}</p></div>,
+            <div key={`${row.id}-recipients`}><b>{row.recipients.length}</b><p className="max-w-xs break-all text-[10px] text-muted-foreground">{row.recipients.join(", ")}</p></div>,
+            <div key={`${row.id}-status`}><Badge variant="outline">{row.status}</Badge><p className="mt-1 text-emerald-600">{row.sent} sent</p><p className="text-destructive">{row.failed} failed</p></div>,
+            <div key={`${row.id}-charge`}>{money(row.total_charged)}<p className="text-muted-foreground">Balance {money(row.wallet_balance)}</p></div>,
+            <div key={`${row.id}-error`} className="max-w-sm">
+              {row.error ? <p className="font-semibold text-destructive">{row.error}</p> : <p className="text-emerald-600">No stored error</p>}
+              {row.results.some((result) => !result.success) && (
+                <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-[9px]">
+                  {JSON.stringify(row.results.filter((result) => !result.success), null, 2)}
+                </pre>
+              )}
+            </div>,
+          ])}
+        />
+      )}
+    </Panel>
+  );
 }
 
 function TunnelsPanel({ rows, loading, onToggle }: { rows: Awaited<ReturnType<typeof renultApi.platformAdmin.tunnels>>; loading: boolean; onToggle: (id: string, active: boolean) => void }) {

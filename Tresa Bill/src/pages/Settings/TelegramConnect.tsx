@@ -53,8 +53,9 @@ function errorMessage(error: unknown, fallback: string) {
 export default function TelegramConnectPage() {
   const [connection, setConnection] = useState<TelegramConnectionResponse | null>(null);
   const [botToken, setBotToken] = useState("");
+  const [secondaryBotToken, setSecondaryBotToken] = useState("");
   const [loading, setLoading] = useState(true);
-  const [action, setAction] = useState<"connect" | "save" | "test" | "disconnect" | null>(null);
+  const [action, setAction] = useState<"connect" | "connect-secondary" | "save" | "test" | "disconnect" | "disconnect-secondary" | null>(null);
 
   useEffect(() => {
     renultApi.telegram.connection()
@@ -76,6 +77,24 @@ export default function TelegramConnectPage() {
       toast.success("Telegram connected");
     } catch (error) {
       toast.error(errorMessage(error, "Could not connect Telegram"));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const connectSecondary = async () => {
+    if (!secondaryBotToken.trim()) {
+      toast.error("Enter the same bot token after messaging the second Telegram chat");
+      return;
+    }
+    setAction("connect-secondary");
+    try {
+      const result = await renultApi.telegram.connect(secondaryBotToken.trim(), 2);
+      setConnection(result);
+      setSecondaryBotToken("");
+      toast.success("Second Telegram destination connected");
+    } catch (error) {
+      toast.error(errorMessage(error, "Could not connect the second Telegram chat"));
     } finally {
       setAction(null);
     }
@@ -117,10 +136,23 @@ export default function TelegramConnectPage() {
     setAction("disconnect");
     try {
       await renultApi.telegram.disconnect();
-      setConnection((current) => current ? { ...current, connected: false, bot_username: null, chat_id: null, chat_title: null } : current);
+      setConnection((current) => current ? { ...current, connected: false, bot_username: null, chat_id: null, chat_title: null, secondary_chat_id: null, secondary_chat_title: null } : current);
       toast.success("Telegram disconnected");
     } catch (error) {
       toast.error(errorMessage(error, "Failed to disconnect Telegram"));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const disconnectSecondary = async () => {
+    setAction("disconnect-secondary");
+    try {
+      await renultApi.telegram.disconnect(2);
+      setConnection((current) => current ? { ...current, secondary_chat_id: null, secondary_chat_title: null } : current);
+      toast.success("Second Telegram destination disconnected");
+    } catch (error) {
+      toast.error(errorMessage(error, "Failed to disconnect the second Telegram chat"));
     } finally {
       setAction(null);
     }
@@ -208,6 +240,41 @@ export default function TelegramConnectPage() {
                   Disconnect
                 </Button>
               </div>
+            </div>
+
+            <div className="border border-border/30 bg-card p-5">
+              <h2 className="text-sm font-semibold">Second notification chat</h2>
+              {connection.secondary_chat_id ? (
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium">{connection.secondary_chat_title || "Secondary Telegram chat"}</p>
+                    <p className="text-xs text-muted-foreground">Chat ID {connection.secondary_chat_id}</p>
+                  </div>
+                  <Button variant="outline" className="text-destructive" onClick={disconnectSecondary} disabled={action !== null}>
+                    {action === "disconnect-secondary" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Unplug className="mr-2 h-4 w-4" />}
+                    Disconnect second chat
+                  </Button>
+                </div>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    Add the same bot to another chat, send a message there, then paste the bot token to discover that second destination.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      autoComplete="off"
+                      placeholder="Same BotFather token"
+                      value={secondaryBotToken}
+                      onChange={(event) => setSecondaryBotToken(event.target.value)}
+                    />
+                    <Button onClick={connectSecondary} disabled={action !== null}>
+                      {action === "connect-secondary" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Add second chat
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

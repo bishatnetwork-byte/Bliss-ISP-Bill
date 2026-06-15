@@ -163,6 +163,27 @@ class PlatformVoucherAuditResponse(BaseModel):
     created_at: datetime
 
 
+class PlatformMessageDiagnosticResponse(BaseModel):
+    id: UUID
+    branch_id: UUID
+    branch_name: str
+    user_id: UUID
+    user_name: str
+    message: str
+    message_type: str
+    recipients: list[str]
+    status: str
+    sent: int
+    failed: int
+    results: Any
+    error: Optional[str]
+    cost_per_sms: int
+    total_charged: int
+    wallet_balance: int
+    created_at: datetime
+    updated_at: datetime
+
+
 class PlatformAuditResponse(BaseModel):
     id: UUID
     actor_id: Optional[UUID]

@@ -178,6 +178,27 @@ export interface PlatformVoucherAuditResponse {
   created_at: string;
 }
 
+export interface PlatformMessageDiagnosticResponse {
+  id: string;
+  branch_id: string;
+  branch_name: string;
+  user_id: string;
+  user_name: string;
+  message: string;
+  message_type: "custom" | "voucher";
+  recipients: string[];
+  status: "sending" | "completed" | "partial" | "failed";
+  sent: number;
+  failed: number;
+  results: MessageSendResult[];
+  error: string | null;
+  cost_per_sms: number;
+  total_charged: number;
+  wallet_balance: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PlatformUserDetailResponse {
   user: PlatformUserResponse;
   branches: Array<{
@@ -330,6 +351,8 @@ export interface TelegramConnectionResponse {
   bot_username: string | null;
   chat_id: string | null;
   chat_title: string | null;
+  secondary_chat_id: string | null;
+  secondary_chat_title: string | null;
   voucher_purchases: boolean;
   voucher_batches: boolean;
   withdrawal_receipts: boolean;
@@ -928,6 +951,7 @@ export interface MessageSendResult {
 }
 
 export interface BulkMessageResponse {
+  id: string;
   success: boolean;
   sent: number;
   failed: number;
@@ -935,6 +959,34 @@ export interface BulkMessageResponse {
   cost_per_sms: number;
   total_charged: number;
   wallet_balance: number;
+  created_at: string;
+}
+
+export interface MessageActivityResponse {
+  id: string;
+  branch_id: string;
+  user_id: string;
+  message: string;
+  recipients: string[];
+  message_type: "custom" | "voucher";
+  status: "sending" | "completed" | "partial" | "failed";
+  sent: number;
+  failed: number;
+  results: MessageSendResult[];
+  error: string | null;
+  cost_per_sms: number;
+  total_charged: number;
+  wallet_balance: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MessageDraftResponse {
+  id: string | null;
+  message: string;
+  message_type: "custom" | "voucher";
+  recipients: string[];
+  updated_at: string | null;
 }
 
 export interface VoucherRouterSyncResponse {
@@ -1252,10 +1304,10 @@ export const renultApi = {
   telegram: {
     connection: () =>
       apiRequest<TelegramConnectionResponse>("/telegram/connection"),
-    connect: (bot_token: string) =>
+    connect: (bot_token: string, slot = 1) =>
       apiRequest<TelegramConnectionResponse>("/telegram/connection", {
         method: "POST",
-        body: JSON.stringify({ bot_token }),
+        body: JSON.stringify({ bot_token, slot }),
       }),
     updatePreferences: (payload: TelegramPreferenceUpdate) =>
       apiRequest<TelegramConnectionResponse>("/telegram/preferences", {
@@ -1266,9 +1318,10 @@ export const renultApi = {
       apiRequest<{ success: boolean; message: string }>("/telegram/test", {
         method: "POST",
       }),
-    disconnect: () =>
+    disconnect: (slot = 1) =>
       apiRequest<{ success: boolean; message: string }>("/telegram/connection", {
         method: "DELETE",
+        query: { slot },
       }),
   },
   uploads: {
@@ -1442,6 +1495,8 @@ export const renultApi = {
       apiRequest<{ message: string }>(`/platform-admin/tunnels/${routerId}/active`, { method: "POST", query: { active } }),
     voucherAudit: (search = "") =>
       apiRequest<PlatformVoucherAuditResponse[]>("/platform-admin/voucher-audit", { query: { search: search || undefined, limit: 500 } }),
+    messageDiagnostics: (query?: { search?: string; status_filter?: string; limit?: number }) =>
+      apiRequest<PlatformMessageDiagnosticResponse[]>("/platform-admin/message-diagnostics", { query }),
     audit: () => apiRequest<PlatformAuditResponse[]>("/platform-admin/audit", { query: { limit: 500 } }),
     storage: (prefix = "") =>
       apiRequest<PlatformStorageObjectResponse[]>("/platform-admin/storage", { query: { prefix } }),
@@ -1463,6 +1518,21 @@ export const renultApi = {
     send: (branchId: string, payload: BulkMessageRequest) =>
       apiRequest<BulkMessageResponse>(`/branches/${branchId}/messages/send`, {
         method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    activity: (branchId: string, limit = 50) =>
+      apiRequest<{ activities: MessageActivityResponse[]; total: number }>(
+        `/branches/${branchId}/messages`,
+        { query: { limit } },
+      ),
+    draft: (branchId: string) =>
+      apiRequest<MessageDraftResponse>(`/branches/${branchId}/messages/draft`),
+    saveDraft: (
+      branchId: string,
+      payload: Pick<MessageDraftResponse, "message" | "message_type" | "recipients">,
+    ) =>
+      apiRequest<MessageDraftResponse>(`/branches/${branchId}/messages/draft`, {
+        method: "PUT",
         body: JSON.stringify(payload),
       }),
   },

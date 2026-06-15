@@ -28,6 +28,8 @@ def _response(connection: TelegramConnection | None) -> TelegramConnectionRespon
         bot_username=connection.bot_username if connection else None,
         chat_id=connection.chat_id if connection else None,
         chat_title=connection.chat_title if connection else None,
+        secondary_chat_id=connection.secondary_chat_id if connection else None,
+        secondary_chat_title=connection.secondary_chat_title if connection else None,
         voucher_purchases=connection.voucher_purchases if connection else True,
         voucher_batches=connection.voucher_batches if connection else True,
         withdrawal_receipts=connection.withdrawal_receipts if connection else True,
@@ -53,11 +55,11 @@ def connect_telegram(
     token = payload.bot_token.strip()
     try:
         bot, chat = discover_bot_chat(token)
-        connection = upsert_connection(session, user.id, token, bot, chat)
+        connection = upsert_connection(session, user.id, token, bot, chat, payload.slot)
         send_connection_event(
             connection,
             "connection",
-            "<b>Renult connected</b>\nTelegram notifications are now active for this account.",
+            f"<b>Renult connected</b>\nTelegram destination {payload.slot} is now active for this account.",
         )
     except TelegramError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
@@ -103,10 +105,17 @@ def test_telegram(user: CurrentUser, session: SessionDep) -> TelegramActionRespo
 
 
 @router.delete("/connection", response_model=TelegramActionResponse)
-def disconnect_telegram(user: CurrentUser, session: SessionDep) -> TelegramActionResponse:
+def disconnect_telegram(user: CurrentUser, session: SessionDep, slot: int = 1) -> TelegramActionResponse:
     connection = session.exec(
         select(TelegramConnection).where(TelegramConnection.user_id == user.id)
     ).first()
+    if connection and slot == 2:
+        connection.secondary_chat_id = None
+        connection.secondary_chat_title = None
+        connection.updated_at = datetime.utcnow()
+        session.add(connection)
+        session.commit()
+        return TelegramActionResponse(success=True, message="Secondary Telegram chat disconnected")
     if connection:
         session.delete(connection)
         session.commit()

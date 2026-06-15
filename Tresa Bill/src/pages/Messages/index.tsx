@@ -1,5 +1,6 @@
 import {
   BulkMessageResponse,
+  MessageActivityResponse,
   MessageContactResponse,
   renultApi,
 } from "@/api/foreform";
@@ -18,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   ChevronDown,
@@ -73,21 +74,31 @@ function statusStyle(status: MessageStatus) {
   return "bg-blue-500/10 text-blue-600 border-blue-500/20";
 }
 
-function readActivities(branchId: string): MessageActivity[] {
-  if (!branchId) return [];
-  try {
-    const saved = JSON.parse(localStorage.getItem(`renult:message-activity:${branchId}`) || "[]") as MessageActivity[];
-    return saved.map((activity) =>
-      activity.status === "sending"
-        ? { ...activity, status: "failed", error: "Sending was interrupted before completion." }
-        : activity,
-    );
-  } catch {
-    return [];
-  }
+function mapActivity(activity: MessageActivityResponse): MessageActivity {
+  return {
+    id: activity.id,
+    createdAt: activity.created_at,
+    message: activity.message,
+    recipients: activity.recipients,
+    type: activity.message_type,
+    status: activity.status,
+    error: activity.error || undefined,
+    response: {
+      id: activity.id,
+      success: activity.status === "completed",
+      sent: activity.sent,
+      failed: activity.failed,
+      results: activity.results,
+      cost_per_sms: activity.cost_per_sms,
+      total_charged: activity.total_charged,
+      wallet_balance: activity.wallet_balance,
+      created_at: activity.created_at,
+    },
+  };
 }
 
 export default function MessagesPage() {
+  const queryClient = useQueryClient();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("sidebar-collapsed") === "true",
   );
@@ -101,7 +112,6 @@ export default function MessagesPage() {
   const [selectedNumbers, setSelectedNumbers] = useState<string[]>([]);
   const [messageType, setMessageType] = useState<"custom" | "voucher">("voucher");
   const [message, setMessage] = useState(VOUCHER_TEMPLATE);
-  const [activities, setActivities] = useState<MessageActivity[]>(() => readActivities(branchId));
 
   useEffect(() => {
     const collapseHandler = (event: Event) => {
@@ -111,7 +121,6 @@ export default function MessagesPage() {
       const nextBranchId = (event as CustomEvent<{ id?: string }>).detail?.id || "";
       setBranchId(nextBranchId);
       setSelectedNumbers([]);
-      setActivities(readActivities(nextBranchId));
     };
     window.addEventListener("sidebar-collapse-change", collapseHandler);
     window.addEventListener("renult-branch-change", branchHandler);
@@ -121,16 +130,33 @@ export default function MessagesPage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!branchId) return;
-    localStorage.setItem(`renult:message-activity:${branchId}`, JSON.stringify(activities.slice(0, 50)));
-  }, [activities, branchId]);
-
   const contactsQuery = useQuery({
     queryKey: ["messageContacts", branchId],
     queryFn: () => renultApi.messages.contacts(branchId, { limit: 500 }),
     enabled: Boolean(branchId),
   });
+  const activitiesQuery = useQuery({
+    queryKey: ["messageActivity", branchId],
+    queryFn: () => renultApi.messages.activity(branchId),
+    enabled: Boolean(branchId),
+    refetchInterval: 15000,
+  });
+  const draftQuery = useQuery({
+    queryKey: ["messageDraft", branchId],
+    queryFn: () => renultApi.messages.draft(branchId),
+    enabled: Boolean(branchId),
+  });
+  const activities = useMemo(
+    () => (activitiesQuery.data?.activities || []).map(mapActivity),
+    [activitiesQuery.data?.activities],
+  );
+
+  useEffect(() => {
+    if (!draftQuery.data) return;
+    setMessage(draftQuery.data.message || VOUCHER_TEMPLATE);
+    setMessageType(draftQuery.data.message_type);
+    setSelectedNumbers(draftQuery.data.recipients);
+  }, [draftQuery.data]);
 
   const preferencesQuery = useQuery({
     queryKey: ["notificationPreferences"],
@@ -171,6 +197,20 @@ export default function MessagesPage() {
         use_voucher_template: payload.useVoucherTemplate,
       }),
   });
+
+  useEffect(() => {
+    if (!branchId || !draftQuery.isSuccess || sendMutation.isPending) return;
+    const timer = window.setTimeout(() => {
+      renultApi.messages.saveDraft(branchId, {
+        message,
+        message_type: messageType,
+        recipients: selectedNumbers,
+      }).then((draft) => {
+        queryClient.setQueryData(["messageDraft", branchId], draft);
+      }).catch(() => undefined);
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [branchId, draftQuery.isSuccess, message, messageType, queryClient, selectedNumbers, sendMutation.isPending]);
 
   const addNumber = (phoneNumber: string) => {
     setSelectedNumbers((current) => {
@@ -237,20 +277,8 @@ export default function MessagesPage() {
 
   const handleSend = async () => {
     if (!canSend) return;
-    const activityId = crypto.randomUUID();
     const phoneNumbers = [...selectedNumbers];
     const body = message.trim();
-    setActivities((current) => [
-      {
-        id: activityId,
-        createdAt: new Date().toISOString(),
-        message: body,
-        recipients: phoneNumbers,
-        type: messageType,
-        status: "sending",
-      },
-      ...current,
-    ]);
     setComposerOpen(false);
 
     try {
@@ -259,16 +287,8 @@ export default function MessagesPage() {
         body,
         useVoucherTemplate: messageType === "voucher",
       });
-      const status: MessageStatus = response.failed
-        ? response.sent
-          ? "partial"
-          : "failed"
-        : "completed";
-      setActivities((current) =>
-        current.map((activity) =>
-          activity.id === activityId ? { ...activity, status, response } : activity,
-        ),
-      );
+      await queryClient.invalidateQueries({ queryKey: ["messageActivity", branchId] });
+      await queryClient.invalidateQueries({ queryKey: ["messageDraft", branchId] });
       const costNote = response.total_charged
         ? ` ${response.total_charged} UGX deducted from the branch wallet (balance: ${response.wallet_balance} UGX).`
         : "";
@@ -277,13 +297,7 @@ export default function MessagesPage() {
       setSelectedNumbers([]);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Could not send messages.";
-      setActivities((current) =>
-        current.map((activity) =>
-          activity.id === activityId
-            ? { ...activity, status: "failed", error: errorMessage }
-            : activity,
-        ),
-      );
+      await queryClient.invalidateQueries({ queryKey: ["messageActivity", branchId] });
       toast.error(errorMessage);
     }
   };
@@ -347,7 +361,7 @@ export default function MessagesPage() {
             {activities.length === 0 ? (
               <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center">
                 <MessageSquareText className="h-10 w-10 text-muted-foreground/30" />
-                <p className="mt-3 text-sm font-medium">No messages sent in this session</p>
+                <p className="mt-3 text-sm font-medium">No saved messages for this branch</p>
                 <p className="mt-1 text-xs text-muted-foreground">Press Compose bulk SMS to start a new message.</p>
               </div>
             ) : (
@@ -387,8 +401,13 @@ export default function MessagesPage() {
                       {activity.response && (
                         <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
                           {activity.response.results.map((result) => (
-                            <div key={result.phone_number} className="flex items-center justify-between rounded border px-2.5 py-2 text-xs">
-                              <span className="font-mono">{result.phone_number}</span>
+                            <div key={result.phone_number} className="flex items-start justify-between gap-2 rounded border px-2.5 py-2 text-xs">
+                              <div className="min-w-0">
+                                <p className="font-mono">{result.phone_number}</p>
+                                {!result.success && (
+                                  <p className="mt-1 break-words text-[10px] text-destructive">{result.message}</p>
+                                )}
+                              </div>
                               {result.success
                                 ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                                 : <XCircle className="h-3.5 w-3.5 text-destructive" />}

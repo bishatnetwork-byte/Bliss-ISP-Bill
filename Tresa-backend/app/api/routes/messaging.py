@@ -3,6 +3,7 @@ from collections import Counter
 from datetime import datetime
 from uuid import UUID
 
+import sqlalchemy as sa
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlmodel import col, select
 
@@ -12,25 +13,61 @@ from app.db.session import SessionDep
 from app.models.branch import Branch
 from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
 from app.models.platform_ledger import PlatformLedgerEntry
+from app.models.message import MessageDraft, MessageLog
 from app.models.router import Router
 from app.models.user import User
 from app.models.voucher_purchase import VoucherPurchase
 from app.schemas.messaging import (
     BulkMessageRequest,
     BulkMessageResponse,
+    MessageActivityListResponse,
+    MessageActivityResponse,
     MessageContactListResponse,
     MessageContactResponse,
     MessageSendResult,
+    MessageDraftResponse,
+    MessageDraftUpdate,
 )
 from app.services.access import require_branch_access
 from app.services.messaging import (
     normalize_sms_phone,
     render_voucher_message,
     send_sms,
+    sms_failure_reason,
     sms_was_accepted,
 )
 
 router = APIRouter(tags=["Messaging"])
+
+
+def _activity_response(row: MessageLog) -> MessageActivityResponse:
+    return MessageActivityResponse(
+        id=str(row.id),
+        branch_id=str(row.branch_id),
+        user_id=str(row.user_id),
+        message=row.message,
+        recipients=list(row.recipients or []),
+        message_type=row.message_type,
+        status=row.status,
+        sent=row.sent,
+        failed=row.failed,
+        results=[MessageSendResult(**result) for result in (row.results or [])],
+        error=row.error,
+        cost_per_sms=row.cost_per_sms,
+        total_charged=row.total_charged,
+        wallet_balance=row.wallet_balance,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def _fail_log(session: SessionDep, row: MessageLog, error: str) -> None:
+    row.status = "failed"
+    row.failed = max(row.failed, len(row.recipients or []))
+    row.error = error
+    row.updated_at = datetime.utcnow()
+    session.add(row)
+    session.commit()
 
 
 def _charge_bulk_sms(session: SessionDep, branch: Branch, user: User, count: int) -> tuple[int, int]:
@@ -145,6 +182,92 @@ def list_message_contacts(
     return MessageContactListResponse(contacts=contacts[:limit], total=len(contacts))
 
 
+@router.get(
+    "/branches/{branch_id}/messages",
+    response_model=MessageActivityListResponse,
+)
+def list_message_activity(
+    branch_id: UUID,
+    user: CurrentUser,
+    session: SessionDep,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> MessageActivityListResponse:
+    require_branch_access(session, branch_id, user, "support")
+    rows = session.exec(
+        select(MessageLog)
+        .where(MessageLog.branch_id == branch_id)
+        .order_by(MessageLog.created_at.desc())
+        .limit(limit)
+    ).all()
+    return MessageActivityListResponse(
+        activities=[_activity_response(row) for row in rows],
+        total=len(rows),
+    )
+
+
+@router.get(
+    "/branches/{branch_id}/messages/draft",
+    response_model=MessageDraftResponse,
+)
+def get_message_draft(
+    branch_id: UUID,
+    user: CurrentUser,
+    session: SessionDep,
+) -> MessageDraftResponse:
+    require_branch_access(session, branch_id, user, "support")
+    draft = session.exec(
+        select(MessageDraft)
+        .where(MessageDraft.branch_id == branch_id)
+        .where(MessageDraft.user_id == user.id)
+    ).first()
+    if not draft:
+        return MessageDraftResponse(message="", message_type="voucher", recipients=[])
+    return MessageDraftResponse(
+        id=str(draft.id),
+        message=draft.message,
+        message_type=draft.message_type,
+        recipients=list(draft.recipients or []),
+        updated_at=draft.updated_at,
+    )
+
+
+@router.put(
+    "/branches/{branch_id}/messages/draft",
+    response_model=MessageDraftResponse,
+)
+def save_message_draft(
+    branch_id: UUID,
+    payload: MessageDraftUpdate,
+    user: CurrentUser,
+    session: SessionDep,
+) -> MessageDraftResponse:
+    require_branch_access(session, branch_id, user, "support")
+    recipients: list[str] = []
+    for value in payload.recipients:
+        normalized = normalize_sms_phone(value)
+        if normalized not in recipients:
+            recipients.append(normalized)
+    draft = session.exec(
+        select(MessageDraft)
+        .where(MessageDraft.branch_id == branch_id)
+        .where(MessageDraft.user_id == user.id)
+    ).first() or MessageDraft(branch_id=branch_id, user_id=user.id)
+    draft.message = payload.message
+    draft.message_type = payload.message_type
+    draft.recipients = recipients
+    draft.updated_at = datetime.utcnow()
+    session.add(draft)
+    session.commit()
+    session.refresh(draft)
+    return MessageDraftResponse(
+        id=str(draft.id),
+        message=draft.message,
+        message_type=draft.message_type,
+        recipients=list(draft.recipients or []),
+        updated_at=draft.updated_at,
+    )
+
+
 @router.post(
     "/branches/{branch_id}/messages/send",
     response_model=BulkMessageResponse,
@@ -157,37 +280,55 @@ def send_bulk_message(
 ) -> BulkMessageResponse:
     branch, _staff = require_branch_access(session, branch_id, user, "support")
     contacts = contact_map(session, branch_id)
+    activity = MessageLog(
+        branch_id=branch_id,
+        user_id=user.id,
+        message=payload.message.strip(),
+        message_type="voucher" if payload.use_voucher_template else "custom",
+        recipients=list(payload.phone_numbers),
+        cost_per_sms=settings.sms_notification_cost,
+    )
+    session.add(activity)
+    session.commit()
+    session.refresh(activity)
 
     requested_numbers: list[str] = []
     for value in payload.phone_numbers:
         try:
             phone_number = normalize_sms_phone(value)
         except ValueError as exc:
+            _fail_log(session, activity, str(exc))
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
         if payload.use_voucher_template and phone_number not in contacts:
+            error = f"{phone_number} has no voucher token for this branch"
+            _fail_log(session, activity, error)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"{phone_number} has no voucher token for this branch",
+                detail=error,
             )
         if phone_number not in requested_numbers:
             requested_numbers.append(phone_number)
 
     message = payload.message.strip()
     if payload.use_voucher_template and "{code}" not in message and "{}" not in message:
+        error = "Voucher messages must include {code} or {}"
+        _fail_log(session, activity, error)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Voucher messages must include {code} or {}",
+            detail=error,
         )
 
     cost_per_sms = settings.sms_notification_cost
     wallet = session.exec(select(BranchWallet).where(BranchWallet.branch_id == branch.id)).first()
     if not wallet or wallet.is_frozen or wallet.balance < cost_per_sms:
+        error = (
+            f"Insufficient branch wallet balance. Each SMS costs {cost_per_sms} UGX — "
+            "top up the branch wallet to send messages."
+        )
+        _fail_log(session, activity, error)
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=(
-                f"Insufficient branch wallet balance. Each SMS costs {cost_per_sms} UGX — "
-                "top up the branch wallet to send messages."
-            ),
+            detail=error,
         )
 
     results: list[MessageSendResult] = []
@@ -203,7 +344,7 @@ def send_bulk_message(
                         MessageSendResult(
                             phone_number=phone_number,
                             success=accepted,
-                            message=rendered,
+                            message=rendered if accepted else sms_failure_reason(response, phone_number),
                             provider_response=response,
                         )
                     )
@@ -223,17 +364,19 @@ def send_bulk_message(
                 MessageSendResult(
                     phone_number=phone_number,
                     success=sms_was_accepted(response, phone_number),
-                    message=message,
+                    message=message if sms_was_accepted(response, phone_number) else sms_failure_reason(response, phone_number),
                     provider_response=response,
                 )
                 for phone_number in requested_numbers
             ]
     except RuntimeError as exc:
+        _fail_log(session, activity, str(exc))
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
     except Exception as exc:
+        _fail_log(session, activity, f"Africa's Talking SMS request failed: {exc}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Africa's Talking SMS request failed: {exc}",
@@ -242,7 +385,24 @@ def send_bulk_message(
     sent = sum(result.success for result in results)
     failed = len(results) - sent
     total_charged, wallet_balance = _charge_bulk_sms(session, branch, user, sent)
+    activity.recipients = requested_numbers
+    activity.status = "completed" if failed == 0 else "partial" if sent else "failed"
+    activity.sent = sent
+    activity.failed = failed
+    activity.results = [result.model_dump(mode="json") for result in results]
+    activity.error = None if sent else next((result.message for result in results if not result.success), None)
+    activity.total_charged = total_charged
+    activity.wallet_balance = wallet_balance
+    activity.updated_at = datetime.utcnow()
+    session.add(activity)
+    session.exec(
+        sa.delete(MessageDraft)
+        .where(MessageDraft.branch_id == branch_id)
+        .where(MessageDraft.user_id == user.id)
+    )
+    session.commit()
     return BulkMessageResponse(
+        id=str(activity.id),
         success=failed == 0,
         sent=sent,
         failed=failed,
@@ -250,4 +410,5 @@ def send_bulk_message(
         cost_per_sms=cost_per_sms,
         total_charged=total_charged,
         wallet_balance=wallet_balance,
+        created_at=activity.created_at,
     )

@@ -21,6 +21,7 @@ from app.models.telegram_connection import TelegramConnection
 from app.models.portal_ad import PortalAd
 from app.models.portal_ad_event import PortalAdEvent
 from app.models.platform_admin import PlatformAuditLog, PlatformSetting, VoucherActivationAudit
+from app.models.message import MessageDraft, MessageLog
 
 __all__ = [
     "EmailVerification",
@@ -51,4 +52,6 @@ __all__ = [
     "PlatformAuditLog",
     "PlatformSetting",
     "VoucherActivationAudit",
+    "MessageDraft",
+    "MessageLog",
 ]
