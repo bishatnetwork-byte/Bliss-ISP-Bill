@@ -3,10 +3,11 @@ import SEO from "@/components/SEO";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { renultApi, WalletTransactionResponse } from "@/api/foreform";
 import { useBranchTransactions } from "@/hooks/useWallet";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, Loader2, RefreshCw, RotateCcw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 function StatusBadge({ status }: { status: string }) {
@@ -20,6 +21,10 @@ function StatusBadge({ status }: { status: string }) {
 export default function WithdrawalHistory() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("sidebar-collapsed") === "true");
   const [branchId, setBranchId] = useState(() => localStorage.getItem("selected-workspace") || "");
+  // Overrides for individual transactions updated via status check
+  const [overrides, setOverrides] = useState<Record<string, WalletTransactionResponse>>({});
+  const [checking, setChecking] = useState<Record<string, boolean>>({});
+  const autoCheckedRef = useRef(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -35,6 +40,31 @@ export default function WithdrawalHistory() {
 
   const { data: transactions, isLoading, refetch, isFetching } = useBranchTransactions(branchId, { limit: 100 });
   const withdrawals = (transactions ?? []).filter((t) => t.transaction_type === "withdrawal");
+
+  const recheckOne = async (txn: WalletTransactionResponse) => {
+    if (!branchId || checking[txn.id]) return;
+    setChecking((prev) => ({ ...prev, [txn.id]: true }));
+    try {
+      const updated = await renultApi.wallets.checkWithdrawalStatus(branchId, txn.id);
+      setOverrides((prev) => ({ ...prev, [txn.id]: updated }));
+    } catch {
+      // silently ignore — stale data stays visible
+    } finally {
+      setChecking((prev) => ({ ...prev, [txn.id]: false }));
+    }
+  };
+
+  // Auto-recheck any PROCESSING transactions once when data first loads
+  useEffect(() => {
+    if (autoCheckedRef.current || !branchId || withdrawals.length === 0) return;
+    const processing = withdrawals.filter((t) => t.status.toLowerCase() === "processing");
+    if (processing.length === 0) return;
+    autoCheckedRef.current = true;
+    processing.forEach((t) => recheckOne(t));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [withdrawals.length, branchId]);
+
+  const display = (txn: WalletTransactionResponse) => overrides[txn.id] ?? txn;
 
   return (
     <div className={cn("min-h-screen bg-background transition-all duration-300", sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[280px]")}>
@@ -52,7 +82,7 @@ export default function WithdrawalHistory() {
               <p className="text-xs text-muted-foreground">{withdrawals.length} withdrawal{withdrawals.length !== 1 ? "s" : ""}</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => refetch()} disabled={isFetching}>
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => { autoCheckedRef.current = false; refetch(); }} disabled={isFetching}>
             <RefreshCw className={cn("w-3.5 h-3.5", isFetching && "animate-spin")} />
             Refresh
           </Button>
@@ -80,29 +110,49 @@ export default function WithdrawalHistory() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {withdrawals.map((txn) => (
-                  <TableRow key={txn.id} className="hover:bg-muted/30">
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(txn.created_at).toLocaleDateString()}{" "}
-                      <span className="text-[10px]">{new Date(txn.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                    </TableCell>
-                    <TableCell className="text-xs font-medium">
-                      {txn.recipient_phone ?? <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="text-xs text-right font-mono">
-                      UGX {txn.amount.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-xs text-right font-mono text-muted-foreground">
-                      {txn.fee_amount > 0 ? `UGX ${txn.fee_amount.toLocaleString()}` : "—"}
-                    </TableCell>
-                    <TableCell className="text-xs text-right font-mono font-semibold text-emerald-700">
-                      UGX {txn.net_amount.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <StatusBadge status={txn.status} />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {withdrawals.map((raw) => {
+                  const txn = display(raw);
+                  const isChecking = !!checking[txn.id];
+                  const isProcessing = txn.status.toLowerCase() === "processing";
+                  return (
+                    <TableRow key={txn.id} className="hover:bg-muted/30">
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(txn.created_at).toLocaleDateString()}{" "}
+                        <span className="text-[10px]">{new Date(txn.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                      </TableCell>
+                      <TableCell className="text-xs font-medium">
+                        {txn.recipient_phone ?? <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell className="text-xs text-right font-mono">
+                        UGX {txn.amount.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-xs text-right font-mono text-muted-foreground">
+                        {txn.fee_amount > 0 ? `UGX ${txn.fee_amount.toLocaleString()}` : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-right font-mono font-semibold text-emerald-700">
+                        UGX {txn.net_amount.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {isChecking ? (
+                            <Loader2 className="w-3 h-3 animate-spin text-amber-500" />
+                          ) : (
+                            <StatusBadge status={txn.status} />
+                          )}
+                          {isProcessing && !isChecking && (
+                            <button
+                              onClick={() => recheckOne(raw)}
+                              className="text-muted-foreground hover:text-foreground transition-colors"
+                              title="Re-check status with gateway"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

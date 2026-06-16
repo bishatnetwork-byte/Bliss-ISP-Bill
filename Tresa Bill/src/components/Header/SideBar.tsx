@@ -19,12 +19,15 @@ import {
   ChevronsUpDown,
   CircleUser,
   Globe,
+  History,
   Home,
+  LucidePercentSquare,
   Megaphone,
   MessagesSquare,
   MoreHorizontal,
   Network,
   Package,
+  PackagePlusIcon,
   PackageSearchIcon,
   PanelLeft,
   Plus,
@@ -63,18 +66,22 @@ const primaryNavItems: NavItem[] = [
     path: "/",
   },
   {
-    label: "Mikrotiks",
-    icon: <MikrotikIcon className="w-5 h-5" />, //Mikrotiks Router
-    path: "/router",
+    label: "My Active Users",
+    icon: <LucidePercentSquare className="w-5 h-5" />, //Mikrotiks Router
+    path: "/active-users",
+  },
+  {
+    label: "Wifi Prices / Packages",
+    icon: <PackagePlusIcon className="w-5 h-5" />, //Mikrotiks Router
+    path: "/packages",
   },
   {
     label: "Vouchers & Users",
     icon: <VoucherIcon className="w-5 h-5" />,
     path: "/vouchers",
     submenu: [
+      { label: "Create Vouchers", path: "/vouchers", icon: <Ticket className="w-4 h-4" /> },
       { label: "Vouchers", path: "/vouchers", icon: <Ticket className="w-4 h-4" /> },
-      { label: "Packages", path: "/packages", icon: <Package className="w-4 h-4" /> },
-      { label: "Active Users", path: "/vouchers/active-users", icon: <Users className="w-4 h-4" /> },
     ],
   },
   {
@@ -96,22 +103,32 @@ const supportNavItems: NavItem[] = [
     path: "/voucher-support",
   },
   {
-    label: "Network Tree",
-    icon: <Network className="w-5 h-5" />,
-    path: "/network",
+    label: "Transactions",
+    icon: <History className="w-5 h-5" />,
+    path: "/transactions"
+  }
+];
+
+const secondaryNavItems: NavItem[] = [
+  {
+    label: "Mikrotiks",
+    icon: <MikrotikIcon className="w-5 h-5" />, //Mikrotiks Router
+    path: "/router",
   },
   {
     label: "Captive Portal",
     icon: <PackageSearchIcon className="w-5 h-5" />,
     path: "/captive-portals",
   },
-];
-
-const secondaryNavItems: NavItem[] = [
   {
     label: "Remote Access",
     icon: <Globe className="w-5 h-5" />,
     path: "/remote-access",
+  },
+  {
+    label: "Network Tree",
+    icon: <Network className="w-5 h-5" />,
+    path: "/network",
   },
   {
     label: "Branches & Staff",

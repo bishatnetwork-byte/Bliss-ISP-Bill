@@ -1563,6 +1563,8 @@ export const renultApi = {
       apiRequest<WithdrawalChallengeResponse>(`/wallets/branch/${branchId}/withdrawal-challenges`, { method: "POST", body: JSON.stringify(payload) }),
     confirmWithdrawal: (branchId: string, payload: WithdrawalConfirmRequest) =>
       apiRequest<WithdrawalConfirmResponse>(`/wallets/branch/${branchId}/withdrawal-confirmations`, { method: "POST", body: JSON.stringify(payload) }),
+    checkWithdrawalStatus: (branchId: string, transactionId: string) =>
+      apiRequest<WalletTransactionResponse>(`/wallets/branch/${branchId}/withdrawals/${transactionId}/status`),
     platformSummary: () =>
       apiRequest<PlatformSummaryResponse>("/wallets/platform/summary"),
     platformClients: () =>
