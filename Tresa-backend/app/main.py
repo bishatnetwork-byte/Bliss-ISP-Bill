@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.routes import ads, auth, health, monitoring, notification, branch, messaging, package, payment_gateway, platform_admin, portal, router, staff, telegram, ticket, upload, wallet
 from app.db.init import init_db
@@ -18,11 +20,23 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["*"],
     )
+
+    # CORSMiddleware doesn't reliably add headers to error responses — handle
+    # it explicitly so the browser can read the error detail instead of showing
+    # a generic "Failed to fetch".
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+        origin = request.headers.get("origin", "*")
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers={"Access-Control-Allow-Origin": origin},
+        )
 
     @app.on_event("startup")
     def on_startup() -> None:
