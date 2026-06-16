@@ -28,7 +28,7 @@ from app.models.wallet import Wallet
 from app.services import renult_pay
 from app.services import wallet as wallet_svc
 from app.services.routers.Packages import get_router_packages
-from app.services.routers.routeros import router_connection
+from app.services.routers.routeros import RouterApiSession, router_connection
 from app.services.storage import STORAGE_ERRORS, object_url, refresh_logo_url, upload_bytes
 from app.services.telegram import branch_has_event_connection, send_branch_event, verified_phone_name
 from app.services.platform_admin import get_setting
@@ -1009,17 +1009,88 @@ def push_captive_portal_to_r2(
     return {"success": True, "files": files, "error": None}
 
 
+# ── Deploy-via-fetch helpers ───────────────────────────────────────────────
+
+
+def _ensure_router_directory(ros: RouterApiSession, directory: str) -> bool:
+    """
+    Confirm *directory* exists on the router, creating it when absent.
+
+    Returns True when the directory is ready to receive files.  The ``/file
+    add`` call is a no-op on RouterOS if the directory already exists (it
+    raises a harmless error that we catch and verify by listing instead).
+    """
+    try:
+        ros.api.get_resource("/file").add(name=directory, type="directory")
+        return True
+    except Exception:
+        pass
+    try:
+        entries = ros.api.get_resource("/file").get(name=directory)
+        if entries and str(entries[0].get("type", "")).lower() in ("directory", "dir"):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _is_permission_denied(error: str) -> bool:
+    """Return True when *error* describes a filesystem permission problem."""
+    low = error.lower()
+    return any(kw in low for kw in ("permission", "denied", "not permitted", "cannot write"))
+
+
+def _verify_router_files(
+    ros: RouterApiSession,
+    directory: str,
+    filenames: list[str],
+) -> tuple[set[str], set[str]]:
+    """
+    Read ``/file print`` and return *(verified, unverified)* sets.
+
+    A file is verified when it appears under ``<directory>/`` with ``size > 0``.
+    Returns the full *filenames* set as unverified if the API call fails.
+    """
+    prefix = f"{directory}/"
+    present: dict[str, int] = {}
+    try:
+        for entry in ros.api.get_resource("/file").get():
+            name = str(entry.get("name", "")).replace("\\", "/")
+            if name.startswith(prefix):
+                basename = name[len(prefix):]
+                if "/" not in basename:  # skip nested paths
+                    present[basename] = int(entry.get("size", 0) or 0)
+    except Exception:
+        return set(), set(filenames)
+
+    verified = {fn for fn in filenames if present.get(fn, 0) > 0}
+    return verified, set(filenames) - verified
+
+
 def deploy_captive_portal_via_fetch(
     router: Router,
     template: str = "renault",
     session: Session | None = None,
 ) -> dict[str, Any]:
     """
-    Push the rendered captive portal to R2, then have the router pull each file
-    down with `/tool fetch` over its API connection and point the hotspot
-    profile(s) at the resulting directory.
+    Push the rendered captive portal to R2, then have the router pull each
+    file down with ``/tool fetch`` over its API connection and point the
+    hotspot profile(s) at the resulting directory.
+
+    Deployment procedure
+    --------------------
+    1. Upload template files to R2 with 2-hour presigned URLs.
+    2. Verify the target directory exists on the router; create it if absent.
+       If it cannot be created, fall back immediately to ``hotspot/``.
+    3. Fetch every file: backend URL first (short, never expires, all RouterOS
+       versions), R2 presigned as fallback.
+    4. If any fetch fails with a permission error, switch to ``hotspot/`` and
+       re-fetch everything there from scratch.
+    5. After fetching, verify each file with ``/file print`` (size > 0).
+    6. Re-fetch any missing or zero-byte files once.
+    7. Update the hotspot server profile(s) to point at the deployed directory.
     """
-    upload_result = push_captive_portal_to_r2(router, template, expires_in=3600)
+    upload_result = push_captive_portal_to_r2(router, template, expires_in=7200)
     if not upload_result["success"]:
         return {
             "success": False,
@@ -1031,91 +1102,153 @@ def deploy_captive_portal_via_fetch(
         }
 
     router_directory = _router_directory_name(router.name)
-    fetched_files: list[str] = []
-    fetch_errors: list[str] = []
     items = _ordered_portal_files(upload_result["files"])
-
-    # `/tool fetch` can occasionally run past the routeros_api default 15s
-    # socket timeout (slow DNS/TLS to R2 from the router's WAN link). A
-    # timeout on one file leaves the underlying socket closed but still
-    # referenced by this connection, so every later call on it fails with
-    # "[Errno 9] Bad file descriptor". Give fetches more headroom and open a
-    # fresh connection after any per-file error so one bad file can't take
-    # down the rest of the deploy.
     FETCH_SOCKET_TIMEOUT = 60.0
 
+    fetched_files: list[str] = []
+    fetch_errors: list[str] = []
+    r2_fallback_files: list[str] = []   # files served from R2 instead of backend
     retry_counts: dict[str, int] = {}
-    fallback_files: list[str] = []
-    for remote_name, r2_url in items:
-        urls = [r2_url, _portal_backend_file_url(router, remote_name)]
-        errors: list[str] = []
-        fetched = False
-        for source_index, url in enumerate(urls):
-            attempts_for_source = 1 if source_index == 0 else 2
-            for attempt in range(1, attempts_for_source + 1):
-                retry_counts[remote_name] = retry_counts.get(remote_name, 0) + 1
-                try:
-                    with router_connection(router, socket_timeout=FETCH_SOCKET_TIMEOUT) as api:
-                        try:
-                            api.get_resource("/file").add(name=router_directory, type="directory")
-                        except Exception:
-                            pass
-                        replies = api.get_resource("/tool").call("fetch", {
+    target_directory = router_directory
+    used_hotspot_fallback = False
+
+    # ── Inner fetch loop (runs once per directory — custom, then hotspot/) ──
+    def _run_fetch_loop(ros: RouterApiSession, batch: list[tuple[str, str]], target: str) -> None:
+        for remote_name, r2_url in batch:
+            backend_url = _portal_backend_file_url(router, remote_name)
+            urls = [backend_url, r2_url]
+            errors: list[str] = []
+            fetched = False
+
+            for source_index, url in enumerate(urls):
+                for attempt in range(1, 3):
+                    retry_counts[remote_name] = retry_counts.get(remote_name, 0) + 1
+                    try:
+                        replies = ros.api.get_resource("/tool").call("fetch", {
                             "url": url,
-                            "dst-path": f"{router_directory}/{remote_name}",
+                            "dst-path": f"{target}/{remote_name}",
                             "mode": "https",
                             "check-certificate": "no",
                         })
-                        fetch_status = replies[-1].get("status") if replies else None
-                        if fetch_status and fetch_status != "finished":
-                            raise RuntimeError(str(fetch_status))
-                    fetched_files.append(remote_name)
-                    if source_index == 1:
-                        fallback_files.append(remote_name)
-                    fetched = True
+                        status = replies[-1].get("status") if replies else None
+                        if status and status != "finished":
+                            raise RuntimeError(str(status))
+                        fetched_files.append(remote_name)
+                        if source_index == 1:
+                            r2_fallback_files.append(remote_name)
+                        fetched = True
+                        break
+                    except OSError as exc:
+                        errors.append(f"src{source_index + 1}/att{attempt}: {exc}")
+                        if attempt < 2:
+                            try:
+                                ros.reconnect()
+                                _ensure_router_directory(ros, target)
+                            except Exception as reconnect_exc:
+                                errors.append(f"reconnect: {reconnect_exc}")
+                                break
+                    except Exception as exc:
+                        errors.append(f"src{source_index + 1}/att{attempt}: {exc}")
+                        break
+                if fetched:
                     break
-                except Exception as exc:
-                    errors.append(f"source {source_index + 1}, attempt {attempt}: {exc}")
-            if fetched:
-                break
-        if not fetched:
-            fetch_errors.append(f"{remote_name}: {'; '.join(errors)}")
 
+            if not fetched:
+                fetch_errors.append(f"{remote_name}: {'; '.join(errors)}")
+
+    with RouterApiSession(router, socket_timeout=FETCH_SOCKET_TIMEOUT) as ros:
+
+        # ── 1. Verify / create target directory ────────────────────────
+        if not _ensure_router_directory(ros, target_directory):
+            logger.warning(
+                "Could not create /%s on %s — falling back to hotspot/",
+                target_directory, router.name,
+            )
+            target_directory = "hotspot"
+            used_hotspot_fallback = True
+            _ensure_router_directory(ros, "hotspot")
+
+        # ── 2. Fetch all files ─────────────────────────────────────────
+        _run_fetch_loop(ros, items, target_directory)
+
+        # ── 3. Fall back to hotspot/ on permission errors ──────────────
+        if (
+            not used_hotspot_fallback
+            and target_directory != "hotspot"
+            and any(_is_permission_denied(e) for e in fetch_errors)
+        ):
+            logger.info(
+                "Permission denied writing to /%s on %s — retrying in hotspot/",
+                target_directory, router.name,
+            )
+            used_hotspot_fallback = True
+            target_directory = "hotspot"
+            _ensure_router_directory(ros, "hotspot")
+            fetched_files.clear()
+            fetch_errors.clear()
+            r2_fallback_files.clear()
+            retry_counts.clear()
+            _run_fetch_loop(ros, items, "hotspot")
+
+        # ── 4. Verify each file exists with size > 0 ───────────────────
+        _, unverified = _verify_router_files(ros, target_directory, list(set(fetched_files)))
+
+        # ── 5. Re-fetch missing or zero-byte files once ────────────────
+        if unverified:
+            logger.info(
+                "Re-fetching %d unverified file(s) on %s: %s",
+                len(unverified), router.name, ", ".join(sorted(unverified)),
+            )
+            retry_batch = [(name, url) for name, url in items if name in unverified]
+            for fn in unverified:
+                while fn in fetched_files:
+                    fetched_files.remove(fn)
+            _run_fetch_loop(ros, retry_batch, target_directory)
+            _, still_missing = _verify_router_files(ros, target_directory, list(unverified))
+            for fn in still_missing:
+                fetch_errors.append(f"{fn}: absent or zero-byte after re-fetch")
+
+    # ── 6. Require at least one file to have been fetched ─────────────
     if not fetched_files:
         return {
             "success": False,
-            "fetched_files": fetched_files,
-            "deployed_directory": router_directory,
+            "fetched_files": [],
+            "deployed_directory": target_directory,
             "updated_profiles": [],
             "error": "; ".join(fetch_errors) or "No captive portal files were fetched.",
-            "diagnostics": {"fetch_errors": "; ".join(fetch_errors)} if fetch_errors else {},
+            "diagnostics": {
+                "fetch_errors": "; ".join(fetch_errors),
+                "used_hotspot_fallback": str(used_hotspot_fallback),
+            },
         }
 
+    # ── 7. Update hotspot profile(s) ──────────────────────────────────
     try:
         updated_profiles, allowed_hosts = _set_hotspot_portal_configuration(
-            router,
-            router_directory,
-            template,
-            session,
+            router, target_directory, template, session,
         )
     except Exception as exc:
         return {
             "success": False,
             "fetched_files": fetched_files,
-            "deployed_directory": router_directory,
+            "deployed_directory": target_directory,
             "updated_profiles": [],
-            "error": f"Files were fetched, but updating the hotspot profile failed: {exc}",
-            "diagnostics": {"fetch_errors": "; ".join(fetch_errors)} if fetch_errors else {},
+            "error": f"Files fetched but updating the hotspot profile failed: {exc}",
+            "diagnostics": {
+                "fetch_errors": "; ".join(fetch_errors) if fetch_errors else None,
+                "used_hotspot_fallback": str(used_hotspot_fallback),
+            },
         }
 
-    diagnostics = {
+    diagnostics: dict[str, Any] = {
         "walled_garden_hosts": ",".join(allowed_hosts) or "none",
         "walled_garden_script": _WALLED_GARDEN_SYNC_NAME,
         "updated_hotspot_profiles": ",".join(updated_profiles) or "none",
-        "fetch_attempts": ",".join(f"{name}:{count}" for name, count in retry_counts.items()),
+        "fetch_attempts": ",".join(f"{n}:{c}" for n, c in retry_counts.items()),
+        "used_hotspot_fallback": str(used_hotspot_fallback),
     }
-    if fallback_files:
-        diagnostics["backend_fallback_files"] = ",".join(fallback_files)
+    if r2_fallback_files:
+        diagnostics["r2_fallback_files"] = ",".join(r2_fallback_files)
     if fetch_errors:
         diagnostics["fetch_errors"] = "; ".join(fetch_errors)
 
@@ -1123,11 +1256,11 @@ def deploy_captive_portal_via_fetch(
         return {
             "success": False,
             "fetched_files": fetched_files,
-            "deployed_directory": router_directory,
+            "deployed_directory": target_directory,
             "updated_profiles": [],
             "error": (
-                f"Files were fetched into /{router_directory}, but no active hotspot server profile "
-                "was found to update its html-directory."
+                f"Files fetched into /{target_directory}, but no active hotspot server "
+                "profile was found to update its html-directory."
             ),
             "diagnostics": diagnostics,
         }
@@ -1139,10 +1272,10 @@ def deploy_captive_portal_via_fetch(
     return {
         "success": not missing_essential,
         "fetched_files": fetched_files,
-        "deployed_directory": router_directory,
+        "deployed_directory": target_directory,
         "updated_profiles": updated_profiles,
         "error": (
-            f"Essential captive files could not be deployed: {', '.join(missing_essential)}"
+            f"Essential portal files could not be deployed: {', '.join(missing_essential)}"
             if missing_essential
             else None
         ),
@@ -1158,6 +1291,24 @@ def push_captive_files_to_mikrotik(
     ftp_port: int | None = None,
     session: Session | None = None,
 ) -> dict[str, Any]:
+    # CHR-tunneled routers reach the backend via a NAT rule that maps only the
+    # RouterOS API port (8728) and Winbox port through the CHR.  FTP port 21 is
+    # not forwarded, so plaintext FTP will never connect.  Tell the caller to
+    # use the /tool-fetch deploy path instead.
+    if router.nat_port is not None and not ftp_port:
+        return {
+            "success": False,
+            "pushed_files": [],
+            "deployed_directory": None,
+            "updated_profiles": [],
+            "error": (
+                "This router connects through the Tresa CHR tunnel. "
+                "FTP port 21 is not forwarded through the tunnel — use 'Deploy via /tool fetch' "
+                "instead, which uses the existing API connection."
+            ),
+            "diagnostics": {"nat_port": str(router.nat_port), "router_host": str(router.host)},
+        }
+
     template_dir = PORTAL_ROOT / template
     if not template_dir.exists():
         return {

@@ -29,6 +29,58 @@ def router_defaults() -> dict[str, Any]:
     }
 
 
+class RouterApiSession:
+    """A RouterOS API connection that survives individual broken-socket errors.
+
+    Use as a context manager.  After catching an ``OSError`` (e.g. '[Errno 9]
+    Bad file descriptor' left by a timed-out ``/tool fetch``), call
+    ``reconnect()`` to get a fresh socket and continue the loop without
+    tearing down the whole ``with`` block.
+    """
+
+    def __init__(self, router: Router, socket_timeout: float | None = None) -> None:
+        self._router = router
+        self._socket_timeout = socket_timeout
+        self._pool: Any | None = None
+        self.api: Any | None = None
+
+    def connect(self) -> None:
+        self._close()
+        if routeros_api is None:
+            raise RuntimeError("routeros-api is not installed")
+        pool = routeros_api.RouterOsApiPool(
+            self._router.host,
+            username=self._router.username,
+            password=decrypt_secret(self._router.password),
+            port=self._router.port,
+            plaintext_login=self._router.plaintext_login,
+        )
+        if self._socket_timeout is not None:
+            pool.socket_timeout = self._socket_timeout
+        self._pool = pool
+        self.api = pool.get_api()
+
+    def reconnect(self) -> None:
+        """Replace a broken socket with a fresh connection."""
+        self.connect()
+
+    def _close(self) -> None:
+        if self._pool is not None:
+            try:
+                self._pool.disconnect()
+            except Exception:
+                pass
+            self._pool = None
+            self.api = None
+
+    def __enter__(self) -> "RouterApiSession":
+        self.connect()
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        self._close()
+
+
 @contextmanager
 def router_connection(router: Router, socket_timeout: float | None = None) -> Iterator[Any]:
     if routeros_api is None:
