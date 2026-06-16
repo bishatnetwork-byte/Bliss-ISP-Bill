@@ -34,6 +34,7 @@ import SalesIndex from './pages/Sales/index';
 import CustomerDetail from './pages/Sales/CustomerDetail';
 import Withdrawal from './pages/Sales/Withdrawal';
 import WithdrawalHistory from './pages/Sales/WithdrawalHistory';
+import TransactionsPage from './pages/History/Transcations';
 import SupportsIndex from './pages/Supports/index';
 import VouchersIndex from './pages/Vouchers/index';
 import CreateVouchers from './pages/Vouchers/CreateVouchers';
@@ -162,6 +163,7 @@ const AppRoutes = () => {
         <Route path="/withdraw" element={protectedElement(<OwnerRoute permission="withdrawals"><Withdrawal /></OwnerRoute>)} />
         <Route path="/withdrawals" element={protectedElement(<OwnerRoute permission="withdrawals"><Withdrawal /></OwnerRoute>)} />
         <Route path="/withdrawals/history" element={protectedElement(<OwnerRoute permission="withdrawals"><WithdrawalHistory /></OwnerRoute>)} />
+        <Route path="/transactions" element={protectedElement(<OwnerRoute permission="withdrawals"><TransactionsPage /></OwnerRoute>)} />
         <Route path="/remote-access" element={protectedElement(<PermissionRoute permission="network"><RemoteAccess /></PermissionRoute>)} />
         <Route path="/branches" element={protectedElement(<OwnerRoute permission="branches"><BranchesPage /></OwnerRoute>)} />
         <Route path="/notifications" element={protectedElement(<NotificationsPage />)} />
