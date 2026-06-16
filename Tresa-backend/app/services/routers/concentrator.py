@@ -607,7 +607,7 @@ def run_safe_command(router: Router, path: str, action: str, params: dict[str, s
     with router_connection(router) as api:
         if action == "print":
             return [dict(item) for item in api.get_resource(path).get(**params)]
-        return api.get_binary_resource("/").call("ping", params)
+        return api.get_resource("/").call("ping", params)
 
 
 def delete_router_from_chr(session: Session, router: Router) -> None:

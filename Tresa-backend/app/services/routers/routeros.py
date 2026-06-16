@@ -308,7 +308,7 @@ def ping_tcp(host: str, port: int, timeout_seconds: float = 3.0) -> dict[str, An
 def ping_from_router(router: Router, target: str, count: int = 4) -> dict[str, Any]:
     try:
         with router_connection(router) as api:
-            replies = api.get_binary_resource("/").call(
+            replies = api.get_resource("/").call(
                 "ping",
                 {"address": target, "count": str(count), "interval": "500ms"},
             )
