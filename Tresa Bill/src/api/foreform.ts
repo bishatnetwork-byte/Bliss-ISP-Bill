@@ -1227,6 +1227,38 @@ export interface ClientWalletSummary {
   wallets: BranchWalletResponse[];
 }
 
+export interface PlatformLedgerEntryFullResponse {
+  id: string;
+  branch_id: string;
+  branch_name: string;
+  user_id: string;
+  owner_name: string;
+  amount: number;
+  fee_type: string;
+  source_amount: number;
+  fee_rate: number;
+  reference: string | null;
+  created_at: string;
+}
+
+export interface PlatformAllTransactionResponse {
+  id: string;
+  wallet_id: string;
+  branch_id: string;
+  branch_name: string;
+  owner_name: string;
+  amount: number;
+  fee_amount: number;
+  net_amount: number;
+  transaction_type: string;
+  reference: string | null;
+  status: string;
+  recipient_phone: string | null;
+  gateway_status: string | null;
+  failure_reason: string | null;
+  created_at: string;
+}
+
 export const renultApi = {
   identity: {
     verifyPhone: (msisdn: string) =>
@@ -1565,6 +1597,10 @@ export const renultApi = {
       apiRequest<WithdrawalConfirmResponse>(`/wallets/branch/${branchId}/withdrawal-confirmations`, { method: "POST", body: JSON.stringify(payload) }),
     checkWithdrawalStatus: (branchId: string, transactionId: string) =>
       apiRequest<WalletTransactionResponse>(`/wallets/branch/${branchId}/withdrawals/${transactionId}/status`),
+    platformLedger: (limit = 200) =>
+      apiRequest<PlatformLedgerEntryFullResponse[]>("/platform-admin/ledger", { query: { limit } }),
+    platformAllTransactions: (limit = 200) =>
+      apiRequest<PlatformAllTransactionResponse[]>("/platform-admin/all-transactions", { query: { limit } }),
     platformSummary: () =>
       apiRequest<PlatformSummaryResponse>("/wallets/platform/summary"),
     platformClients: () =>

@@ -268,3 +268,35 @@ class PlatformHealthResponse(BaseModel):
     payment_gateway: str
     router_errors_24h: int
     last_router_error: Optional[str] = None
+
+
+class PlatformLedgerEntryFullResponse(BaseModel):
+    id: UUID
+    branch_id: UUID
+    branch_name: str
+    user_id: UUID
+    owner_name: str
+    amount: int
+    fee_type: str
+    source_amount: int
+    fee_rate: float
+    reference: Optional[str]
+    created_at: datetime
+
+
+class PlatformAllTransactionResponse(BaseModel):
+    id: UUID
+    wallet_id: UUID
+    branch_id: UUID
+    branch_name: str
+    owner_name: str
+    amount: int
+    fee_amount: int
+    net_amount: int
+    transaction_type: str
+    reference: Optional[str]
+    status: str
+    recipient_phone: Optional[str]
+    gateway_status: Optional[str]
+    failure_reason: Optional[str]
+    created_at: datetime

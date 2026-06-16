@@ -11,7 +11,7 @@ from app.api.deps import platform_admin, platform_admin_any
 from app.core.config import settings
 from app.db.session import SessionDep
 from app.models.branch import Branch
-from app.models.branch_wallet import BranchWallet
+from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
 from app.models.platform_admin import PlatformAuditLog, VoucherActivationAudit
 from app.models.platform_ledger import PlatformLedgerEntry
 from app.models.message import MessageLog
@@ -44,6 +44,8 @@ from app.schemas.platform_admin import (
     PlatformUserVoucherResponse,
     PlatformVoucherAuditResponse,
     PlatformWalletResponse,
+    PlatformLedgerEntryFullResponse,
+    PlatformAllTransactionResponse,
 )
 from app.services.dns_provider import (
     DnsProviderError,
@@ -527,6 +529,77 @@ def wallets(
             updated_at=wallet.updated_at,
         )
         for wallet, branch, user in rows
+    ]
+
+
+@router.get("/ledger", response_model=list[PlatformLedgerEntryFullResponse])
+def platform_ledger(
+    session: SessionDep,
+    limit: int = Query(default=200, ge=1, le=500),
+    admin: User = _admin("finance"),
+) -> list[PlatformLedgerEntryFullResponse]:
+    """All platform fee ledger entries (DEPOSIT_FEE, WITHDRAWAL_FEE) with owner info."""
+    del admin
+    rows = session.exec(
+        select(PlatformLedgerEntry, Branch, User)
+        .join(Branch, PlatformLedgerEntry.branch_id == Branch.id)
+        .join(User, Branch.user_id == User.id)
+        .order_by(PlatformLedgerEntry.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [
+        PlatformLedgerEntryFullResponse(
+            id=entry.id,
+            branch_id=entry.branch_id,
+            branch_name=branch.name,
+            user_id=entry.user_id,
+            owner_name=user.full_name,
+            amount=entry.amount,
+            fee_type=entry.fee_type,
+            source_amount=entry.source_amount,
+            fee_rate=entry.fee_rate,
+            reference=entry.reference,
+            created_at=entry.created_at,
+        )
+        for entry, branch, user in rows
+    ]
+
+
+@router.get("/all-transactions", response_model=list[PlatformAllTransactionResponse])
+def all_transactions(
+    session: SessionDep,
+    limit: int = Query(default=200, ge=1, le=500),
+    admin: User = _admin("finance"),
+) -> list[PlatformAllTransactionResponse]:
+    """All branch wallet transactions across every client, newest first."""
+    del admin
+    rows = session.exec(
+        select(BranchWalletTransaction, Branch, User)
+        .join(BranchWallet, BranchWalletTransaction.wallet_id == BranchWallet.id)
+        .join(Branch, BranchWallet.branch_id == Branch.id)
+        .join(User, Branch.user_id == User.id)
+        .order_by(BranchWalletTransaction.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [
+        PlatformAllTransactionResponse(
+            id=txn.id,
+            wallet_id=txn.wallet_id,
+            branch_id=txn.branch_id,
+            branch_name=branch.name,
+            owner_name=user.full_name,
+            amount=txn.amount,
+            fee_amount=txn.fee_amount,
+            net_amount=txn.net_amount,
+            transaction_type=txn.transaction_type.lower(),
+            reference=txn.reference,
+            status=txn.status,
+            recipient_phone=txn.recipient_phone,
+            gateway_status=txn.gateway_status,
+            failure_reason=txn.failure_reason,
+            created_at=txn.created_at,
+        )
+        for txn, branch, user in rows
     ]
 
 

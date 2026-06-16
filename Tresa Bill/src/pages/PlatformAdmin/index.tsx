@@ -1,4 +1,6 @@
 import {
+  PlatformAllTransactionResponse,
+  PlatformLedgerEntryFullResponse,
   PlatformSettingsResponse,
   PlatformUserResponse,
   getAccountBaseDomain,
@@ -6,15 +8,23 @@ import {
 } from "@/api/foreform";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
+  ArrowDownLeft,
+  ArrowUpRight,
   Banknote,
+  Calculator,
+  ChevronLeft,
+  ChevronRight,
+  CircleDollarSign,
   Cloud,
   Database,
   FileClock,
@@ -28,12 +38,15 @@ import {
   Save,
   Send,
   ShieldCheck,
+  Snowflake,
   Trash2,
+  TrendingDown,
+  TrendingUp,
   UserCog,
   Users,
   Wifi,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import PlatformAdminLayout, { PlatformAdminSection } from "./PlatformAdminLayout";
@@ -117,6 +130,16 @@ export default function PlatformAdminPage() {
   const walletsQuery = useQuery({
     queryKey: ["platformAdmin", "wallets"],
     queryFn: renultApi.platformAdmin.wallets,
+    enabled: activeTab === "finance" && permissions.has("finance"),
+  });
+  const ledgerQuery = useQuery({
+    queryKey: ["platformAdmin", "ledger"],
+    queryFn: () => renultApi.wallets.platformLedger(),
+    enabled: activeTab === "finance" && permissions.has("finance"),
+  });
+  const allTxnsQuery = useQuery({
+    queryKey: ["platformAdmin", "allTransactions"],
+    queryFn: () => renultApi.wallets.platformAllTransactions(),
     enabled: activeTab === "finance" && permissions.has("finance"),
   });
   const tunnels = useQuery({
@@ -260,7 +283,9 @@ export default function PlatformAdminPage() {
             <FinancePanel
               initial={settingsQuery.data}
               wallets={walletsQuery.data || []}
-              loading={settingsQuery.isLoading}
+              ledger={ledgerQuery.data || []}
+              allTransactions={allTxnsQuery.data || []}
+              loading={settingsQuery.isLoading || ledgerQuery.isLoading || allTxnsQuery.isLoading}
               onSaved={() => queryClient.invalidateQueries({ queryKey: ["platformAdmin", "settings"] })}
               onFreeze={(id, frozen) => freezeWallet.mutate({ id, frozen })}
             />
@@ -443,45 +468,606 @@ function UserSubdomainControl({
   );
 }
 
-function FinancePanel({ initial, wallets, loading, onSaved, onFreeze }: {
+// ── Sparkline SVG ────────────────────────────────────────────────────
+function Sparkline({ data, color, height = 32 }: { data: number[]; color: string; height?: number }) {
+  if (!data || data.length < 2) return <div style={{ height }} className="w-full" />;
+  const width = 100;
+  const max = Math.max(...data, 1);
+  const step = width / (data.length - 1);
+  const pts = data.map((v, i) => `${(i * step).toFixed(1)},${(height - (v / max) * (height - 4) - 2).toFixed(1)}`).join(" ");
+  const gid = `sg${color.replace(/[^a-z0-9]/gi, "")}`;
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="w-full" style={{ height }}>
+      <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.2" /><stop offset="100%" stopColor={color} stopOpacity="0" /></linearGradient></defs>
+      <polygon points={`0,${height} ${pts} ${width},${height}`} fill={`url(#${gid})`} />
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function dayStr(daysAgo: number) {
+  const d = new Date(); d.setDate(d.getDate() - daysAgo); return d.toISOString().slice(0, 10);
+}
+
+const FEE_PAGE = 15;
+
+function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSaved, onFreeze }: {
   initial?: PlatformSettingsResponse;
   wallets: Awaited<ReturnType<typeof renultApi.platformAdmin.wallets>>;
+  ledger: PlatformLedgerEntryFullResponse[];
+  allTransactions: PlatformAllTransactionResponse[];
   loading: boolean;
   onSaved: () => void;
   onFreeze: (id: string, frozen: boolean) => void;
 }) {
+  type Tab = "overview" | "ledger" | "transactions" | "calculator" | "wallets" | "settings";
+  const [tab, setTab] = useState<Tab>("overview");
   const [form, setForm] = useState<PlatformSettingsResponse | null>(null);
+  const [calcAmount, setCalcAmount] = useState(100000);
+  const [calcType, setCalcType] = useState<"deposit" | "withdrawal">("withdrawal");
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [txnPage, setTxnPage] = useState(1);
+  const [txnTypeFilter, setTxnTypeFilter] = useState("all");
+  const [txnStatusFilter, setTxnStatusFilter] = useState("all");
+
   useEffect(() => { if (initial) setForm(initial); }, [initial]);
+
   const save = useMutation({
     mutationFn: renultApi.platformAdmin.updateSettings,
-    onSuccess: () => { toast.success("Platform fee and voucher settings saved."); onSaved(); },
+    onSuccess: () => { toast.success("Platform fee settings saved."); onSaved(); },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not save settings."),
   });
-  if (loading || !form) return <Loading />;
-  return <Panel title="Platform Fees, Voucher Defaults & Wallets" icon={Banknote}>
-    <div className="grid max-w-4xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <Field label="Voucher fee type"><select className="h-10 w-full rounded border bg-background px-3 text-sm" value={form.voucher_fee_type} onChange={(e) => setForm({ ...form, voucher_fee_type: e.target.value as "fixed" | "percentage" })}><option value="percentage">Percentage</option><option value="fixed">Fixed UGX</option></select></Field>
-      <Field label="Voucher fee value"><Input type="number" value={form.voucher_fee_value} onChange={(e) => setForm({ ...form, voucher_fee_value: Number(e.target.value) })} /></Field>
-      <Field label="Deposit fee (%)"><Input type="number" value={form.deposit_fee_percentage} onChange={(e) => setForm({ ...form, deposit_fee_percentage: Number(e.target.value) })} /></Field>
-      <Field label="Withdrawal fee (%)"><Input type="number" value={form.withdrawal_fee_percentage} onChange={(e) => setForm({ ...form, withdrawal_fee_percentage: Number(e.target.value) })} /></Field>
-      <Field label="Min withdrawal payout (UGX)"><Input type="number" value={form.withdrawal_min_amount} onChange={(e) => setForm({ ...form, withdrawal_min_amount: Number(e.target.value) })} /></Field>
-      <Field label="Max withdrawal payout (UGX)"><Input type="number" value={form.withdrawal_max_amount} onChange={(e) => setForm({ ...form, withdrawal_max_amount: Number(e.target.value) })} /></Field>
-      <Field label="Default voucher prefix"><Input value={form.voucher_prefix} onChange={(e) => setForm({ ...form, voucher_prefix: e.target.value.toUpperCase() })} /></Field>
-      <Field label="Print prefix order"><select className="h-10 w-full rounded border bg-background px-3 text-sm" value={form.voucher_prefix_order} onChange={(e) => setForm({ ...form, voucher_prefix_order: e.target.value as "prefix-first" | "prefix-last" })}><option value="prefix-first">Prefix first</option><option value="prefix-last">Prefix last</option></select></Field>
-      <label className="flex items-center gap-2 rounded border p-3 text-sm"><input type="checkbox" checked={form.telegram_access_alerts} onChange={(e) => setForm({ ...form, telegram_access_alerts: e.target.checked })} />Telegram alert for every platform-admin API access</label>
+
+  // ── KPI computations ────────────────────────────────────────────
+  const kpi = useMemo(() => {
+    const totalFees = ledger.reduce((s, e) => s + e.amount, 0);
+    const depositFees = ledger.filter(e => e.fee_type === "DEPOSIT_FEE").reduce((s, e) => s + e.amount, 0);
+    const withdrawalFees = ledger.filter(e => e.fee_type === "WITHDRAWAL_FEE").reduce((s, e) => s + e.amount, 0);
+    const totalDeposited = allTransactions.filter(t => t.transaction_type === "deposit" && t.status.toLowerCase() === "completed").reduce((s, t) => s + t.amount, 0);
+    const totalWithdrawn = allTransactions.filter(t => t.transaction_type === "withdrawal" && t.status.toLowerCase() === "completed").reduce((s, t) => s + t.amount, 0);
+    const activeWallets = wallets.filter(w => !w.is_frozen).length;
+    const frozenWallets = wallets.filter(w => w.is_frozen).length;
+    const totalClientBalance = wallets.reduce((s, w) => s + w.balance, 0);
+    return { totalFees, depositFees, withdrawalFees, totalDeposited, totalWithdrawn, activeWallets, frozenWallets, totalClientBalance };
+  }, [ledger, allTransactions, wallets]);
+
+  // Sparklines — daily fee totals last 7 days
+  const feeSparkline = useMemo(() =>
+    Array.from({ length: 7 }, (_, i) => {
+      const d = dayStr(6 - i);
+      return ledger.filter(e => e.created_at.slice(0, 10) === d).reduce((s, e) => s + e.amount, 0);
+    }), [ledger]);
+
+  const depositSparkline = useMemo(() =>
+    Array.from({ length: 7 }, (_, i) => {
+      const d = dayStr(6 - i);
+      return allTransactions.filter(t => t.transaction_type === "deposit" && t.created_at.slice(0, 10) === d).reduce((s, t) => s + t.amount, 0);
+    }), [allTransactions]);
+
+  const withdrawalSparkline = useMemo(() =>
+    Array.from({ length: 7 }, (_, i) => {
+      const d = dayStr(6 - i);
+      return allTransactions.filter(t => t.transaction_type === "withdrawal" && t.created_at.slice(0, 10) === d).reduce((s, t) => s + t.amount, 0);
+    }), [allTransactions]);
+
+  // ── Fee calculator ───────────────────────────────────────────────
+  const calcResult = useMemo(() => {
+    if (!form) return null;
+    const rate = calcType === "deposit" ? form.deposit_fee_percentage / 100 : form.withdrawal_fee_percentage / 100;
+    const fee = Math.round(calcAmount * rate);
+    const net = calcAmount - fee;
+    return { rate, fee, net };
+  }, [form, calcAmount, calcType]);
+
+  // ── Filtered transactions ────────────────────────────────────────
+  const filteredTxns = useMemo(() => allTransactions.filter(t => {
+    if (txnTypeFilter !== "all" && t.transaction_type !== txnTypeFilter) return false;
+    if (txnStatusFilter !== "all" && t.status.toLowerCase() !== txnStatusFilter) return false;
+    return true;
+  }), [allTransactions, txnTypeFilter, txnStatusFilter]);
+
+  const ledgerPages = Math.max(1, Math.ceil(ledger.length / FEE_PAGE));
+  const txnPages = Math.max(1, Math.ceil(filteredTxns.length / FEE_PAGE));
+  const pagedLedger = ledger.slice((ledgerPage - 1) * FEE_PAGE, ledgerPage * FEE_PAGE);
+  const pagedTxns = filteredTxns.slice((txnPage - 1) * FEE_PAGE, txnPage * FEE_PAGE);
+
+  if (loading) return <Loading />;
+
+  const TABS: { key: Tab; label: string }[] = [
+    { key: "overview", label: "Overview" },
+    { key: "ledger", label: "Fee Ledger" },
+    { key: "transactions", label: "All Transactions" },
+    { key: "calculator", label: "Fee Calculator" },
+    { key: "wallets", label: "Wallet Control" },
+    { key: "settings", label: "Settings" },
+  ];
+
+  return (
+    <div className="space-y-5">
+      {/* ── Sub-tab bar ─────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-1 border-b border-border/40 pb-0">
+        {TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={cn(
+              "px-4 py-2 text-xs font-semibold rounded-t transition-colors",
+              tab === key
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Overview ────────────────────────────────────────────── */}
+      {tab === "overview" && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Total Fees */}
+            <Card className="rounded-lg border border-border/80 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
+              <CardHeader className="pb-1 pt-3 px-4">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Total Fees Earned</span>
+                <CardTitle className="text-xl font-black mt-0.5 leading-tight">{money(kpi.totalFees)}</CardTitle>
+              </CardHeader>
+              <div className="px-4 mt-auto"><Sparkline data={feeSparkline} color="#8b5cf6" /></div>
+              <CardContent className="pb-3 pt-0 px-4">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
+                  <span>Deposit: {money(kpi.depositFees)} · Withdrawal: {money(kpi.withdrawalFees)}</span>
+                  <div className="p-1 rounded bg-violet-500/10 text-violet-600"><Database className="w-3.5 h-3.5" /></div>
+                </div>
+              </CardContent>
+              <div className="h-[2px] bg-violet-500" />
+            </Card>
+
+            {/* Total Deposited */}
+            <Card className="rounded-lg border border-border/80 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
+              <CardHeader className="pb-1 pt-3 px-4">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Platform Deposits</span>
+                <CardTitle className="text-xl font-black mt-0.5 leading-tight">{money(kpi.totalDeposited)}</CardTitle>
+              </CardHeader>
+              <div className="px-4 mt-auto"><Sparkline data={depositSparkline} color="#10b981" /></div>
+              <CardContent className="pb-3 pt-0 px-4">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
+                  <span>All client inflows · completed</span>
+                  <div className="p-1 rounded bg-emerald-500/10 text-emerald-600"><TrendingUp className="w-3.5 h-3.5" /></div>
+                </div>
+              </CardContent>
+              <div className="h-[2px] bg-emerald-500" />
+            </Card>
+
+            {/* Total Withdrawn */}
+            <Card className="rounded-lg border border-border/80 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
+              <CardHeader className="pb-1 pt-3 px-4">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Platform Withdrawals</span>
+                <CardTitle className="text-xl font-black mt-0.5 leading-tight">{money(kpi.totalWithdrawn)}</CardTitle>
+              </CardHeader>
+              <div className="px-4 mt-auto"><Sparkline data={withdrawalSparkline} color="#ef4444" /></div>
+              <CardContent className="pb-3 pt-0 px-4">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
+                  <span>All client outflows · completed</span>
+                  <div className="p-1 rounded bg-red-500/10 text-red-600"><TrendingDown className="w-3.5 h-3.5" /></div>
+                </div>
+              </CardContent>
+              <div className="h-[2px] bg-red-500" />
+            </Card>
+
+            {/* Wallets */}
+            <Card className="rounded-lg border border-border/80 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
+              <CardHeader className="pb-1 pt-3 px-4">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Client Balances</span>
+                <CardTitle className="text-xl font-black mt-0.5 leading-tight">{money(kpi.totalClientBalance)}</CardTitle>
+              </CardHeader>
+              <div className="px-4 mt-auto"><Sparkline data={Array.from({ length: 7 }, (_, i) => kpi.totalClientBalance / (i + 1))} color="#f97316" /></div>
+              <CardContent className="pb-3 pt-0 px-4">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
+                  <span>{kpi.activeWallets} active · {kpi.frozenWallets} frozen</span>
+                  <div className="p-1 rounded bg-orange-500/10 text-orange-500"><CircleDollarSign className="w-3.5 h-3.5" /></div>
+                </div>
+              </CardContent>
+              <div className="h-[2px] bg-orange-500" />
+            </Card>
+          </div>
+
+          {/* Fee type breakdown */}
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Card className="shadow-none border border-border/40">
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-bold flex items-center gap-2"><Database className="w-4 h-4 text-violet-500" />Fee Breakdown</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {[
+                  { label: "Deposit Fees", amount: kpi.depositFees, pct: kpi.totalFees ? (kpi.depositFees / kpi.totalFees) * 100 : 0, color: "bg-emerald-500" },
+                  { label: "Withdrawal Fees", amount: kpi.withdrawalFees, pct: kpi.totalFees ? (kpi.withdrawalFees / kpi.totalFees) * 100 : 0, color: "bg-red-500" },
+                ].map(({ label, amount, pct, color }) => (
+                  <div key={label}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-semibold text-foreground/80">{label}</span>
+                      <span className="font-bold font-mono">{money(amount)}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{pct.toFixed(1)}% of total fees</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-none border border-border/40">
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-bold flex items-center gap-2"><Banknote className="w-4 h-4 text-blue-500" />Current Fee Rates</CardTitle></CardHeader>
+              <CardContent>
+                {!form ? <Loading /> : (
+                  <div className="space-y-2 text-sm">
+                    {[
+                      ["Deposit fee", `${form.deposit_fee_percentage}%`],
+                      ["Withdrawal fee", `${form.withdrawal_fee_percentage}%`],
+                      ["Min withdrawal payout", money(form.withdrawal_min_amount)],
+                      ["Max withdrawal payout", money(form.withdrawal_max_amount)],
+                      ["Voucher fee type", form.voucher_fee_type],
+                      ["Voucher fee value", form.voucher_fee_type === "percentage" ? `${form.voucher_fee_value}%` : money(form.voucher_fee_value)],
+                    ].map(([label, val]) => (
+                      <div key={label} className="flex justify-between border-b border-border/30 pb-1">
+                        <span className="text-muted-foreground text-xs">{label}</span>
+                        <span className="text-xs font-bold font-mono">{val}</span>
+                      </div>
+                    ))}
+                    <Button size="sm" variant="outline" className="w-full mt-2 text-xs gap-1.5 h-8" onClick={() => setTab("calculator")}>
+                      <Calculator className="w-3.5 h-3.5" /> Open Fee Calculator
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* ── Fee Ledger ──────────────────────────────────────────── */}
+      {tab === "ledger" && (
+        <Card className="shadow-none border border-border/40">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-bold flex items-center gap-2"><Database className="w-4 h-4 text-violet-500" />Platform Fee Audit Ledger</CardTitle>
+              <CardDescription className="text-xs mt-0.5">Every fee collected — deposit &amp; withdrawal charges across all clients.</CardDescription>
+            </div>
+            <Badge variant="outline" className="bg-violet-500/10 text-violet-700 border-violet-500/20 text-xs font-bold">{ledger.length} entries</Badge>
+          </CardHeader>
+          <CardContent>
+            {ledger.length === 0 ? (
+              <div className="py-16 text-center text-sm text-muted-foreground">No fee entries recorded yet.</div>
+            ) : (
+              <>
+                <div className="overflow-x-auto rounded border border-border/10">
+                  <Table>
+                    <TableHeader className="bg-muted/30">
+                      <TableRow>
+                        {["#", "Date / Time", "Owner", "Branch", "Fee Type", "Source Amount", "Fee Rate", "Fee Earned", "Reference"].map(h => (
+                          <TableHead key={h} className="text-[11px] font-bold uppercase text-foreground">{h}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pagedLedger.map((entry, i) => {
+                        const d = new Date(entry.created_at);
+                        const isDeposit = entry.fee_type === "DEPOSIT_FEE";
+                        return (
+                          <TableRow key={entry.id} className="hover:bg-muted/30 transition-colors">
+                            <TableCell className="font-mono text-xs text-muted-foreground">{(ledgerPage - 1) * FEE_PAGE + i + 1}</TableCell>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              <span className="font-medium">{d.toLocaleDateString("en-UG", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                              <br /><span className="text-[10px] text-muted-foreground font-mono">{d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                            </TableCell>
+                            <TableCell className="text-xs font-semibold">{entry.owner_name}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{entry.branch_name}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={cn("text-[10px] font-bold", isDeposit ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" : "bg-red-500/10 text-red-700 border-red-500/20")}>
+                                {isDeposit ? "Deposit Fee" : "Withdrawal Fee"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs font-mono text-right">{money(entry.source_amount)}</TableCell>
+                            <TableCell className="text-xs font-mono text-right text-muted-foreground">{(entry.fee_rate * 100).toFixed(1)}%</TableCell>
+                            <TableCell className="text-xs font-mono text-right font-bold text-violet-700">{money(entry.amount)}</TableCell>
+                            <TableCell className="text-xs font-mono text-muted-foreground">{entry.reference ?? "—"}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                {ledgerPages > 1 && (
+                  <div className="flex items-center justify-between pt-4">
+                    <span className="text-xs text-muted-foreground">Page {ledgerPage} of {ledgerPages} · {ledger.length} entries</span>
+                    <div className="flex items-center gap-1.5">
+                      <Button variant="outline" size="icon" className="w-8 h-8" disabled={ledgerPage === 1} onClick={() => setLedgerPage(p => p - 1)}><ChevronLeft className="w-4 h-4" /></Button>
+                      {Array.from({ length: Math.min(ledgerPages, 5) }, (_, i) => i + 1).map(p => (
+                        <Button key={p} variant={ledgerPage === p ? "default" : "outline"} size="icon" className="w-8 h-8 text-xs font-bold" onClick={() => setLedgerPage(p)}>{p}</Button>
+                      ))}
+                      <Button variant="outline" size="icon" className="w-8 h-8" disabled={ledgerPage === ledgerPages} onClick={() => setLedgerPage(p => p + 1)}><ChevronRight className="w-4 h-4" /></Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── All Transactions ────────────────────────────────────── */}
+      {tab === "transactions" && (
+        <Card className="shadow-none border border-border/40">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-sm font-bold flex items-center gap-2"><Banknote className="w-4 h-4 text-blue-500" />All Client Wallet Transactions</CardTitle>
+                <CardDescription className="text-xs mt-0.5">Every deposit &amp; withdrawal across every client branch.</CardDescription>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Select value={txnTypeFilter} onValueChange={v => { setTxnTypeFilter(v); setTxnPage(1); }}>
+                  <SelectTrigger className="h-8 text-xs w-[130px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="deposit">Deposits</SelectItem>
+                    <SelectItem value="withdrawal">Withdrawals</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={txnStatusFilter} onValueChange={v => { setTxnStatusFilter(v); setTxnPage(1); }}>
+                  <SelectTrigger className="h-8 text-xs w-[130px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="processing">Processing</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Badge variant="outline" className="bg-blue-500/10 text-blue-700 border-blue-500/20 text-xs font-bold self-center">{filteredTxns.length} txns</Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {filteredTxns.length === 0 ? (
+              <div className="py-16 text-center text-sm text-muted-foreground">No transactions found.</div>
+            ) : (
+              <>
+                <div className="overflow-x-auto rounded border border-border/10">
+                  <Table>
+                    <TableHeader className="bg-muted/30">
+                      <TableRow>
+                        {["#", "Date / Time", "Owner", "Branch", "Type", "Amount", "Fee", "Net", "Status"].map(h => (
+                          <TableHead key={h} className="text-[11px] font-bold uppercase text-foreground">{h}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pagedTxns.map((txn, i) => {
+                        const d = new Date(txn.created_at);
+                        const isDeposit = txn.transaction_type === "deposit";
+                        const s = txn.status.toLowerCase();
+                        return (
+                          <TableRow key={txn.id} className={cn("hover:bg-muted/30 transition-colors", s === "failed" && "opacity-60")}>
+                            <TableCell className="font-mono text-xs text-muted-foreground">{(txnPage - 1) * FEE_PAGE + i + 1}</TableCell>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              <span className="font-medium">{d.toLocaleDateString("en-UG", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                              <br /><span className="text-[10px] text-muted-foreground font-mono">{d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                            </TableCell>
+                            <TableCell className="text-xs font-semibold">{txn.owner_name}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{txn.branch_name}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                {isDeposit ? <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600" /> : <ArrowUpRight className="w-3.5 h-3.5 text-red-500" />}
+                                <span className={cn("text-[11px] font-bold uppercase", isDeposit ? "text-emerald-700" : "text-red-600")}>{txn.transaction_type}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className={cn("text-xs font-mono font-bold text-right", isDeposit ? "text-emerald-700" : "text-red-600")}>
+                              {isDeposit ? "+" : "−"}{txn.amount.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-xs font-mono text-right text-muted-foreground">{txn.fee_amount > 0 ? txn.fee_amount.toLocaleString() : "—"}</TableCell>
+                            <TableCell className="text-xs font-mono text-right font-semibold">{txn.net_amount > 0 ? txn.net_amount.toLocaleString() : "—"}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={cn("text-[10px] font-bold", s === "completed" ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" : s === "processing" ? "bg-amber-500/10 text-amber-700 border-amber-500/20" : "bg-red-500/10 text-red-700 border-red-500/20")}>
+                                {txn.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                {txnPages > 1 && (
+                  <div className="flex items-center justify-between pt-4">
+                    <span className="text-xs text-muted-foreground">Page {txnPage} of {txnPages}</span>
+                    <div className="flex items-center gap-1.5">
+                      <Button variant="outline" size="icon" className="w-8 h-8" disabled={txnPage === 1} onClick={() => setTxnPage(p => p - 1)}><ChevronLeft className="w-4 h-4" /></Button>
+                      {Array.from({ length: Math.min(txnPages, 5) }, (_, i) => i + 1).map(p => (
+                        <Button key={p} variant={txnPage === p ? "default" : "outline"} size="icon" className="w-8 h-8 text-xs font-bold" onClick={() => setTxnPage(p)}>{p}</Button>
+                      ))}
+                      <Button variant="outline" size="icon" className="w-8 h-8" disabled={txnPage === txnPages} onClick={() => setTxnPage(p => p + 1)}><ChevronRight className="w-4 h-4" /></Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Fee Calculator ──────────────────────────────────────── */}
+      {tab === "calculator" && (
+        <div className="grid sm:grid-cols-2 gap-4 max-w-3xl">
+          <Card className="shadow-none border border-border/40">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-bold flex items-center gap-2"><Calculator className="w-4 h-4 text-primary" />Platform Fee Calculator</CardTitle>
+              <CardDescription className="text-xs">Simulate what the platform earns for any transaction amount.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">Transaction Type</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["deposit", "withdrawal"] as const).map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setCalcType(t)}
+                      className={cn(
+                        "py-2.5 rounded border text-xs font-bold capitalize transition-all",
+                        calcType === t ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted/50"
+                      )}
+                    >
+                      {t === "deposit" ? "💰 Deposit" : "📤 Withdrawal"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">Transaction Amount (UGX)</Label>
+                <Input
+                  type="number"
+                  value={calcAmount}
+                  onChange={e => setCalcAmount(Number(e.target.value))}
+                  className="h-10 text-sm font-mono"
+                  min={0}
+                />
+                {form && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Current {calcType} fee rate: <strong>{calcType === "deposit" ? form.deposit_fee_percentage : form.withdrawal_fee_percentage}%</strong>
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {[10000, 50000, 100000, 500000, 1000000].map(v => (
+                  <button key={v} onClick={() => setCalcAmount(v)} className={cn("px-3 py-1.5 rounded border text-xs font-semibold transition-all", calcAmount === v ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted/50")}>
+                    {(v / 1000).toFixed(0)}K
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={cn("shadow-none border-2 flex flex-col", calcResult && calcResult.fee > 0 ? "border-violet-500/40 bg-violet-500/5" : "border-border/40")}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wide">Calculation Result</CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col justify-center space-y-4">
+              {!calcResult ? (
+                <p className="text-xs text-muted-foreground text-center">Load settings first.</p>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    {[
+                      { label: "Transaction Amount", value: money(calcAmount), color: "text-foreground" },
+                      { label: `Fee Rate (${(calcResult.rate * 100).toFixed(2)}%)`, value: money(calcResult.fee), color: "text-violet-700 font-black" },
+                      { label: "Net to Client", value: money(calcResult.net), color: "text-emerald-700" },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="flex items-center justify-between border-b border-border/30 pb-2">
+                        <span className="text-xs text-muted-foreground">{label}</span>
+                        <span className={cn("text-sm font-bold font-mono", color)}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rounded-lg bg-violet-500/10 border border-violet-500/20 p-4 text-center">
+                    <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Platform Earns</p>
+                    <p className="text-3xl font-black text-violet-700 font-mono mt-1">{money(calcResult.fee)}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{(calcResult.rate * 100).toFixed(2)}% of {money(calcAmount)}</p>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Wallet Control ──────────────────────────────────────── */}
+      {tab === "wallets" && (
+        <Card className="shadow-none border border-border/40">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-bold flex items-center gap-2"><Snowflake className="w-4 h-4 text-blue-500" />Client Wallet Control</CardTitle>
+              <CardDescription className="text-xs mt-0.5">Freeze or unfreeze client wallets. Frozen wallets cannot process withdrawals.</CardDescription>
+            </div>
+            <div className="flex gap-2 text-xs text-muted-foreground">
+              <span className="bg-emerald-500/10 text-emerald-700 px-2 py-1 rounded font-bold">{kpi.activeWallets} active</span>
+              <span className="bg-blue-500/10 text-blue-700 px-2 py-1 rounded font-bold">{kpi.frozenWallets} frozen</span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto rounded border border-border/10">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow>
+                    {["Owner", "Branch", "Balance", "Deposited", "Withdrawn", "Fees Paid", "Status", "Control"].map(h => (
+                      <TableHead key={h} className="text-[11px] font-bold uppercase text-foreground">{h}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {wallets.length === 0 ? (
+                    <TableRow><TableCell colSpan={8} className="h-32 text-center text-sm text-muted-foreground">No wallets found.</TableCell></TableRow>
+                  ) : wallets.map(w => (
+                    <TableRow key={w.id} className={cn("hover:bg-muted/30 transition-colors", w.is_frozen && "opacity-70")}>
+                      <TableCell className="text-xs font-semibold">{w.owner_name}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{w.branch_name}</TableCell>
+                      <TableCell className="text-xs font-mono font-bold">{money(w.balance)}</TableCell>
+                      <TableCell className="text-xs font-mono text-emerald-700">{money(w.total_deposited)}</TableCell>
+                      <TableCell className="text-xs font-mono text-red-600">{money(w.total_withdrawn)}</TableCell>
+                      <TableCell className="text-xs font-mono text-violet-700">{money(w.total_fees_paid)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn("text-[10px] font-bold", w.is_frozen ? "bg-blue-500/10 text-blue-700 border-blue-500/20" : "bg-emerald-500/10 text-emerald-700 border-emerald-500/20")}>
+                          {w.is_frozen ? "Frozen" : "Active"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button size="sm" variant={w.is_frozen ? "outline" : "destructive"} className="h-7 text-xs gap-1" onClick={() => onFreeze(w.id, !w.is_frozen)}>
+                          {w.is_frozen ? <><TrendingUp className="w-3 h-3" /> Unfreeze</> : <><Snowflake className="w-3 h-3" /> Freeze</>}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Settings ────────────────────────────────────────────── */}
+      {tab === "settings" && (
+        <Card className="shadow-none border border-border/40 max-w-3xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-bold flex items-center gap-2"><Save className="w-4 h-4 text-primary" />Platform Fee &amp; Voucher Settings</CardTitle>
+            <CardDescription className="text-xs">Changes take effect immediately for new transactions.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!form ? <Loading /> : (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <Field label="Voucher fee type">
+                    <select className="h-10 w-full rounded border bg-background px-3 text-sm" value={form.voucher_fee_type} onChange={e => setForm({ ...form, voucher_fee_type: e.target.value as "fixed" | "percentage" })}>
+                      <option value="percentage">Percentage</option><option value="fixed">Fixed UGX</option>
+                    </select>
+                  </Field>
+                  <Field label="Voucher fee value"><Input type="number" value={form.voucher_fee_value} onChange={e => setForm({ ...form, voucher_fee_value: Number(e.target.value) })} /></Field>
+                  <Field label="Deposit fee (%)"><Input type="number" value={form.deposit_fee_percentage} onChange={e => setForm({ ...form, deposit_fee_percentage: Number(e.target.value) })} /></Field>
+                  <Field label="Withdrawal fee (%)"><Input type="number" value={form.withdrawal_fee_percentage} onChange={e => setForm({ ...form, withdrawal_fee_percentage: Number(e.target.value) })} /></Field>
+                  <Field label="Min withdrawal payout (UGX)"><Input type="number" value={form.withdrawal_min_amount} onChange={e => setForm({ ...form, withdrawal_min_amount: Number(e.target.value) })} /></Field>
+                  <Field label="Max withdrawal payout (UGX)"><Input type="number" value={form.withdrawal_max_amount} onChange={e => setForm({ ...form, withdrawal_max_amount: Number(e.target.value) })} /></Field>
+                  <Field label="Default voucher prefix"><Input value={form.voucher_prefix} onChange={e => setForm({ ...form, voucher_prefix: e.target.value.toUpperCase() })} /></Field>
+                  <Field label="Print prefix order">
+                    <select className="h-10 w-full rounded border bg-background px-3 text-sm" value={form.voucher_prefix_order} onChange={e => setForm({ ...form, voucher_prefix_order: e.target.value as "prefix-first" | "prefix-last" })}>
+                      <option value="prefix-first">Prefix first</option><option value="prefix-last">Prefix last</option>
+                    </select>
+                  </Field>
+                  <label className="flex items-center gap-2 rounded border p-3 text-sm self-end"><input type="checkbox" checked={form.telegram_access_alerts} onChange={e => setForm({ ...form, telegram_access_alerts: e.target.checked })} />Telegram alerts for admin API access</label>
+                </div>
+                <Button className="mt-5 gap-2" onClick={() => save.mutate(form)} disabled={save.isPending}>
+                  {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Settings
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
-    <Button className="mt-5 gap-2" onClick={() => save.mutate(form)} disabled={save.isPending}>{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save Settings</Button>
-    <div className="mt-7"><h3 className="mb-3 text-sm font-bold">Client Wallet Control</h3><SimpleTable headers={["Owner", "Branch", "Balance", "Deposited", "Withdrawn", "Fees", "Status", "Control"]} rows={wallets.map((wallet) => [
-      wallet.owner_name,
-      wallet.branch_name,
-      money(wallet.balance),
-      money(wallet.total_deposited),
-      money(wallet.total_withdrawn),
-      money(wallet.total_fees_paid),
-      wallet.is_frozen ? "Frozen" : "Active",
-      <Button key={wallet.id} size="sm" variant={wallet.is_frozen ? "outline" : "destructive"} onClick={() => onFreeze(wallet.id, !wallet.is_frozen)}>{wallet.is_frozen ? "Unfreeze" : "Freeze"}</Button>,
-    ])} /></div>
-  </Panel>;
+  );
 }
 
 function BroadcastPanel({ users }: { users: PlatformUserResponse[] }) {
