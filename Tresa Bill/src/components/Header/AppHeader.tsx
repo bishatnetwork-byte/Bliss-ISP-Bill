@@ -19,8 +19,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth";
 import { renultApi, RouterMonitorSummary } from "@/api/foreform";
-import { Loader2, Menu, PanelLeft, RadioTower, User } from "lucide-react";
-import React, { useCallback, useEffect, useState } from "react";
+import { Loader2, Menu, PanelLeft, RadioTower, RefreshCw, User } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import NotificationsDialog from "./NotificationsDialog";
@@ -45,8 +45,10 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
   const { user, logout } = useAuth();
   const [monitoring, setMonitoring] = useState<RouterMonitorSummary | null>(null);
   const [enablingRouterId, setEnablingRouterId] = useState<string | null>(null);
-  // Ping fallback state: keyed by router_id
   const [pingStatuses, setPingStatuses] = useState<Record<string, PingStatus>>({});
+  const [isManualChecking, setIsManualChecking] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const isCheckingRef = useRef(false);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -119,20 +121,31 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
   }, []);
 
   const loadMonitoring = useCallback(async () => {
+    if (isCheckingRef.current) return;
+    isCheckingRef.current = true;
     const branchId = localStorage.getItem("selected-workspace");
     try {
       const summary = await renultApi.monitoring.summary(branchId);
       setMonitoring(summary);
-      // After SNMP summary, run ping for routers with no real SNMP data
+      setLastCheckedAt(new Date());
       runPingFallback(summary);
     } catch {
       setMonitoring(null);
+    } finally {
+      isCheckingRef.current = false;
     }
   }, [runPingFallback]);
 
+  const handleManualCheck = useCallback(async () => {
+    if (isCheckingRef.current) return;
+    setIsManualChecking(true);
+    await loadMonitoring();
+    setIsManualChecking(false);
+  }, [loadMonitoring]);
+
   useEffect(() => {
     loadMonitoring();
-    const interval = window.setInterval(loadMonitoring, 60000);
+    const interval = window.setInterval(loadMonitoring, 30 * 60 * 1000);
     window.addEventListener("renult-branch-change", loadMonitoring);
     return () => {
       window.clearInterval(interval);
@@ -245,6 +258,7 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
         : "Waiting";
 
   const anyPingChecking = Object.values(pingStatuses).some((p) => p.checking);
+  const isBusy = isManualChecking || anyPingChecking;
 
   return (
     <>
@@ -307,13 +321,18 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
           <div className="flex items-center gap-4 sm:gap-4">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2 h-9 px-3 rounded font-semibold text-xs sm:text-sm">
-                  {anyPingChecking ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 h-9 px-3 rounded font-semibold text-xs sm:text-sm"
+                  onClick={handleManualCheck}
+                >
+                  {isBusy ? (
                     <Loader2 className="h-2.5 w-2.5 animate-spin text-amber-500" />
                   ) : (
                     <span className={`h-2.5 w-2.5 rounded-full ${monitorColor}`} />
                   )}
-                  <span className="hidden sm:inline">{anyPingChecking ? "Checking…" : monitorLabel}</span>
+                  <span className="hidden sm:inline">{isBusy ? "Checking…" : monitorLabel}</span>
                 </Button>
               </PopoverTrigger>
 
@@ -324,16 +343,26 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
                     <p className="text-sm font-bold">Router Status</p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">SNMP · Ping fallback</p>
                   </div>
-                  <span
-                    className={`rounded px-2 py-1 text-[10px] font-bold ${overallStatus === "online"
-                        ? "bg-emerald-100 text-emerald-600"
-                        : overallStatus === "offline"
-                          ? "bg-red-100 text-red-600"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                  >
-                    {anyPingChecking ? "Checking" : monitorLabel}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleManualCheck}
+                      disabled={isBusy}
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+                      aria-label="Refresh status"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${isBusy ? "animate-spin" : ""}`} />
+                    </button>
+                    <span
+                      className={`rounded px-2 py-1 text-[10px] font-bold ${overallStatus === "online"
+                          ? "bg-emerald-100 text-emerald-600"
+                          : overallStatus === "offline"
+                            ? "bg-red-100 text-red-600"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                    >
+                      {isBusy ? "Checking" : monitorLabel}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Visual bar */}
@@ -362,7 +391,7 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
                 {/* Aggregate count */}
                 <p className="mt-3 text-xs text-muted-foreground">
                   {monitoring?.total
-                    ? `${computedCounts.online} online, ${computedCounts.offline} offline, ${computedCounts.unknown} ${anyPingChecking ? "checking" : "unknown"}`
+                    ? `${computedCounts.online} online, ${computedCounts.offline} offline, ${computedCounts.unknown} ${isBusy ? "checking" : "unknown"}`
                     : "No active routers are being monitored."}
                 </p>
 
@@ -427,11 +456,11 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
 
                 {/* Footer */}
                 <p className="mt-4 border-t pt-3 text-[11px] text-muted-foreground">
-                  {anyPingChecking
-                    ? "Pinging routers for reachability…"
-                    : monitoring?.last_checked_at
-                      ? `SNMP · last checked ${new Date(monitoring.last_checked_at).toLocaleTimeString()}`
-                      : "Ping fallback active · enable SNMP for full metrics"}
+                  {isBusy
+                    ? "Checking routers…"
+                    : lastCheckedAt
+                      ? `Last checked ${lastCheckedAt.toLocaleTimeString()} · auto-refreshes every 30 min`
+                      : "Tap the status button to check"}
                 </p>
               </PopoverContent>
             </Popover>
