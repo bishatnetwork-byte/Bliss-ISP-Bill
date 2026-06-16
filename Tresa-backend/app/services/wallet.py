@@ -24,8 +24,10 @@ from app.services.platform_admin import get_setting
 DEPOSIT_FEE_RATE = 0.01   # 1 %
 WITHDRAW_FEE_RATE = 0.02  # 2 %
 
-# The payment gateway only accepts disbursements within this range (UGX).
-WITHDRAW_MIN_AMOUNT = 500
+# The payment gateway rejects net disbursements below 1,000 UGX.
+# min_amount is compared against the NET (post-fee) amount, so keeping this
+# at 1,000 guarantees the gateway always receives at least that floor.
+WITHDRAW_MIN_AMOUNT = 1000
 WITHDRAW_MAX_AMOUNT = 10_000_000
 
 
