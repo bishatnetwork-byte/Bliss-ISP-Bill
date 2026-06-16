@@ -854,7 +854,7 @@ export interface VoucherBatchCreate {
   phone_number?: string | null;
   prefix?: string;
   code_length?: number;
-  code_format?: "alphanumeric-upper" | "numeric" | "alphanumeric-mixed";
+  code_format?: "alphanumeric-lower" | "alphanumeric-upper" | "numeric" | "alphanumeric-mixed";
   payment_reference?: string | null;
 }
 

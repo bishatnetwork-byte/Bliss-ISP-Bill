@@ -80,7 +80,7 @@ const primaryNavItems: NavItem[] = [
     icon: <VoucherIcon className="w-5 h-5" />,
     path: "/vouchers",
     submenu: [
-      { label: "Create Vouchers", path: "/vouchers", icon: <Ticket className="w-4 h-4" /> },
+      { label: "Create Vouchers", path: "/vouchers/create", icon: <Ticket className="w-4 h-4" /> },
       { label: "Vouchers", path: "/vouchers", icon: <Ticket className="w-4 h-4" /> },
     ],
   },
@@ -154,7 +154,9 @@ const PERMISSION_BY_PATH: Record<string, string> = {
   "/router/packages": "routers",
   "/sales": "sales",
   "/vouchers": "vouchers",
+  "/vouchers/create": "vouchers",
   "/vouchers/active-users": "vouchers",
+  "/active-users": "vouchers",
   "/voucher-support": "support",
   "/messages": "messages",
   "/network": "network",

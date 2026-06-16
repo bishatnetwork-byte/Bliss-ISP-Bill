@@ -36,6 +36,7 @@ import Withdrawal from './pages/Sales/Withdrawal';
 import WithdrawalHistory from './pages/Sales/WithdrawalHistory';
 import SupportsIndex from './pages/Supports/index';
 import VouchersIndex from './pages/Vouchers/index';
+import CreateVouchers from './pages/Vouchers/CreateVouchers';
 import ActiveUsersPage from './pages/Vouchers/ActiveUsers';
 import PlatformAdminPage from './pages/PlatformAdmin';
 import PlatformUserDetailsPage from './pages/PlatformAdmin/UserDetails';
@@ -152,6 +153,7 @@ const AppRoutes = () => {
         <Route path="/sales" element={protectedElement(<PermissionRoute permission="sales"><SalesIndex /></PermissionRoute>)} />
         <Route path="/sales/customer/:phone" element={protectedElement(<PermissionRoute permission="sales"><CustomerDetail /></PermissionRoute>)} />
         <Route path="/vouchers" element={protectedElement(<PermissionRoute permission="vouchers"><VouchersIndex /></PermissionRoute>)} />
+        <Route path="/vouchers/create" element={protectedElement(<PermissionRoute permission="vouchers"><CreateVouchers /></PermissionRoute>)} />
         <Route path="/active-users" element={protectedElement(<PermissionRoute permission="vouchers"><ActiveUsersPage /></PermissionRoute>)} />
         <Route path="/router" element={protectedElement(<PermissionRoute permission="routers"><RoutersIndex /></PermissionRoute>)} />
         <Route path="/router/configure" element={protectedElement(<PermissionRoute permission="routers"><ConfigureRouter /></PermissionRoute>)} />
