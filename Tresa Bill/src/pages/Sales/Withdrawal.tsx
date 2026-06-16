@@ -9,8 +9,9 @@ import { usePhoneVerifed } from "@/hooks/usePhoneVerifed";
 import { useBranchWallet, useConfirmWithdrawal, useRequestWithdrawal, useWithdrawalConfig } from "@/hooks/useWallet";
 import type { WithdrawalConfirmResponse } from "@/api/foreform";
 import { cn } from "@/lib/utils";
-import { AlertCircle, CheckCircle2, Copy, Loader2, MailCheck, Printer, ShieldCheck, Verified, Wallet2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Copy, Loader2, MailCheck, Printer, ShieldCheck, Verified, Wallet2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 
@@ -32,6 +33,7 @@ function providerFor(phone: string): string {
 type FlowStep = "closed" | "review" | "code" | "processing" | "success";
 
 export default function Withdrawal() {
+  const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("sidebar-collapsed") === "true");
   const [branchId, setBranchId] = useState(() => localStorage.getItem("selected-workspace") || "");
   const [phone, setPhone] = useState("");
@@ -159,7 +161,14 @@ export default function Withdrawal() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 print:p-0">
         <div className="grid lg:grid-cols-[1fr_340px] gap-6 items-start">
           <Card className="print:hidden rounded border border-border/10 shadow-none">
-            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Wallet2 className="w-4 h-4 text-primary" /> Withdrawal Details</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm flex items-center gap-2"><Wallet2 className="w-4 h-4 text-primary" /> Withdrawal Details</CardTitle>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8" onClick={() => navigate("/withdrawals/history")}>
+                  <Clock className="w-3.5 h-3.5" /> History
+                </Button>
+              </div>
+            </CardHeader>
             <CardContent className="space-y-5">
               <div className="rounded border border-primary/30 p-4">
                 <p className="text-[12px] font-bold text-gray-500">Available balance</p>

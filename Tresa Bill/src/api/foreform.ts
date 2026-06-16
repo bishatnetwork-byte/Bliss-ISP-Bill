@@ -1160,6 +1160,9 @@ export interface WalletTransactionResponse {
   net_amount: number;
   reference: string | null;
   status: string;
+  recipient_phone: string | null;
+  gateway_status: string | null;
+  failure_reason: string | null;
   created_at: string;
 }
 
