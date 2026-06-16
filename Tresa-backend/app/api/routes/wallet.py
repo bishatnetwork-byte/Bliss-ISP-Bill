@@ -42,6 +42,28 @@ from app.services.telegram import send_user_event
 
 router = APIRouter(prefix="/wallets", tags=["Wallets"])
 
+
+@router.post("/debug/send-money", tags=["Debug"], include_in_schema=True)
+def debug_send_money(
+    phone: str,
+    amount: int,
+    session: SessionDep,
+):
+    """NO-AUTH debug endpoint — calls send_money directly and returns the raw gateway response or error."""
+    from uuid import uuid4
+    net = wallet_svc.withdrawal_net_amount(amount, session)
+    try:
+        resp = renult_pay.send_money(
+            amount=net,
+            phone_number=gateway_phone(phone),
+            reference=uuid4(),
+            description="DEBUG send-money test",
+        )
+        return {"ok": True, "requested_amount": amount, "net_sent": net, "gateway_response": resp}
+    except renult_pay.RenultPayError as exc:
+        return {"ok": False, "requested_amount": amount, "net_sent": net, "error": str(exc)}
+
+
 # Minimum time between calls to the gateway's send-money status endpoint for
 # a single withdrawal, mirroring `portal.PAYMENT_VERIFY_INTERVAL`.
 WITHDRAWAL_VERIFY_INTERVAL = timedelta(seconds=2)
