@@ -253,7 +253,6 @@ export default function PlatformAdminPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-6 w-6 text-primary" />
               <h1 className="text-xl font-black">Platform Administration</h1>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -266,35 +265,35 @@ export default function PlatformAdminPage() {
         </div>
 
         {activeTab === "overview" && (
-            <Overview data={overview.data} loading={overview.isLoading} />
+          <Overview data={overview.data} loading={overview.isLoading} />
         )}
         {activeTab === "users" && (
-            <UsersPanel
-              users={usersQuery.data || []}
-              loading={usersQuery.isLoading}
-              search={userSearch}
-              onSearch={setUserSearch}
-              onUpdate={(id, payload) => updateUser.mutate({ id, payload })}
-              onSyncSubdomain={(id) => syncUserSubdomain.mutate(id)}
-              onView={(id) => navigate(`/platform-admin/users/${id}`)}
-            />
+          <UsersPanel
+            users={usersQuery.data || []}
+            loading={usersQuery.isLoading}
+            search={userSearch}
+            onSearch={setUserSearch}
+            onUpdate={(id, payload) => updateUser.mutate({ id, payload })}
+            onSyncSubdomain={(id) => syncUserSubdomain.mutate(id)}
+            onView={(id) => navigate(`/platform-admin/users/${id}`)}
+          />
         )}
         {activeTab === "finance" && (
-            <FinancePanel
-              initial={settingsQuery.data}
-              wallets={walletsQuery.data || []}
-              ledger={ledgerQuery.data || []}
-              allTransactions={allTxnsQuery.data || []}
-              loading={settingsQuery.isLoading || ledgerQuery.isLoading || allTxnsQuery.isLoading}
-              onSaved={() => queryClient.invalidateQueries({ queryKey: ["platformAdmin", "settings"] })}
-              onFreeze={(id, frozen) => freezeWallet.mutate({ id, frozen })}
-            />
+          <FinancePanel
+            initial={settingsQuery.data}
+            wallets={walletsQuery.data || []}
+            ledger={ledgerQuery.data || []}
+            allTransactions={allTxnsQuery.data || []}
+            loading={settingsQuery.isLoading || ledgerQuery.isLoading || allTxnsQuery.isLoading}
+            onSaved={() => queryClient.invalidateQueries({ queryKey: ["platformAdmin", "settings"] })}
+            onFreeze={(id, frozen) => freezeWallet.mutate({ id, frozen })}
+          />
         )}
         {activeTab === "broadcasts" && (
-            <BroadcastPanel users={usersQuery.data || []} />
+          <BroadcastPanel users={usersQuery.data || []} />
         )}
         {activeTab === "voucher_audit" && (
-            <VoucherAuditPanel rows={voucherAudit.data || []} search={voucherSearch} onSearch={setVoucherSearch} loading={voucherAudit.isLoading} />
+          <VoucherAuditPanel rows={voucherAudit.data || []} search={voucherSearch} onSearch={setVoucherSearch} loading={voucherAudit.isLoading} />
         )}
         {activeTab === "message_diagnostics" && (
           <MessageDiagnosticsPanel
@@ -307,22 +306,22 @@ export default function PlatformAdminPage() {
           />
         )}
         {activeTab === "tunnels" && (
-            <TunnelsPanel rows={tunnels.data || []} loading={tunnels.isLoading} onToggle={(id, active) => tunnelMutation.mutate({ id, active })} />
+          <TunnelsPanel rows={tunnels.data || []} loading={tunnels.isLoading} onToggle={(id, active) => tunnelMutation.mutate({ id, active })} />
         )}
         {activeTab === "storage" && (
-            <StoragePanel rows={storage.data || []} loading={storage.isLoading} error={storage.error} prefix={storagePrefix} onPrefix={setStoragePrefix} onDelete={(key) => deleteStorage.mutate(key)} />
+          <StoragePanel rows={storage.data || []} loading={storage.isLoading} error={storage.error} prefix={storagePrefix} onPrefix={setStoragePrefix} onDelete={(key) => deleteStorage.mutate(key)} />
         )}
         {activeTab === "dns" && (
-            <DnsPanel zones={dnsZones.data || []} records={dnsRecords.data || []} error={dnsZones.error || dnsRecords.error} zoneId={zoneId} onZone={setZoneId} onDelete={(record) => deleteDns.mutate({ zone: zoneId, record })} />
+          <DnsPanel zones={dnsZones.data || []} records={dnsRecords.data || []} error={dnsZones.error || dnsRecords.error} zoneId={zoneId} onZone={setZoneId} onDelete={(record) => deleteDns.mutate({ zone: zoneId, record })} />
         )}
         {activeTab === "subadmins" && (
-            <SubadminsPanel users={usersQuery.data || []} onSave={(id, role, next) => updateSubadmin.mutate({ id, role, permissions: next })} />
+          <SubadminsPanel users={usersQuery.data || []} onSave={(id, role, next) => updateSubadmin.mutate({ id, role, permissions: next })} />
         )}
         {activeTab === "system" && (
-            <HealthPanel data={health.data} loading={health.isLoading} onRefresh={() => health.refetch()} />
+          <HealthPanel data={health.data} loading={health.isLoading} onRefresh={() => health.refetch()} />
         )}
         {activeTab === "audit" && (
-            <AdminAuditPanel rows={adminAudit.data || []} loading={adminAudit.isLoading} />
+          <AdminAuditPanel rows={adminAudit.data || []} loading={adminAudit.isLoading} />
         )}
       </div>
     </PlatformAdminLayout>
@@ -345,12 +344,12 @@ function Overview({ data, loading }: { data: Awaited<ReturnType<typeof renultApi
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {cards.map(([label, value, Icon]) => (
-        <Card key={label} className="shadow-none"><CardContent className="flex items-center justify-between p-5">
+        <Card key={label} className="shadow-sm rounded border"><CardContent className="flex items-center justify-between p-5">
           <div><p className="text-xs font-bold text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></div>
           <Icon className="h-8 w-8 text-primary/40" />
         </CardContent></Card>
       ))}
-      <Card className="shadow-none sm:col-span-2 xl:col-span-3"><CardContent className="flex flex-wrap gap-2 p-4 text-xs">
+      <Card className="shadow-none rounded sm:col-span-2 xl:col-span-3"><CardContent className="flex flex-wrap gap-2 p-4 text-xs">
         <Status label="Cloudflare R2" ok={data.r2_configured} />
         <Status label={`${providerLabel(data.dns_provider)} DNS`} ok={data.dns_configured} />
       </CardContent></Card>
