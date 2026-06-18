@@ -193,7 +193,6 @@ export default function Dashboard() {
     return sum + bound;
   }, 0);
   const offlineWithSession = Math.max(0, sessionCount - onlineUsersCount);
-  const totalActiveUsers = Math.max(onlineUsersCount, sessionCount);
   const isActiveUsersLoading = isRoutersLoading
     || activeUsersQueries.some((query) => query.isLoading)
     || routerStatusQueries.some((query) => query.isLoading);
@@ -477,7 +476,7 @@ export default function Dashboard() {
                 {isActiveUsersLoading ? (
                   <Skeleton className="h-8 w-16" />
                 ) : (
-                  <h3 className="text-2xl font-black text-foreground tracking-tight">{totalActiveUsers}</h3>
+                  <h3 className="text-2xl font-black text-foreground tracking-tight">{onlineUsersCount}</h3>
                 )}
                 <div className="flex flex-wrap items-center gap-1.5 mt-2">
                   <Badge className="bg-emerald-500/10 text-emerald-600 border-none text-[10px] gap-1 font-semibold">
