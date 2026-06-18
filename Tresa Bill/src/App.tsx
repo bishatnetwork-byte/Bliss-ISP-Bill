@@ -22,6 +22,7 @@ import HotspotPages from './pages/CaptivePages/HotspotPages';
 import BranchesPage from './pages/Branches';
 import Dashboard from './pages/Dashboard';
 import MessagesPage from './pages/Messages';
+import BulkSMSPage from './pages/BulkSMS';
 import Networks from './pages/Networks/index';
 import NotificationsPage from './pages/Notifications';
 import RemoteAccess from './pages/Networks/RemoteAccess';
@@ -151,6 +152,7 @@ const AppRoutes = () => {
         <Route path="/network" element={protectedElement(<PermissionRoute permission="network"><Networks /></PermissionRoute>)} />
         <Route path="/voucher-support" element={protectedElement(<PermissionRoute permission="support"><SupportsIndex /></PermissionRoute>)} />
         <Route path="/messages" element={protectedElement(<PermissionRoute permission="messages"><MessagesPage /></PermissionRoute>)} />
+        <Route path="/bulk-sms" element={protectedElement(<PermissionRoute permission="support"><BulkSMSPage /></PermissionRoute>)} />
         <Route path="/sales" element={protectedElement(<PermissionRoute permission="sales"><SalesIndex /></PermissionRoute>)} />
         <Route path="/sales/customer/:phone" element={protectedElement(<PermissionRoute permission="sales"><CustomerDetail /></PermissionRoute>)} />
         <Route path="/vouchers" element={protectedElement(<PermissionRoute permission="vouchers"><VouchersIndex /></PermissionRoute>)} />

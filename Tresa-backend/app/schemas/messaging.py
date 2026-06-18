@@ -75,3 +75,14 @@ class MessageDraftUpdate(BaseModel):
 class MessageDraftResponse(MessageDraftUpdate):
     id: str | None = None
     updated_at: datetime | None = None
+
+
+class BulkSmsSettingsUpdate(BaseModel):
+    voucher_sms_enabled: bool = False
+    low_balance_sms_enabled: bool = False
+    low_balance_threshold: int = Field(default=1000, ge=1, le=1_000_000)
+    admin_buy_for_sms_enabled: bool = False
+
+
+class BulkSmsSettingsResponse(BulkSmsSettingsUpdate):
+    sms_cost_ugx: int

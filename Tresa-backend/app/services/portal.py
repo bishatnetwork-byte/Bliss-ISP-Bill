@@ -18,7 +18,11 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.models.captive_portal import CaptivePortal
 from app.models.branch import Branch
+from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
+from app.models.message import MessageLog
 from app.models.notification import Notification
+from app.models.notification_preference import NotificationPreference
+from app.models.platform_ledger import PlatformLedgerEntry
 from app.models.portal_payment import PortalPayment
 from app.models.router import Router
 from app.models.staff import Staff
@@ -27,6 +31,13 @@ from app.models.voucher_purchase import VoucherPurchase
 from app.models.wallet import Wallet
 from app.services import renult_pay
 from app.services import wallet as wallet_svc
+from app.services.messaging import (
+    normalize_sms_phone,
+    render_voucher_message,
+    send_sms,
+    sms_failure_reason,
+    sms_was_accepted,
+)
 from app.services.routers.Packages import get_router_packages
 from app.services.routers.routeros import RouterApiSession, router_connection
 from app.services.storage import STORAGE_ERRORS, object_url, refresh_logo_url, upload_bytes
@@ -496,6 +507,177 @@ def initiate_portal_payment(
     return payment
 
 
+def _portal_sms_preferences(session: Session, user: User) -> NotificationPreference:
+    preferences = session.exec(
+        select(NotificationPreference).where(NotificationPreference.user_id == user.id)
+    ).first()
+    if preferences:
+        return preferences
+    preferences = NotificationPreference(user_id=user.id)
+    session.add(preferences)
+    session.commit()
+    session.refresh(preferences)
+    return preferences
+
+
+def _charge_portal_sms(session: Session, branch: Branch, user: User, reference: str) -> tuple[bool, int]:
+    wallet = session.exec(
+        select(BranchWallet)
+        .where(BranchWallet.branch_id == branch.id)
+        .with_for_update()
+    ).first()
+    cost = settings.sms_notification_cost
+    if not wallet or wallet.is_frozen or wallet.balance < cost:
+        return False, wallet.balance if wallet else 0
+
+    wallet.balance -= cost
+    wallet.total_fees_paid += cost
+    wallet.updated_at = datetime.utcnow()
+    session.add(
+        BranchWalletTransaction(
+            wallet_id=wallet.id,
+            branch_id=branch.id,
+            amount=cost,
+            fee_amount=cost,
+            net_amount=0,
+            transaction_type="SMS_NOTIFICATION",
+            reference=reference,
+        )
+    )
+    session.add(
+        PlatformLedgerEntry(
+            branch_wallet_id=wallet.id,
+            branch_id=branch.id,
+            user_id=user.id,
+            amount=cost,
+            fee_type="SMS_NOTIFICATION",
+            source_amount=cost,
+            fee_rate=1,
+            reference=reference,
+        )
+    )
+    session.add(wallet)
+    session.commit()
+    session.refresh(wallet)
+    return True, wallet.balance
+
+
+def _send_low_balance_sms(
+    session: Session,
+    branch: Branch,
+    user: User,
+    preferences: NotificationPreference,
+    balance: int,
+) -> None:
+    warning_phone = preferences.sms_phone_number or user.phone_number
+    if not warning_phone:
+        return
+    try:
+        phone = normalize_sms_phone(warning_phone)
+        message = (
+            f"Renult Bulk SMS warning: {branch.name} SMS wallet balance is "
+            f"UGX {balance:,}. Auto voucher SMS is paused until you top up."
+        )
+        response = send_sms(message, [phone])
+        accepted = sms_was_accepted(response, phone)
+        if accepted:
+            _charge_portal_sms(session, branch, user, f"SMS-LOW-{branch.id}-{int(datetime.utcnow().timestamp())}")
+    except Exception:
+        return
+
+
+def _send_portal_voucher_sms(
+    session: Session,
+    router: Router,
+    payment: PortalPayment,
+    voucher: VoucherPurchase,
+) -> None:
+    branch = session.get(Branch, router.branch_id)
+    if not branch:
+        return
+    user = session.get(User, branch.user_id)
+    if not user:
+        return
+    preferences = _portal_sms_preferences(session, user)
+    if not preferences.bulk_sms_voucher_enabled:
+        return
+    if payment.buy_for != "self" and not preferences.bulk_sms_admin_buy_for_enabled:
+        return
+
+    wallet = session.exec(select(BranchWallet).where(BranchWallet.branch_id == branch.id)).first()
+    balance = wallet.balance if wallet else 0
+    if balance < preferences.bulk_sms_low_balance_threshold:
+        if preferences.bulk_sms_low_balance_enabled and balance >= settings.sms_notification_cost:
+            _send_low_balance_sms(session, branch, user, preferences, balance)
+        session.add(
+            Notification(
+                user_id=user.id,
+                category="wallet",
+                title="Bulk SMS paused",
+                body=(
+                    f"{branch.name} SMS wallet balance is UGX {balance:,}. "
+                    f"Top up to at least UGX {preferences.bulk_sms_low_balance_threshold:,}."
+                ),
+            )
+        )
+        session.commit()
+        return
+
+    try:
+        phone = normalize_sms_phone(voucher.phone_number)
+    except ValueError:
+        return
+
+    message = render_voucher_message(
+        "{wifi_name}: your Wi-Fi voucher code is {code}.",
+        router.name,
+        voucher.voucher_code,
+    )
+    log = MessageLog(
+        branch_id=branch.id,
+        user_id=user.id,
+        message=message,
+        message_type="voucher",
+        recipients=[phone],
+        cost_per_sms=settings.sms_notification_cost,
+    )
+    session.add(log)
+    session.commit()
+    session.refresh(log)
+
+    try:
+        response = send_sms(message, [phone])
+        accepted = sms_was_accepted(response, phone)
+        charged, wallet_balance = (
+            _charge_portal_sms(session, branch, user, f"SMS-PORTAL-{payment.reference}")
+            if accepted
+            else (False, balance)
+        )
+        failure = None if accepted else sms_failure_reason(response, phone)
+        log.status = "completed" if accepted else "failed"
+        log.sent = 1 if accepted else 0
+        log.failed = 0 if accepted else 1
+        log.results = [{
+            "phone_number": phone,
+            "success": accepted,
+            "message": message if accepted else failure,
+            "provider_response": response,
+        }]
+        log.error = failure
+        log.total_charged = settings.sms_notification_cost if charged else 0
+        log.wallet_balance = wallet_balance
+        log.updated_at = datetime.utcnow()
+        session.add(log)
+        session.commit()
+    except Exception as exc:
+        log.status = "failed"
+        log.failed = 1
+        log.error = str(exc)
+        log.updated_at = datetime.utcnow()
+        session.add(log)
+        session.commit()
+
+
 def _finalize_payment_voucher(session: Session, payment: PortalPayment) -> PortalPayment:
     """Provision the voucher for a payment whose gateway status is SUCCESS."""
     router = find_router_by_name(session, payment.router_name)
@@ -541,6 +723,7 @@ def _finalize_payment_voucher(session: Session, payment: PortalPayment) -> Porta
     session.add(payment)
     session.commit()
     session.refresh(payment)
+    _send_portal_voucher_sms(session, router, payment, voucher)
     return payment
 
 

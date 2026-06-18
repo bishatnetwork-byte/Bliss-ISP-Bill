@@ -14,6 +14,7 @@ from app.models.branch import Branch
 from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
 from app.models.platform_ledger import PlatformLedgerEntry
 from app.models.message import MessageDraft, MessageLog
+from app.services.snmp_monitor import get_or_create_preferences
 from app.models.router import Router
 from app.models.user import User
 from app.models.voucher_purchase import VoucherPurchase
@@ -27,6 +28,8 @@ from app.schemas.messaging import (
     MessageSendResult,
     MessageDraftResponse,
     MessageDraftUpdate,
+    BulkSmsSettingsResponse,
+    BulkSmsSettingsUpdate,
 )
 from app.services.access import require_branch_access
 from app.services.messaging import (
@@ -266,6 +269,55 @@ def save_message_draft(
         recipients=list(draft.recipients or []),
         updated_at=draft.updated_at,
     )
+
+
+def _bulk_sms_settings_response(preferences) -> BulkSmsSettingsResponse:
+    return BulkSmsSettingsResponse(
+        voucher_sms_enabled=preferences.bulk_sms_voucher_enabled,
+        low_balance_sms_enabled=preferences.bulk_sms_low_balance_enabled,
+        low_balance_threshold=preferences.bulk_sms_low_balance_threshold,
+        admin_buy_for_sms_enabled=preferences.bulk_sms_admin_buy_for_enabled,
+        sms_cost_ugx=settings.sms_notification_cost,
+    )
+
+
+@router.get(
+    "/branches/{branch_id}/messages/settings",
+    response_model=BulkSmsSettingsResponse,
+)
+def get_bulk_sms_settings(
+    branch_id: UUID,
+    user: CurrentUser,
+    session: SessionDep,
+) -> BulkSmsSettingsResponse:
+    branch, _staff = require_branch_access(session, branch_id, user, "support")
+    owner = session.get(User, branch.user_id) or user
+    preferences = get_or_create_preferences(session, owner)
+    return _bulk_sms_settings_response(preferences)
+
+
+@router.put(
+    "/branches/{branch_id}/messages/settings",
+    response_model=BulkSmsSettingsResponse,
+)
+def update_bulk_sms_settings(
+    branch_id: UUID,
+    payload: BulkSmsSettingsUpdate,
+    user: CurrentUser,
+    session: SessionDep,
+) -> BulkSmsSettingsResponse:
+    branch, _staff = require_branch_access(session, branch_id, user, "support")
+    owner = session.get(User, branch.user_id) or user
+    preferences = get_or_create_preferences(session, owner)
+    preferences.bulk_sms_voucher_enabled = payload.voucher_sms_enabled
+    preferences.bulk_sms_low_balance_enabled = payload.low_balance_sms_enabled
+    preferences.bulk_sms_low_balance_threshold = payload.low_balance_threshold
+    preferences.bulk_sms_admin_buy_for_enabled = payload.admin_buy_for_sms_enabled
+    preferences.updated_at = datetime.utcnow()
+    session.add(preferences)
+    session.commit()
+    session.refresh(preferences)
+    return _bulk_sms_settings_response(preferences)
 
 
 @router.post(

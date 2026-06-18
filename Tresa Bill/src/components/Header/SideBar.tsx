@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/tooltip";
 import { HelpDeskIcon, MikrotikIcon, MoneyIcon, SettingsIcon, VoucherIcon, WithdrawIcon } from "@/constants/Icons";
 import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 import {
   Check,
   ChevronDown,
@@ -169,6 +170,7 @@ const PERMISSION_BY_PATH: Record<string, string> = {
   "/remote-access": "network",
   "/captive-portals": "captive",
   "/campaigns": "support",
+  "/bulk-sms": "support",
   "/withdrawals": "withdrawals",
   "/branches": "branches",
   "/settings": "settings",
@@ -271,6 +273,7 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
     cachedSelected ? readRouterStatusCache(cachedSelected.id)?.pingStatuses ?? {} : {},
   );
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
+  const [bulkSmsLowBalance, setBulkSmsLowBalance] = useState(false);
 
   const handleSelectWorkspace = (workspace: Workspace) => {
     setSelectedWorkspace(workspace);
@@ -428,6 +431,37 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
     };
   }, [selectedWorkspace?.id]);
 
+  useEffect(() => {
+    if (!selectedWorkspace?.id) return;
+    const branchId = selectedWorkspace.id;
+    let mounted = true;
+    let timer: number | undefined;
+
+    const loadBulkSmsBalance = async () => {
+      try {
+        const [wallet, settings] = await Promise.all([
+          renultApi.wallets.getBranchWallet(branchId),
+          renultApi.messages.settings(branchId),
+        ]);
+        if (!mounted) return;
+        setBulkSmsLowBalance(wallet.balance < settings.low_balance_threshold);
+      } catch {
+        if (mounted) setBulkSmsLowBalance(false);
+      } finally {
+        if (mounted) timer = window.setTimeout(loadBulkSmsBalance, 60 * 1000);
+      }
+    };
+
+    loadBulkSmsBalance();
+    const refresh = () => loadBulkSmsBalance();
+    window.addEventListener("bulk-sms-balance-change", refresh);
+    return () => {
+      mounted = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+      window.removeEventListener("bulk-sms-balance-change", refresh);
+    };
+  }, [selectedWorkspace?.id]);
+
   const toggleCollapse = () => {
     const next = !isCollapsed;
     setIsCollapsed(next);
@@ -525,7 +559,12 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
     const subActive = submenu?.some((sub) => isSubActive(sub.path)) ?? false;
     const active = isActive(item.path) || subActive;
     const isExpanded = expandedMenu === item.label;
-    const iconClassName = `shrink-0 ${active ? "text-primary" : item.iconColor || "text-muted-foreground"}`;
+    const isBulkSmsWarning = item.path === "/bulk-sms" && bulkSmsLowBalance;
+    const iconClassName = cn(
+      "shrink-0",
+      isBulkSmsWarning && "animate-pulse text-red-600",
+      !isBulkSmsWarning && (active ? "text-primary" : item.iconColor || "text-muted-foreground"),
+    );
     const routerAvailability =
       effectiveRouterCounts.online > 0
         ? "online"
@@ -570,9 +609,12 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
         `}
       >
         {isCollapsed ? (
-          <span className={iconClassName}>
-            {item.icon}
-            {item.label === "Mikrotiks" && monitoring && monitoring.total > 0 && (
+              <span className={iconClassName}>
+                {item.icon}
+                {isBulkSmsWarning && (
+                  <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-600 ring-2 ring-white" />
+                )}
+                {item.label === "Mikrotiks" && monitoring && monitoring.total > 0 && (
               <span
                 className={`absolute right-0 top-0 inline-flex min-w-4 items-center justify-center rounded-full border border-white px-1 text-[9px] font-bold leading-4 ${routerBadgeColor}`}
                 title={`${effectiveRouterCounts.online} online, ${effectiveRouterCounts.offline} offline`}
@@ -590,6 +632,9 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
               <span className="truncate">{item.label}</span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {isBulkSmsWarning && (
+                <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse" title="Bulk SMS wallet balance is low" />
+              )}
               {routerCountBadge}
               {item.hasSubmenu && (
                 <MoreHorizontal className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-colors" />

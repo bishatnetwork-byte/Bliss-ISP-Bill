@@ -992,6 +992,14 @@ export interface MessageDraftResponse {
   updated_at: string | null;
 }
 
+export interface BulkSmsSettingsResponse {
+  voucher_sms_enabled: boolean;
+  low_balance_sms_enabled: boolean;
+  low_balance_threshold: number;
+  admin_buy_for_sms_enabled: boolean;
+  sms_cost_ugx: number;
+}
+
 export interface VoucherRouterSyncResponse {
   success: boolean;
   router_id: string;
@@ -1576,6 +1584,16 @@ export const renultApi = {
       payload: Pick<MessageDraftResponse, "message" | "message_type" | "recipients">,
     ) =>
       apiRequest<MessageDraftResponse>(`/branches/${branchId}/messages/draft`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }),
+    settings: (branchId: string) =>
+      apiRequest<BulkSmsSettingsResponse>(`/branches/${branchId}/messages/settings`),
+    saveSettings: (
+      branchId: string,
+      payload: Omit<BulkSmsSettingsResponse, "sms_cost_ugx">,
+    ) =>
+      apiRequest<BulkSmsSettingsResponse>(`/branches/${branchId}/messages/settings`, {
         method: "PUT",
         body: JSON.stringify(payload),
       }),

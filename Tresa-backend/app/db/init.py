@@ -73,6 +73,7 @@ def init_db() -> None:
     _ensure_staff_columns()
     _ensure_user_platform_columns()
     _ensure_router_columns()
+    _ensure_notification_preference_columns()
     _ensure_voucher_purchase_columns()
     _ensure_portal_ad_columns()
     _ensure_branch_wallet_transaction_columns()
@@ -156,6 +157,23 @@ def _ensure_telegram_connection_columns() -> None:
         for name, sql_type in column_types.items():
             if name not in columns:
                 conn.execute(sa.text(f"ALTER TABLE telegramconnection ADD COLUMN {name} {sql_type}"))
+
+
+def _ensure_notification_preference_columns() -> None:
+    inspector = sa.inspect(engine)
+    if not inspector.has_table("notificationpreference"):
+        return
+    columns = {column["name"] for column in inspector.get_columns("notificationpreference")}
+    column_types = {
+        "bulk_sms_voucher_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
+        "bulk_sms_low_balance_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
+        "bulk_sms_low_balance_threshold": "INTEGER DEFAULT 1000 NOT NULL",
+        "bulk_sms_admin_buy_for_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
+    }
+    with engine.begin() as conn:
+        for name, sql_type in column_types.items():
+            if name not in columns:
+                conn.execute(sa.text(f"ALTER TABLE notificationpreference ADD COLUMN {name} {sql_type}"))
 
 
 def _bootstrap_platform_admins() -> None:
