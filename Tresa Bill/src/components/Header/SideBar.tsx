@@ -23,6 +23,7 @@ import {
   Home,
   LucidePercentSquare,
   Megaphone,
+  MessageCircleMoreIcon,
   MessagesSquare,
   MoreHorizontal,
   Network,
@@ -71,7 +72,7 @@ const primaryNavItems: NavItem[] = [
     path: "/active-users",
   },
   {
-    label: "Wifi Prices / Packages",
+    label: "Wifi Prices",
     icon: <PackagePlusIcon className="w-5 h-5" />, //Mikrotiks Router
     path: "/packages",
   },
@@ -92,6 +93,11 @@ const primaryNavItems: NavItem[] = [
 ];
 
 const supportNavItems: NavItem[] = [
+  {
+label: "Bulk Sms",
+    icon: <MessageCircleMoreIcon className="w-5 h-5" />,
+    path: "/bulk-sms",
+  },
   {
     label: "Withdrawals",
     icon: <WithdrawIcon className="w-5 h-5" />,

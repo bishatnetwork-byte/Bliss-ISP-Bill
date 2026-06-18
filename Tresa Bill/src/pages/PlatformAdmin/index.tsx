@@ -344,7 +344,7 @@ function Overview({ data, loading }: { data: Awaited<ReturnType<typeof renultApi
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {cards.map(([label, value, Icon]) => (
-        <Card key={label} className="shadow-sm rounded border"><CardContent className="flex items-center justify-between p-5">
+        <Card key={label} className="shadow-sm rounded-none border"><CardContent className="flex items-center justify-between p-5">
           <div><p className="text-xs font-bold text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></div>
           <Icon className="h-8 w-8 text-primary/40" />
         </CardContent></Card>
@@ -1230,7 +1230,7 @@ function AdminAuditPanel({ rows, loading }: { rows: Awaited<ReturnType<typeof re
 }
 
 function Panel({ title, icon: Icon, action, children }: { title: string; icon: typeof Users; action?: React.ReactNode; children: React.ReactNode }) {
-  return <Card className="shadow-none"><CardHeader className="flex flex-row items-center justify-between gap-3"><CardTitle className="flex items-center gap-2 text-sm"><Icon className="h-4 w-4 text-primary" />{title}</CardTitle>{action}</CardHeader><CardContent>{children}</CardContent></Card>;
+  return <Card className="shadow-none rounded border border-border/20"><CardHeader className="flex flex-row items-center justify-between gap-3"><CardTitle className="flex items-center gap-2 text-sm"><Icon className="h-4 w-4 text-primary" />{title}</CardTitle>{action}</CardHeader><CardContent>{children}</CardContent></Card>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
