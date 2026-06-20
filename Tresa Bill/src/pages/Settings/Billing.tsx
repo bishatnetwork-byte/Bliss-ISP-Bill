@@ -56,8 +56,8 @@ export default function BillingPage() {
       id: tx.id.slice(0, 8).toUpperCase(),
       date: tx.created_at,
       description: tx.transaction_type === "deposit"
-        ? `Deposit${tx.reference ? " — " + tx.reference : ""}`
-        : `Withdrawal${tx.reference ? " — " + tx.reference : ""}`,
+        ? `Deposit${tx.reference ? " " + tx.reference : ""}`
+        : `Withdrawal${tx.reference ? " " + tx.reference : ""}`,
       amount: tx.transaction_type === "withdrawal" ? -tx.net_amount : tx.net_amount,
       status: "Paid" as const,
     }));

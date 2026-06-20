@@ -39,7 +39,7 @@ export default function ReportsPanel({ users, transactions, audit, voucherAudit,
     {
       key: "users",
       label: "Global Users",
-      description: `${users.length} users — name, email, phone, assets, wallet balance, status.`,
+      description: `${users.length} users name, email, phone, assets, wallet balance, status.`,
       disabled: users.length === 0,
       onExport: () => downloadCsv(
         "renult-users.csv",

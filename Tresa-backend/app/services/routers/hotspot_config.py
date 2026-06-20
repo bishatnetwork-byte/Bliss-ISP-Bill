@@ -3,7 +3,7 @@ MikroTik Hotspot Configuration Provisioning Engine
 ===================================================
 
 Detects router hardware (port count, wireless, identity) and generates + executes
-the correct RouterOS API commands to set up PPPoE / Hotspot / NAT / DNS — adapting
+the correct RouterOS API commands to set up PPPoE / Hotspot / NAT / DNS adapting
 dynamically to whatever hardware the router has.
 
 Reference script: ``mikrotik_restore_template.rsc`` in this directory.
@@ -489,7 +489,7 @@ def _execute_command(api: Any, cmd: dict[str, Any]) -> CommandResult:
                 if item_id:
                     resource.set(id=item_id, **params)
                 else:
-                    # For singleton resources (e.g. /ip/dns) — use direct set
+                    # For singleton resources (e.g. /ip/dns) use direct set
                     resource.set(**params)
             else:
                 resource.set(**params)
@@ -537,7 +537,7 @@ def provision_hotspot(
     if config is None:
         config = HotspotProvisionConfig()
 
-    # Step 1 — detect hardware
+    # Step 1 detect hardware
     hardware = detect_router_hardware(router)
     if hardware["error"]:
         return {
@@ -554,7 +554,7 @@ def provision_hotspot(
             "hardware": hardware,
             "commands_executed": 0,
             "command_log": [],
-            "error": "No ethernet ports detected — cannot provision.",
+            "error": "No ethernet ports detected cannot provision.",
         }
 
     # Validate WAN port index
@@ -570,10 +570,10 @@ def provision_hotspot(
             ),
         }
 
-    # Step 2 — generate commands
+    # Step 2 generate commands
     commands = generate_config_commands(hardware, config)
 
-    # Step 3 — execute
+    # Step 3 execute
     command_log: list[CommandResult] = []
     try:
         with router_connection(router) as api:
@@ -617,8 +617,8 @@ def apply_trial_settings(router: Router, trial_enabled: bool, trial_minutes: int
 
     Sets ``trial-uptime-limit`` to the requested duration (and
     ``trial-uptime-reset`` to "1d" so a device can retry once per day) when
-    enabled, or zeroes both fields — RouterOS's documented way of disabling
-    the trial feature — when disabled.
+    enabled, or zeroes both fields RouterOS's documented way of disabling
+    the trial feature when disabled.
 
     Returns an error string on failure, or ``None`` on success.
     """

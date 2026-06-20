@@ -165,7 +165,7 @@ def enable_router_snmp(
         chr_forwarding_enabled = True
     except ValueError as exc:
         if "provisioning" in str(exc).lower():
-            # Tunnel not yet provisioned — physical SNMP is fine, CHR NAT will be
+            # Tunnel not yet provisioned physical SNMP is fine, CHR NAT will be
             # configured automatically once the tunnel comes up.
             chr_pending_provisioning = True
         else:

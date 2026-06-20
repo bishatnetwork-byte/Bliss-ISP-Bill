@@ -29,7 +29,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
-  Cloud,
   Database,
   FileClock,
   Globe2,
@@ -50,7 +49,7 @@ import {
   UserCog,
   UserPlus,
   Users,
-  Wifi,
+  Wifi
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -465,9 +464,9 @@ function Overview({ data, loading }: { data: Awaited<ReturnType<typeof renultApi
     ["Telegram Admins", data.telegram_admins, Send],
   ] as const;
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-3">
       {cards.map(([label, value, Icon]) => (
-        <Card key={label} className="shadow-sm rounded-none border"><CardContent className="flex items-center justify-between p-5">
+        <Card key={label} className="shadow-none rounded border border-gray-100 cursor-alias"><CardContent className="flex items-center justify-between p-5">
           <div><p className="text-xs font-bold text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></div>
           <Icon className="h-8 w-8 text-primary/40" />
         </CardContent></Card>
@@ -523,35 +522,35 @@ function UsersPanel({ users, loading, search, onSearch, onUpdate, onSyncSubdomai
       <tbody>{users.map((item) => {
         const blocked = item.blocked_until && new Date(item.blocked_until) > new Date();
         return <tr key={item.id} className="border-b align-top">
-        <td className="p-3"><p className="font-bold">{item.full_name}</p><p className="text-muted-foreground">{item.email}</p><p className="mt-1">{formatDate(item.created_at)}</p></td>
-        <td className="p-3">{item.phone_number || "N/A"}</td>
-        <td className="p-3">{item.branches} branches<br />{item.routers} routers<br />{item.vouchers} vouchers</td>
-        <td className="p-3 font-bold">{money(item.wallet_balance)}</td>
-        <td className="min-w-[280px] p-3"><CheckboxGrid values={item.allowed_sections} options={USER_SECTIONS} onChange={(next) => onUpdate(item.id, { allowed_sections: next })} emptyLabel="All sections" /></td>
-        <td className="min-w-[260px] p-3">
-          <UserSubdomainControl
-            user={item}
-            onUpdate={(payload) => onUpdate(item.id, payload)}
-            onSync={() => onSyncSubdomain(item.id)}
-          />
-        </td>
-        <td className="p-3">
-          <Status label={item.is_active ? "Active" : "Suspended"} ok={item.is_active} />
-          <div className="mt-2"><Status label={item.is_verified ? "Verified" : "Unverified"} ok={item.is_verified} /></div>
-          {blocked && <div className="mt-2"><Status label={`Blocked until ${formatDate(item.blocked_until)}`} ok={false} /></div>}
-          {item.force_password_change && <div className="mt-2"><Status label="Must reset password" ok={false} /></div>}
-        </td>
-        <td className="p-3 space-y-2">
-          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onView(item.id)}>View Profile</Button>
-          <Button size="sm" variant={item.is_active ? "destructive" : "outline"} className="h-8 text-xs" onClick={() => onUpdate(item.id, { is_active: !item.is_active })}>{item.is_active ? "Suspend" : "Activate"}</Button>
-          {!item.is_verified && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onUpdate(item.id, { is_verified: true })}>Verify</Button>}
-          {blocked
-            ? <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onUnblock(item.id)}>Unblock</Button>
-            : <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => handleBlock(item.id)}>Block</Button>}
-          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => window.confirm(`Reset password for ${item.email}?`) && onResetPassword(item.id)}>Reset Password</Button>
-          <Button size="sm" variant="destructive" className="h-8 text-xs" onClick={() => window.confirm(`Remove ${item.email}? This only works if they own no branches/routers.`) && onDelete(item.id)}>Remove</Button>
-        </td>
-      </tr>;
+          <td className="p-3"><p className="font-bold">{item.full_name}</p><p className="text-muted-foreground">{item.email}</p><p className="mt-1">{formatDate(item.created_at)}</p></td>
+          <td className="p-3">{item.phone_number || "N/A"}</td>
+          <td className="p-3">{item.branches} branches<br />{item.routers} routers<br />{item.vouchers} vouchers</td>
+          <td className="p-3 font-bold">{money(item.wallet_balance)}</td>
+          <td className="min-w-[280px] p-3"><CheckboxGrid values={item.allowed_sections} options={USER_SECTIONS} onChange={(next) => onUpdate(item.id, { allowed_sections: next })} emptyLabel="All sections" /></td>
+          <td className="min-w-[260px] p-3">
+            <UserSubdomainControl
+              user={item}
+              onUpdate={(payload) => onUpdate(item.id, payload)}
+              onSync={() => onSyncSubdomain(item.id)}
+            />
+          </td>
+          <td className="p-3">
+            <Status label={item.is_active ? "Active" : "Suspended"} ok={item.is_active} />
+            <div className="mt-2"><Status label={item.is_verified ? "Verified" : "Unverified"} ok={item.is_verified} /></div>
+            {blocked && <div className="mt-2"><Status label={`Blocked until ${formatDate(item.blocked_until)}`} ok={false} /></div>}
+            {item.force_password_change && <div className="mt-2"><Status label="Must reset password" ok={false} /></div>}
+          </td>
+          <td className="p-3 space-y-2">
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onView(item.id)}>View Profile</Button>
+            <Button size="sm" variant={item.is_active ? "destructive" : "outline"} className="h-8 text-xs" onClick={() => onUpdate(item.id, { is_active: !item.is_active })}>{item.is_active ? "Suspend" : "Activate"}</Button>
+            {!item.is_verified && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onUpdate(item.id, { is_verified: true })}>Verify</Button>}
+            {blocked
+              ? <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onUnblock(item.id)}>Unblock</Button>
+              : <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => handleBlock(item.id)}>Block</Button>}
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => window.confirm(`Reset password for ${item.email}?`) && onResetPassword(item.id)}>Reset Password</Button>
+            <Button size="sm" variant="destructive" className="h-8 text-xs" onClick={() => window.confirm(`Remove ${item.email}? This only works if they own no branches/routers.`) && onDelete(item.id)}>Remove</Button>
+          </td>
+        </tr>;
       })}</tbody>
     </table></div>}
   </Panel>;
@@ -655,7 +654,7 @@ function dayStr(daysAgo: number) {
   const d = new Date(); d.setDate(d.getDate() - daysAgo); return d.toISOString().slice(0, 10);
 }
 
-const FEE_PAGE = 15;
+const FEE_PAGE = 5;
 
 function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSaved, onFreeze }: {
   initial?: PlatformSettingsResponse;
@@ -697,7 +696,7 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
     return { totalFees, depositFees, withdrawalFees, totalDeposited, totalWithdrawn, activeWallets, frozenWallets, totalClientBalance };
   }, [ledger, allTransactions, wallets]);
 
-  // Sparklines — daily fee totals last 7 days
+  // Sparklines daily fee totals last 7 days
   const feeSparkline = useMemo(() =>
     Array.from({ length: 7 }, (_, i) => {
       const d = dayStr(6 - i);
@@ -773,9 +772,9 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Total Fees */}
-            <Card className="rounded-lg border border-border/80 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
+            <Card className="rounded border border-border/20 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
               <CardHeader className="pb-1 pt-3 px-4">
-                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Total Fees Earned</span>
+                <span className="text-[11px] font-bold text-muted-foreground ">Total Fees Earned</span>
                 <CardTitle className="text-xl font-black mt-0.5 leading-tight">{money(kpi.totalFees)}</CardTitle>
               </CardHeader>
               <div className="px-4 mt-auto"><Sparkline data={feeSparkline} color="#8b5cf6" /></div>
@@ -785,13 +784,12 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
                   <div className="p-1 rounded bg-violet-500/10 text-violet-600"><Database className="w-3.5 h-3.5" /></div>
                 </div>
               </CardContent>
-              <div className="h-[2px] bg-violet-500" />
             </Card>
 
             {/* Total Deposited */}
-            <Card className="rounded-lg border border-border/80 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
+            <Card className="rounded border border-border/20 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
               <CardHeader className="pb-1 pt-3 px-4">
-                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Platform Deposits</span>
+                <span className="text-[11px] font-bold text-muted-foreground ">Platform Deposits</span>
                 <CardTitle className="text-xl font-black mt-0.5 leading-tight">{money(kpi.totalDeposited)}</CardTitle>
               </CardHeader>
               <div className="px-4 mt-auto"><Sparkline data={depositSparkline} color="#10b981" /></div>
@@ -801,13 +799,12 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
                   <div className="p-1 rounded bg-emerald-500/10 text-emerald-600"><TrendingUp className="w-3.5 h-3.5" /></div>
                 </div>
               </CardContent>
-              <div className="h-[2px] bg-emerald-500" />
             </Card>
 
             {/* Total Withdrawn */}
-            <Card className="rounded-lg border border-border/80 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
+            <Card className="rounded border border-border/20 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
               <CardHeader className="pb-1 pt-3 px-4">
-                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Platform Withdrawals</span>
+                <span className="text-[11px] font-bold text-muted-foreground ">Platform Withdrawals</span>
                 <CardTitle className="text-xl font-black mt-0.5 leading-tight">{money(kpi.totalWithdrawn)}</CardTitle>
               </CardHeader>
               <div className="px-4 mt-auto"><Sparkline data={withdrawalSparkline} color="#ef4444" /></div>
@@ -817,13 +814,12 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
                   <div className="p-1 rounded bg-red-500/10 text-red-600"><TrendingDown className="w-3.5 h-3.5" /></div>
                 </div>
               </CardContent>
-              <div className="h-[2px] bg-red-500" />
             </Card>
 
             {/* Wallets */}
-            <Card className="rounded-lg border border-border/80 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
+            <Card className="rounded border border-border/20 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
               <CardHeader className="pb-1 pt-3 px-4">
-                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Client Balances</span>
+                <span className="text-[11px] font-bold text-muted-foreground ">Client Balances</span>
                 <CardTitle className="text-xl font-black mt-0.5 leading-tight">{money(kpi.totalClientBalance)}</CardTitle>
               </CardHeader>
               <div className="px-4 mt-auto"><Sparkline data={Array.from({ length: 7 }, (_, i) => kpi.totalClientBalance / (i + 1))} color="#f97316" /></div>
@@ -833,14 +829,13 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
                   <div className="p-1 rounded bg-orange-500/10 text-orange-500"><CircleDollarSign className="w-3.5 h-3.5" /></div>
                 </div>
               </CardContent>
-              <div className="h-[2px] bg-orange-500" />
             </Card>
           </div>
 
           {/* Fee type breakdown */}
           <div className="grid sm:grid-cols-2 gap-3">
-            <Card className="shadow-none border border-border/40">
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-bold flex items-center gap-2"><Database className="w-4 h-4 text-violet-500" />Fee Breakdown</CardTitle></CardHeader>
+            <Card className="shadow-none border border-border/20 rounded">
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-bold flex items-center gap-2">Fee Breakdown</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 {[
                   { label: "Deposit Fees", amount: kpi.depositFees, pct: kpi.totalFees ? (kpi.depositFees / kpi.totalFees) * 100 : 0, color: "bg-emerald-500" },
@@ -860,8 +855,8 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
               </CardContent>
             </Card>
 
-            <Card className="shadow-none border border-border/40">
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-bold flex items-center gap-2"><Banknote className="w-4 h-4 text-blue-500" />Current Fee Rates</CardTitle></CardHeader>
+            <Card className="shadow-none border border-border/20 rounded">
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-bold flex items-center gap-2">Current Fee Rates</CardTitle></CardHeader>
               <CardContent>
                 {!form ? <Loading /> : (
                   <div className="space-y-2 text-sm">
@@ -891,11 +886,11 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
 
       {/* ── Fee Ledger ──────────────────────────────────────────── */}
       {tab === "ledger" && (
-        <Card className="shadow-none border border-border/40">
+        <Card className="shadow-none border border-border/20 rounded">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-sm font-bold flex items-center gap-2"><Database className="w-4 h-4 text-violet-500" />Platform Fee Audit Ledger</CardTitle>
-              <CardDescription className="text-xs mt-0.5">Every fee collected — deposit &amp; withdrawal charges across all clients.</CardDescription>
+              <CardTitle className="text-sm font-bold flex items-center gap-2">Platform Fee Audit Ledger</CardTitle>
+              <CardDescription className="text-xs mt-0.5">Every fee collected deposit &amp; withdrawal charges across all clients.</CardDescription>
             </div>
             <Badge variant="outline" className="bg-violet-500/10 text-violet-700 border-violet-500/20 text-xs font-bold">{ledger.length} entries</Badge>
           </CardHeader>
@@ -927,7 +922,7 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
                             <TableCell className="text-xs font-semibold">{entry.owner_name}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">{entry.branch_name}</TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={cn("text-[10px] font-bold", isDeposit ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" : "bg-red-500/10 text-red-700 border-red-500/20")}>
+                              <Badge variant="outline" className={cn("text-[9px] font-bold", isDeposit ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" : "bg-red-500/10 text-red-700 border-red-500/20")}>
                                 {isDeposit ? "Deposit Fee" : "Withdrawal Fee"}
                               </Badge>
                             </TableCell>
@@ -961,11 +956,11 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
 
       {/* ── All Transactions ────────────────────────────────────── */}
       {tab === "transactions" && (
-        <Card className="shadow-none border border-border/40">
+        <Card className="shadow-none border border-border/20 rounded">
           <CardHeader className="pb-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-sm font-bold flex items-center gap-2"><Banknote className="w-4 h-4 text-blue-500" />All Client Wallet Transactions</CardTitle>
+                <CardTitle className="text-sm font-bold flex items-center gap-2">All Client Wallet Transactions</CardTitle>
                 <CardDescription className="text-xs mt-0.5">Every deposit &amp; withdrawal across every client branch.</CardDescription>
               </div>
               <div className="flex gap-2 flex-wrap">
@@ -1061,7 +1056,7 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
       {/* ── Fee Calculator ──────────────────────────────────────── */}
       {tab === "calculator" && (
         <div className="grid sm:grid-cols-2 gap-4 max-w-3xl">
-          <Card className="shadow-none border border-border/40">
+          <Card className="shadow-none border border-border/20 rounded">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-bold flex items-center gap-2"><Calculator className="w-4 h-4 text-primary" />Platform Fee Calculator</CardTitle>
               <CardDescription className="text-xs">Simulate what the platform earns for any transaction amount.</CardDescription>
@@ -1109,11 +1104,11 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
             </CardContent>
           </Card>
 
-          <Card className={cn("shadow-none border-2 flex flex-col", calcResult && calcResult.fee > 0 ? "border-violet-500/40 bg-violet-500/5" : "border-border/40")}>
+          <Card className={cn("shadow-none border-2 flex flex-col rounded", calcResult && calcResult.fee > 0 ? "border-violet-500/40 bg-violet-500/5" : "border-border/40")}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wide">Calculation Result</CardTitle>
+              <CardTitle className="text-sm font-bold text-muted-foreground ">Calculation Result</CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col justify-center space-y-4">
+            <CardContent className="flex-1 flex flex-col justify-center space-y-4 rounded">
               {!calcResult ? (
                 <p className="text-xs text-muted-foreground text-center">Load settings first.</p>
               ) : (
@@ -1130,9 +1125,9 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
                       </div>
                     ))}
                   </div>
-                  <div className="rounded-lg bg-violet-500/10 border border-violet-500/20 p-4 text-center">
-                    <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Platform Earns</p>
-                    <p className="text-3xl font-black text-violet-700 font-mono mt-1">{money(calcResult.fee)}</p>
+                  <div className="rounded bg-violet-500/10 border border-violet-500/20 p-4 text-center">
+                    <p className="text-[11px] text-muted-foreground font-semibold ">Platform Earns</p>
+                    <p className="text-3xl font-black text-violet-700 mt-1">{money(calcResult.fee)}</p>
                     <p className="text-[10px] text-muted-foreground mt-1">{(calcResult.rate * 100).toFixed(2)}% of {money(calcAmount)}</p>
                   </div>
                 </>
@@ -1144,7 +1139,7 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
 
       {/* ── Wallet Control ──────────────────────────────────────── */}
       {tab === "wallets" && (
-        <Card className="shadow-none border border-border/40">
+        <Card className="shadow-none border border-border/20 rounded">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-sm font-bold flex items-center gap-2"><Snowflake className="w-4 h-4 text-blue-500" />Client Wallet Control</CardTitle>
@@ -1197,7 +1192,7 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
 
       {/* ── Settings ────────────────────────────────────────────── */}
       {tab === "settings" && (
-        <Card className="shadow-none border border-border/40 max-w-3xl">
+        <Card className="shadow-none border border-border/20 rounded">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-bold flex items-center gap-2"><Save className="w-4 h-4 text-primary" />Platform Fee &amp; Voucher Settings</CardTitle>
             <CardDescription className="text-xs">Changes take effect immediately for new transactions.</CardDescription>
@@ -1396,7 +1391,7 @@ function SubadminsPanel({ users, onSave }: { users: PlatformUserResponse[]; onSa
   const candidates = users.filter((x) => x.platform_role !== "superadmin");
   return <Panel title="Subadmin Privileges" icon={UserCog}><div className="space-y-3">{candidates.map((item) => {
     const values = drafts[item.id] || item.platform_permissions;
-    return <Card key={item.id} className="shadow-none"><CardContent className="p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">{item.full_name}</p><p className="text-xs text-muted-foreground">{item.email}</p></div><Badge variant="outline">{item.platform_role || "User"}</Badge></div>
+    return <Card key={item.id} className="shadow-none rounded border-gray-100"><CardContent className="p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">{item.full_name}</p><p className="text-xs text-muted-foreground">{item.email}</p></div><Badge variant="outline">{item.platform_role || "User"}</Badge></div>
       <div className="mt-3"><CheckboxGrid values={values} options={ADMIN_PERMISSIONS} onChange={(next) => setDrafts((old) => ({ ...old, [item.id]: next }))} /></div>
       <div className="mt-3 flex gap-2"><Button size="sm" onClick={() => onSave(item.id, "subadmin", values)}>Save Subadmin</Button>{item.platform_role === "subadmin" && <Button size="sm" variant="destructive" onClick={() => onSave(item.id, "none", [])}>Remove</Button>}</div>
     </CardContent></Card>;

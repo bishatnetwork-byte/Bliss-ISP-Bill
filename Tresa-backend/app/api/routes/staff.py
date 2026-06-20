@@ -134,7 +134,7 @@ def branch_revenue_share(
     if router_names:
         # VoucherPurchase.router_name is always stored normalized (see
         # get_or_create_wallet), while Router.name keeps whatever casing the
-        # owner typed — normalize before matching or sales come back as 0.
+        # owner typed normalize before matching or sales come back as 0.
         normalized_names = [normalize_router_name(name) for name in router_names]
         voucher_sales = int(session.exec(
             select(func.coalesce(func.sum(VoucherPurchase.amount), 0))

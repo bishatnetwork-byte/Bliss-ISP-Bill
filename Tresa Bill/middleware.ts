@@ -87,7 +87,7 @@ export default async function middleware(request: Request) {
   );
 
   if (!isBot) {
-    // Not a bot — let Vercel serve the normal SPA
+    // Not a bot let Vercel serve the normal SPA
     return passThrough();
   }
 
@@ -108,7 +108,7 @@ export default async function middleware(request: Request) {
     });
 
     if (!res.ok) {
-      // Form not found or error — fall through to SPA
+      // Form not found or error fall through to SPA
       return passThrough();
     }
 

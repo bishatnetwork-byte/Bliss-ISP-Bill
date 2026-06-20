@@ -200,7 +200,7 @@ export default function ExportSidebar({ open, onClose, form, responses }: Export
         if (!form?.id) return;
         setPushingSheets(true);
         try {
-            const result = await base44.integrations.Sheets.push(form.id, `${form.title || "Form"} — Responses`);
+            const result = await base44.integrations.Sheets.push(form.id, `${form.title || "Form"} Responses`);
             if (result.success && result.url) {
                 toast.success(result.message, { action: { label: "Open Sheet", onClick: () => window.open(result.url, "_blank") } });
             } else {
@@ -276,8 +276,8 @@ export default function ExportSidebar({ open, onClose, form, responses }: Export
                             id={`export-sidebar-tab-${t}`}
                             onClick={() => setTab(t)}
                             className={`flex-1 py-2.5 text-xs font-semibold transition-colors relative ${tab === t
-                                    ? "text-primary"
-                                    : "text-muted-foreground hover:text-foreground"
+                                ? "text-primary"
+                                : "text-muted-foreground hover:text-foreground"
                                 }`}
                         >
                             {t === "export" ? (

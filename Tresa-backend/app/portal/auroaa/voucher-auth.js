@@ -1,5 +1,5 @@
 /**
- * MikroTik hotspot auth — matches hotspot_internal_boaz exactly.
+ * MikroTik hotspot auth matches hotspot_internal_boaz exactly.
  * - Voucher: empty password first (CHAP), then auto-retry with password = username.
  * - Member: separate form, uses typed password only (no voucher retry).
  */

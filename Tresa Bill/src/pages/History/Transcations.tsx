@@ -229,7 +229,7 @@ export default function TransactionsPage() {
 
   const newestFirst = useMemo(() => [...withBalance].reverse(), [withBalance]);
 
-  // Sparkline helpers — sum per day over last N days
+  // Sparkline helpers sum per day over last N days
   const dailySum = React.useCallback(
     (days: number, type?: "deposit" | "withdrawal") =>
       Array.from({ length: days }, (_, i) => {

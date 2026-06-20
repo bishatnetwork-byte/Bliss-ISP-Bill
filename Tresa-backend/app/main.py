@@ -26,7 +26,7 @@ def create_app() -> FastAPI:
         expose_headers=["*"],
     )
 
-    # CORSMiddleware doesn't reliably add headers to error responses — handle
+    # CORSMiddleware doesn't reliably add headers to error responses handle
     # it explicitly so the browser can read the error detail instead of showing
     # a generic "Failed to fetch".
     @app.exception_handler(HTTPException)

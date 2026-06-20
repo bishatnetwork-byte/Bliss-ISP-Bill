@@ -52,7 +52,7 @@ function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platf
   const [managingRouter, setManagingRouter] = useState<{ id: string; name: string } | null>(null);
   return (
     <>
-      <Card className="shadow-none">
+      <Card className="shadow-none border-gray-100 rounded">
         <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
           <div className="flex items-center gap-4">
             <Avatar className="h-14 w-14">
@@ -85,7 +85,7 @@ function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platf
         <Metric title="Wallet balance" value={money(user.wallet_balance)} icon={Wallet} />
       </div>
 
-      <Card className="shadow-none">
+      <Card className="shadow-none rounded border-gray-100">
         <CardHeader><CardTitle className="text-sm">Account details</CardTitle></CardHeader>
         <CardContent className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <Detail label="Created" value={formatDate(user.created_at)} />
@@ -94,7 +94,7 @@ function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platf
         </CardContent>
       </Card>
 
-      <Card className="shadow-none">
+      <Card className="shadow-none rounded border-gray-100">
         <CardHeader><CardTitle className="text-sm">Branches</CardTitle></CardHeader>
         <CardContent>
           <Table
@@ -111,7 +111,7 @@ function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platf
         </CardContent>
       </Card>
 
-      <Card className="shadow-none">
+      <Card className="shadow-none rounded border-gray-100">
         <CardHeader><CardTitle className="text-sm">Routers</CardTitle></CardHeader>
         <CardContent>
           <Table
@@ -138,7 +138,7 @@ function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platf
 
       {managingRouter && <RouterManagement router={managingRouter} />}
 
-      <Card className="shadow-none">
+      <Card className="shadow-none rounded border-gray-100">
         <CardHeader><CardTitle className="text-sm">Recent vouchers</CardTitle></CardHeader>
         <CardContent>
           <Table
@@ -221,7 +221,7 @@ function RouterManagement({ router }: { router: { id: string; name: string } }) 
   };
 
   return (
-    <Card className="shadow-none border-primary/30">
+    <Card className="shadow-none border-primary/30 rounded">
       <CardHeader className="flex flex-wrap items-center justify-between gap-3">
         <CardTitle className="text-sm">Manage {router.name}</CardTitle>
         <div className="flex flex-wrap gap-2">
@@ -259,7 +259,7 @@ function RouterManagement({ router }: { router: { id: string; name: string } }) 
 
 function Metric({ title, value, icon: Icon }: { title: string; value: React.ReactNode; icon: typeof Wallet }) {
   return (
-    <Card className="shadow-none">
+    <Card className="shadow-none border-gray-100 rounded">
       <CardContent className="flex items-center justify-between p-4">
         <div><p className="text-xs font-bold text-muted-foreground">{title}</p><p className="mt-1 text-xl font-black">{value}</p></div>
         <Icon className="h-7 w-7 text-primary/40" />

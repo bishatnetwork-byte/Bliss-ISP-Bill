@@ -1,22 +1,22 @@
 # ============================================================
-# RENULT BILLING — CHR CONCENTRATOR SSTP FALLOVER ADDON v1
+# RENULT BILLING CHR CONCENTRATOR SSTP FALLOVER ADDON v1
 # Platform: Renult / RENULT BILLING
 # Run AFTER chr-bootstrap.rsc v7 has completed successfully.
-# Safe to re-run — every step is idempotent.
+# Safe to re-run every step is idempotent.
 #
 # Adds SSTP (TCP/443) as a fallover transport for customer
 # routers whose ISP blocks the UDP ports L2TP/IPsec needs
 # (500, 4500, 1701, ESP). Reuses the same PPP profile and
-# tunnel pool as L2TP — a router connects via one or the
+# tunnel pool as L2TP a router connects via one or the
 # other, never both.
 #
 # Does NOT touch L2TP, the API service, the established/API
-# firewall rules, or NAT masquerade — those are left exactly
+# firewall rules, or NAT masquerade those are left exactly
 # as chr-bootstrap.rsc configured them.
 # ============================================================
 
 :local chrPublicIp "23.92.30.38"
-# ^ keep this in sync with chr-bootstrap.rsc's $chrPublicIp — used only
+# ^ keep this in sync with chr-bootstrap.rsc's $chrPublicIp used only
 #   as the SSTP server certificate's common-name (not validated by
 #   clients, since verify-server-certificate=no).
 
@@ -26,7 +26,7 @@
 :put "========================================================"
 
 # ============================================================
-# STEP 1 — PRECHECK: chr-bootstrap.rsc must already be applied
+# STEP 1 PRECHECK: chr-bootstrap.rsc must already be applied
 # ============================================================
 :put "Step 1: Checking that chr-bootstrap.rsc v7 has been applied..."
 :if ([:len [/ppp profile find where name="tresa-l2tp-profile"]] = 0) do={
@@ -39,10 +39,10 @@
     :put " Run chr-bootstrap.rsc v7 on this CHR first, then re-run this addon."
     :error "chr-bootstrap.rsc has not been applied to this CHR"
 }
-:put "Step 1: OK — base CHR configuration found."
+:put "Step 1: OK base CHR configuration found."
 
 # ============================================================
-# STEP 2 — SSTP CERTIFICATES (idempotent)
+# STEP 2 SSTP CERTIFICATES (idempotent)
 # ============================================================
 :put "Step 2: Setting up SSTP certificates..."
 
@@ -53,7 +53,7 @@
     /certificate sign tresa-sstp-ca
     :put "  CA certificate signed."
 } else={
-    :put "  SSTP CA certificate already exists — skipping."
+    :put "  SSTP CA certificate already exists skipping."
 }
 
 :if ([:len [/certificate find where name="tresa-sstp-server"]] = 0) do={
@@ -62,12 +62,12 @@
     /certificate sign tresa-sstp-server ca=tresa-sstp-ca
     :put "  Server certificate signed."
 } else={
-    :put "  SSTP server certificate already exists — skipping."
+    :put "  SSTP server certificate already exists skipping."
 }
 :put "Step 2: Done."
 
 # ============================================================
-# STEP 3 — SSTP SERVER (reuses tresa-l2tp-profile + tunnel pool)
+# STEP 3 SSTP SERVER (reuses tresa-l2tp-profile + tunnel pool)
 # ============================================================
 :put "Step 3: Enabling SSTP server..."
 
@@ -79,19 +79,19 @@
     default-profile=tresa-l2tp-profile \
     pfs=no
 
-# tls-version was added in RouterOS v7 and does not exist on v6.45-6.x —
+# tls-version was added in RouterOS v7 and does not exist on v6.45-6.x
 # apply it as a best-effort second step so the rest of this script still
 # works (and stays idempotent) on either major version.
 :do {
     /interface sstp-server server set tls-version=any
 } on-error={
-    :put "  (tls-version not supported on this RouterOS version — skipping)"
+    :put "  (tls-version not supported on this RouterOS version skipping)"
 }
 
-:put "Step 3: Done — SSTP server enabled on port 443."
+:put "Step 3: Done SSTP server enabled on port 443."
 
 # ============================================================
-# STEP 4 — FIREWALL: allow SSTP (TCP/443)
+# STEP 4 FIREWALL: allow SSTP (TCP/443)
 # ============================================================
 :put "Step 4: Installing SSTP firewall rule..."
 
@@ -109,12 +109,12 @@
 :put "Step 4: Done."
 # Note: forwarded API/SNMP connections (CHR -> customer router) over the
 # SSTP tunnel are already covered by chr-bootstrap.rsc's
-# "Tresa CHR: allow router API dstnat" forward rule from Step 7 — that
+# "Tresa CHR: allow router API dstnat" forward rule from Step 7 that
 # rule matches on protocol/port/dstnat state only, not the tunnel
 # interface, so no separate SSTP forward rule is needed.
 
 # ============================================================
-# STEP 5 — VERIFY
+# STEP 5 VERIFY
 # ============================================================
 :put "Step 5: Verifying SSTP fallover configuration..."
 :local verifyFailed false
@@ -123,7 +123,7 @@
     :put "  VERIFY FAILED: SSTP server is disabled."
     :set verifyFailed true
 } else={
-    :put "  SSTP server       : ENABLED (port 443 — L2TP fallover)"
+    :put "  SSTP server       : ENABLED (port 443 L2TP fallover)"
 }
 
 :if ([:len [/certificate find where name="tresa-sstp-server"]] = 0) do={
@@ -141,11 +141,11 @@
 }
 
 :if ($verifyFailed = true) do={
-    :error "Tresa CHR SSTP fallover verification failed — review errors above and re-run."
+    :error "Tresa CHR SSTP fallover verification failed review errors above and re-run."
 }
 
 :put "========================================================"
-:put " RENULT BILLING CHR SSTP FALLOVER — READY"
+:put " RENULT BILLING CHR SSTP FALLOVER READY"
 :put (" Public IP         : " . $chrPublicIp)
 :put " SSTP port (CHR)   : 443 (TCP)"
 :put " Fallover profile  : tresa-l2tp-profile (shared with L2TP)"
@@ -157,7 +157,7 @@
 :put "========================================================"
 
 # ============================================================
-# CUSTOMER ROUTER REFERENCE — SSTP FALLOVER CLIENT (for provisioning)
+# CUSTOMER ROUTER REFERENCE SSTP FALLOVER CLIENT (for provisioning)
 #
 # This block is NOT executed by this addon. It documents the
 # client-side companion to the SSTP server above, matching the
@@ -165,7 +165,7 @@
 # real registration script (build_secure_setup_script in
 # app/services/routers/security.py): $chrHost, $pppUser, $pppPass.
 #
-# IMPORTANT — firewall caveat if you wire this up in security.py:
+# IMPORTANT firewall caveat if you wire this up in security.py:
 # the registration script's firewall rules restrict CHR API/SNMP
 # access with in-interface="tresa-tunnel" (allow) and
 # in-interface=!tresa-tunnel (blacklist/brute-force). When SSTP

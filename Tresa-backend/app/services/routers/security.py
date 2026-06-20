@@ -86,7 +86,7 @@ def build_secure_setup_script(
 
     if include_walled_garden:
         walled_garden_block = (
-            "\n    # 8. Walled garden — allow billing portal before hotspot login.\n"
+            "\n    # 8. Walled garden allow billing portal before hotspot login.\n"
             f'    :local portalDomain "{portal_domain}"\n'
             "    :do {\n"
             '        :foreach wge in=[/ip hotspot walled-garden find where comment~"Tresa:"] do={ /ip hotspot walled-garden remove $wge }\n'
@@ -94,7 +94,7 @@ def build_secure_setup_script(
             '        /ip hotspot walled-garden add dst-host=("*." . $portalDomain) comment="Tresa: billing portal wildcard"\n'
             '        :put "Step 8: Walled garden set for Renult portal."\n'
             "    } on-error={\n"
-            '        :put "Step 8: Walled garden skipped (hotspot not yet active — provision from dashboard)."\n'
+            '        :put "Step 8: Walled garden skipped (hotspot not yet active provision from dashboard)."\n'
             "    }"
         )
         wg_status = "Configured (if hotspot active)"
@@ -363,7 +363,7 @@ def build_secure_setup_script(
             :set confirmHttpStatus "error"
         }}
         :if (($confirmHttpStatus != "finished") && ($confirmAttempt < 3)) do={{
-            :put ("Step 6: attempt " . $confirmAttempt . " did not complete (status=" . $confirmHttpStatus . "). The backend may still be starting up — retrying in 3s...")
+            :put ("Step 6: attempt " . $confirmAttempt . " did not complete (status=" . $confirmHttpStatus . "). The backend may still be starting up retrying in 3s...")
             :delay 3s
         }}
     }}

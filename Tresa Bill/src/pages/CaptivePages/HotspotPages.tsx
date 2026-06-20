@@ -70,7 +70,7 @@ const TEMPLATES = [
 // ── iframe scaled to fill its parent card exactly ──────────────────────────
 const IFRAME_W = 1200;
 const IFRAME_H = 780;
-const PREVIEW_H = 220; // px — the visible card slot height
+const PREVIEW_H = 220; // px the visible card slot height
 
 function ScaledPreview({ src, title }: { src: string; title: string }) {
     const wrapRef = useRef<HTMLDivElement>(null);

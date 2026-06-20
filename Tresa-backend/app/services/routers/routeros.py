@@ -94,7 +94,7 @@ def router_connection(router: Router, socket_timeout: float | None = None) -> It
         plaintext_login=router.plaintext_login,
     )
     if socket_timeout is not None:
-        # Must be set before get_api() opens the socket — routeros_api reads
+        # Must be set before get_api() opens the socket routeros_api reads
         # this value when creating the connection, not on every call.
         connection.socket_timeout = socket_timeout
     try:
@@ -165,7 +165,7 @@ def enable_snmp(router: Router) -> None:
             "comment": comment,
         }
         if tunnel_list_exists:
-            # Router was provisioned with the SSTP fallover script — match
+            # Router was provisioned with the SSTP fallover script match
             # either tunnel transport via the shared interface list.
             rule_params["in-interface-list"] = "TresaTunnel"
         elif tunnel_exists:

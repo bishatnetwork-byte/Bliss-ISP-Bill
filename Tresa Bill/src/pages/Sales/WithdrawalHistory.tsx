@@ -48,7 +48,7 @@ export default function WithdrawalHistory() {
       const updated = await renultApi.wallets.checkWithdrawalStatus(branchId, txn.id);
       setOverrides((prev) => ({ ...prev, [txn.id]: updated }));
     } catch {
-      // silently ignore — stale data stays visible
+      // silently ignore stale data stays visible
     } finally {
       setChecking((prev) => ({ ...prev, [txn.id]: false }));
     }
@@ -61,7 +61,7 @@ export default function WithdrawalHistory() {
     if (processing.length === 0) return;
     autoCheckedRef.current = true;
     processing.forEach((t) => recheckOne(t));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [withdrawals.length, branchId]);
 
   const display = (txn: WalletTransactionResponse) => overrides[txn.id] ?? txn;

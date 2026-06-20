@@ -43,7 +43,7 @@ add action=allow dst-host=*.airtel.africa
 
 - `vercel.app` / `*.vercel.app` covers both the backend API
   (`renult.vercel.app`) and the Renult Pay gateway
-  (`renult-pay.vercel.app`) — both are Vercel-hosted, so this single
+  (`renult-pay.vercel.app`) both are Vercel-hosted, so this single
   wildcard keeps working even if either project's domain changes.
 - The `mtn.*` / `airtel.*` entries allow MTN and Airtel mobile money
   payment-confirmation pages to load in the customer's browser before
@@ -65,7 +65,7 @@ HTTPS connections to these hosts.
 Every deploy also creates (or updates) a `/system script` and
 `/system scheduler` entry named **`TresaWalledGardenSync`** on the router.
 It runs once on `startup` and then every `00:10:00`, re-adding any of the
-walled-garden entries above if they're ever missing — e.g. if
+walled-garden entries above if they're ever missing e.g. if
 `/ip hotspot setup` is re-run and clears the walled-garden list. It's named
 distinctly from this router's other schedulers (`RunHeartbeat`,
 `RunHeartbeatCleanup`, `RunChrPingFailover`, `FixDNSonBoot`, ...) so it won't
@@ -95,14 +95,14 @@ router.
 
 So if you edit `login.html` locally and immediately click "Push to MikroTik"
 or "Deploy via R2", the router will receive the **old** template that's still
-running on the backend — your edits won't show up.
+running on the backend your edits won't show up.
 
 To make edits to `login.html` (or any other portal file) take effect:
 
 1. Commit/push your changes.
 2. Redeploy the Tresa-backend service itself (e.g. trigger a new Vercel/host
    deployment) so the server's filesystem has the updated `login.html`.
-3. Only then click "Push to MikroTik" or "Deploy via R2" from the dashboard —
+3. Only then click "Push to MikroTik" or "Deploy via R2" from the dashboard
    this re-renders the new template and pushes/fetches it onto the router.
 
 If step 3 is done before step 2, the router will be re-flashed with the same

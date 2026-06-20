@@ -1297,7 +1297,7 @@ def deploy_captive_portal_via_fetch(
     target_directory = router_directory
     used_hotspot_fallback = False
 
-    # ── Inner fetch loop (runs once per directory — custom, then hotspot/) ──
+    # ── Inner fetch loop (runs once per directory custom, then hotspot/) ──
     def _run_fetch_loop(ros: RouterApiSession, batch: list[tuple[str, str]], target: str) -> None:
         for remote_name, r2_url in batch:
             backend_url = _portal_backend_file_url(router, remote_name)
@@ -1346,7 +1346,7 @@ def deploy_captive_portal_via_fetch(
         # ── 1. Verify / create target directory ────────────────────────
         if not _ensure_router_directory(ros, target_directory):
             logger.warning(
-                "Could not create /%s on %s — falling back to hotspot/",
+                "Could not create /%s on %s falling back to hotspot/",
                 target_directory, router.name,
             )
             target_directory = "hotspot"
@@ -1363,7 +1363,7 @@ def deploy_captive_portal_via_fetch(
             and any(_is_permission_denied(e) for e in fetch_errors)
         ):
             logger.info(
-                "Permission denied writing to /%s on %s — retrying in hotspot/",
+                "Permission denied writing to /%s on %s retrying in hotspot/",
                 target_directory, router.name,
             )
             used_hotspot_fallback = True
@@ -1488,7 +1488,7 @@ def push_captive_files_to_mikrotik(
             "updated_profiles": [],
             "error": (
                 "This router connects through the Tresa CHR tunnel. "
-                "FTP port 21 is not forwarded through the tunnel — use 'Deploy via /tool fetch' "
+                "FTP port 21 is not forwarded through the tunnel use 'Deploy via /tool fetch' "
                 "instead, which uses the existing API connection."
             ),
             "diagnostics": {"nat_port": str(router.nat_port), "router_host": str(router.host)},

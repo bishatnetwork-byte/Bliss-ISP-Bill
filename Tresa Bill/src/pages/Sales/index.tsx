@@ -713,7 +713,7 @@ export default function SalesIndex() {
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-                                    {/* Router — real data */}
+                                    {/* Router real data */}
                                     <div className="space-y-1.5">
                                         <Label htmlFor="routerFilter" className="text-xs font-semibold text-muted-foreground">Router</Label>
                                         <Select value={selectedRouter} onValueChange={setSelectedRouter}>
@@ -729,7 +729,7 @@ export default function SalesIndex() {
                                         </Select>
                                     </div>
 
-                                    {/* Profile — derived from real sales data */}
+                                    {/* Profile derived from real sales data */}
                                     <div className="space-y-1.5">
                                         <Label htmlFor="profileFilter" className="text-xs font-semibold text-muted-foreground">Profile</Label>
                                         <Select value={selectedProfile} onValueChange={setSelectedProfile}>

@@ -23,18 +23,18 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 export const PLATFORM_ADMIN_SECTIONS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "users", label: "Users", icon: Users },
+  { id: "users", label: "Users Control", icon: Users },
   { id: "finance", label: "Fees & Wallets", icon: Banknote },
   { id: "broadcasts", label: "Broadcasts", icon: Mail },
   { id: "voucher_audit", label: "Voucher Audit", icon: FileClock },
-  { id: "message_diagnostics", label: "Message Diagnostics", icon: MessageSquareWarning },
-  { id: "tunnels", label: "Tunnels", icon: Network },
+  { id: "message_diagnostics", label: "Message Control", icon: MessageSquareWarning },
+  { id: "tunnels", label: "Tunnels Control", icon: Network },
   { id: "storage", label: "Cloud Files", icon: Cloud },
-  { id: "dns", label: "DNS", icon: Globe2 },
+  { id: "dns", label: "DNS Records", icon: Globe2 },
   { id: "subadmins", label: "Subadmins", icon: UserCog },
   { id: "sessions", label: "Sessions & Logins", icon: KeyRound },
   { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "system", label: "Health", icon: Activity },
+  { id: "system", label: "Health Check", icon: Activity },
   { id: "audit", label: "Admin Audit", icon: ShieldCheck },
   { id: "reports", label: "Reports", icon: FileSpreadsheet },
 ] as const;
@@ -104,18 +104,6 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
             <img src="/icons/logo_2.png" alt="Logo" className="h-12" />
           )}
         </div>
-
-        <div className={cn("px-5 pb-3 pt-2", isCollapsed && "px-2 text-center")}>
-          {!isCollapsed && (
-            <>
-              <p className="text-base font-semibold">Platform Admin</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {user?.platform_role === "superadmin" ? "Superadmin access" : "Scoped administration"}
-              </p>
-            </>
-          )}
-        </div>
-
         <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4">
           <div className="space-y-0.5">
             {visibleSections.map((item) => {

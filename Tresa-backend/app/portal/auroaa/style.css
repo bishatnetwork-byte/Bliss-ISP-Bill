@@ -18,7 +18,7 @@ body {
   color: #f8fafc;
 }
 
-/* Inline sprite (same document #id refs — works on routers & local preview) */
+/* Inline sprite (same document #id refs works on routers & local preview) */
 .svg-defs {
   position: absolute;
   width: 0;

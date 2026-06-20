@@ -538,7 +538,7 @@ def delete_user(
     if int(branch_count) > 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "This user still owns branches/routers — suspend or transfer them before removal",
+            "This user still owns branches/routers suspend or transfer them before removal",
         )
     email = target.email
     session.delete(target)

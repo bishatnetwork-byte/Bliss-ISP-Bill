@@ -5,7 +5,7 @@ export interface IconProps extends React.SVGProps<SVGSVGElement> {
 }
 
 /**
- * My Forms — clipboard / form icon (React Hook Form style)
+ * My Forms clipboard / form icon (React Hook Form style)
  */
 export const FormIcon: React.FC<IconProps> = ({
   size = 24,
@@ -27,7 +27,7 @@ export const FormIcon: React.FC<IconProps> = ({
 );
 
 /**
- * Templates — bookmark / template icon
+ * Templates bookmark / template icon
  */
 export const TemplateIcon: React.FC<IconProps> = ({
   size = 24,
@@ -48,7 +48,7 @@ export const TemplateIcon: React.FC<IconProps> = ({
 );
 
 /**
- * Super AI Agent — brain / AI icon (Tabler-style stroked)
+ * Super AI Agent brain / AI icon (Tabler-style stroked)
  */
 export const AIIcon: React.FC<IconProps> = ({
   size = 24,
@@ -79,7 +79,7 @@ export const AIIcon: React.FC<IconProps> = ({
 );
 
 /**
- * Settings — gear / cog icon (Tabler-style stroked)
+ * Settings gear / cog icon (Tabler-style stroked)
  */
 export const SettingsIcon: React.FC<IconProps> = ({
   size = 24,
@@ -105,7 +105,7 @@ export const SettingsIcon: React.FC<IconProps> = ({
 );
 
 /**
- * Connectors — workflow / integration icon (Lucide-style stroked)
+ * Connectors workflow / integration icon (Lucide-style stroked)
  */
 export const ConnectorsIcon: React.FC<IconProps> = ({
   size = 25,

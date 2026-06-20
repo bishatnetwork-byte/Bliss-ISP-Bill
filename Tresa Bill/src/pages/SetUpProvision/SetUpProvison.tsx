@@ -1047,60 +1047,60 @@ export default function SetUpProvison() {
                       (provisionResult && provisionResult.command_log.length > 0) ||
                       deployCaptivePortal.isPending ||
                       captivePortalResult) && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-semibold text-slate-700">Provisioning Console</span>
-                          {provisionResult && provisionResult.command_log.length > 0 && (
-                            <span className="font-semibold text-primary">
-                              {provisionResult.command_log.filter((c) => c.success).length} / {provisionResult.command_log.length} succeeded
-                            </span>
-                          )}
-                        </div>
-                        <div className="rounded-lg overflow-hidden border border-slate-800 bg-slate-950 shadow-inner">
-                          <div className="flex items-center gap-1.5 border-b border-slate-800 bg-slate-900/80 px-3 py-2">
-                            <span className="h-2.5 w-2.5 rounded-full bg-rose-500/70" />
-                            <span className="h-2.5 w-2.5 rounded-full bg-amber-500/70" />
-                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
-                            <span className="ml-2 text-[11px] font-medium text-slate-400">tresa@provisioning ~ console</span>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-semibold text-slate-700">Provisioning Console</span>
+                            {provisionResult && provisionResult.command_log.length > 0 && (
+                              <span className="font-semibold text-primary">
+                                {provisionResult.command_log.filter((c) => c.success).length} / {provisionResult.command_log.length} succeeded
+                              </span>
+                            )}
                           </div>
-                          <div className="max-h-[300px] overflow-y-auto p-3 font-mono text-[11px] leading-5 text-slate-100">
-                            {provisionResult?.command_log.map((command, index) => (
-                              <p key={`${command.step}-${index}`} className="break-words">
-                                <span className={command.success ? "text-emerald-400" : "text-rose-400"}>
-                                  {command.success ? "[OK]" : "[FAIL]"}
-                                </span>{" "}
-                                <span className="text-slate-300">$ {command.step}</span>
-                                {command.error && <span className="text-rose-400"> — {command.error}</span>}
-                              </p>
-                            ))}
-                            {provisionResult && !provisionResult.success && provisionResult.error && (
-                              <p className="break-words text-rose-400">[FAIL] $ {provisionResult.error}</p>
-                            )}
-                            {provisionHotspot.isPending && (
-                              <p className="text-sky-400">
-                                $ Applying hotspot/PPPoE configuration...
-                                <span className="ml-1 inline-block animate-pulse text-slate-400">▋</span>
-                              </p>
-                            )}
-                            {deployCaptivePortal.isPending && (
-                              <p className="text-sky-400">
-                                $ Deploying WiFi login page...
-                                <span className="ml-1 inline-block animate-pulse text-slate-400">▋</span>
-                              </p>
-                            )}
-                            {captivePortalResult && (
-                              captivePortalResult.success ? (
-                                <p className="break-words text-emerald-400">
-                                  [OK] $ WiFi login page deployed ({captivePortalResult.fetched_files.length} file(s))
+                          <div className="rounded-lg overflow-hidden border border-slate-800 bg-slate-950 shadow-inner">
+                            <div className="flex items-center gap-1.5 border-b border-slate-800 bg-slate-900/80 px-3 py-2">
+                              <span className="h-2.5 w-2.5 rounded-full bg-rose-500/70" />
+                              <span className="h-2.5 w-2.5 rounded-full bg-amber-500/70" />
+                              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
+                              <span className="ml-2 text-[11px] font-medium text-slate-400">tresa@provisioning ~ console</span>
+                            </div>
+                            <div className="max-h-[300px] overflow-y-auto p-3 font-mono text-[11px] leading-5 text-slate-100">
+                              {provisionResult?.command_log.map((command, index) => (
+                                <p key={`${command.step}-${index}`} className="break-words">
+                                  <span className={command.success ? "text-emerald-400" : "text-rose-400"}>
+                                    {command.success ? "[OK]" : "[FAIL]"}
+                                  </span>{" "}
+                                  <span className="text-slate-300">$ {command.step}</span>
+                                  {command.error && <span className="text-rose-400"> {command.error}</span>}
                                 </p>
-                              ) : (
-                                <p className="break-words text-rose-400">[FAIL] $ WiFi login page — {captivePortalResult.error}</p>
-                              )
-                            )}
+                              ))}
+                              {provisionResult && !provisionResult.success && provisionResult.error && (
+                                <p className="break-words text-rose-400">[FAIL] $ {provisionResult.error}</p>
+                              )}
+                              {provisionHotspot.isPending && (
+                                <p className="text-sky-400">
+                                  $ Applying hotspot/PPPoE configuration...
+                                  <span className="ml-1 inline-block animate-pulse text-slate-400">▋</span>
+                                </p>
+                              )}
+                              {deployCaptivePortal.isPending && (
+                                <p className="text-sky-400">
+                                  $ Deploying WiFi login page...
+                                  <span className="ml-1 inline-block animate-pulse text-slate-400">▋</span>
+                                </p>
+                              )}
+                              {captivePortalResult && (
+                                captivePortalResult.success ? (
+                                  <p className="break-words text-emerald-400">
+                                    [OK] $ WiFi login page deployed ({captivePortalResult.fetched_files.length} file(s))
+                                  </p>
+                                ) : (
+                                  <p className="break-words text-rose-400">[FAIL] $ WiFi login page {captivePortalResult.error}</p>
+                                )
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
                     {/* Success prompt */}
                     {applySuccess && (

@@ -1,5 +1,5 @@
 """
-Wallet service — all balance mutations go through here.
+Wallet service all balance mutations go through here.
 
 Race-condition safety: every deposit/withdraw acquires a row-level lock
 (SELECT … FOR UPDATE) on the BranchWallet row before reading the balance.
@@ -63,7 +63,7 @@ def _fee_amount(
     rate_key: str,
     rate_fallback: float,
 ) -> int:
-    """Admin-configurable fee — either a flat amount or a percentage of `amount`."""
+    """Admin-configurable fee either a flat amount or a percentage of `amount`."""
     fee_type = get_setting(session, type_key, "percentage")
     if fee_type == "fixed":
         return int(get_setting(session, fixed_key, 0))

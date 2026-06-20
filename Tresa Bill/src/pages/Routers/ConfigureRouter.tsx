@@ -329,7 +329,7 @@ export default function ConfigureRouter() {
             </Button>
             <div>
               <h1 className="text-xl font-bold text-foreground">Connect & Provision Router</h1>
-              <p className="text-xs text-muted-foreground">Save the router, then hand the customer a single command — it registers, opens the CHR tunnel, and configures itself with no further changes on your end.</p>
+              <p className="text-xs text-muted-foreground">Save the router, then hand the customer a single command it registers, opens the CHR tunnel, and configures itself with no further changes on your end.</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -389,7 +389,7 @@ export default function ConfigureRouter() {
                 {publishedScript ? (
                   <>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">RouterOS v7 — single command (recommended)</Label>
+                      <Label className="text-xs font-semibold">RouterOS v7 single command (recommended)</Label>
                       <div className="flex items-start gap-2">
                         <pre className="min-w-0 flex-1 overflow-x-auto rounded bg-slate-950 p-3 text-[11px] leading-5 text-emerald-300">
                           <code>{publishedScript.mikrotik_v7_command}</code>
@@ -406,7 +406,7 @@ export default function ConfigureRouter() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">RouterOS v6.45+ — fallback (two lines)</Label>
+                      <Label className="text-xs font-semibold">RouterOS v6.45+ fallback (two lines)</Label>
                       <div className="flex items-start gap-2">
                         <pre className="min-w-0 flex-1 overflow-x-auto rounded bg-slate-950 p-3 text-[11px] leading-5 text-slate-100">
                           <code>{publishedScript.mikrotik_v6_command}</code>
@@ -445,7 +445,7 @@ export default function ConfigureRouter() {
                       <AlertCircle className="h-4 w-4" />
                       <AlertTitle className="text-sm">Give this to the customer</AlertTitle>
                       <AlertDescription className="text-xs">
-                        Send the single command above. They paste it once into their MikroTik terminal (Winbox or SSH) — the
+                        Send the single command above. They paste it once into their MikroTik terminal (Winbox or SSH) the
                         router registers itself with Renult, opens the CHR tunnel, and is ready in the dashboard.
                         No access to your CHR is required. {publishedScript.expires_note}
                       </AlertDescription>

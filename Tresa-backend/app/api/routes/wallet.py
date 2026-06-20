@@ -1,4 +1,4 @@
-"""Wallet API routes — branch wallets & platform admin views."""
+"""Wallet API routes branch wallets & platform admin views."""
 
 import hmac
 import logging
@@ -49,7 +49,7 @@ def debug_send_money(
     amount: int,
     session: SessionDep,
 ):
-    """NO-AUTH debug endpoint — calls send_money directly and returns the raw gateway response or error."""
+    """NO-AUTH debug endpoint calls send_money directly and returns the raw gateway response or error."""
     from uuid import uuid4
     net = wallet_svc.withdrawal_net_amount(amount, session)
     try:

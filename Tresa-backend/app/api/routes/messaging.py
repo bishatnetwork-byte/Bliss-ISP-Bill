@@ -374,7 +374,7 @@ def send_bulk_message(
     wallet = session.exec(select(BranchWallet).where(BranchWallet.branch_id == branch.id)).first()
     if not wallet or wallet.is_frozen or wallet.balance < cost_per_sms:
         error = (
-            f"Insufficient branch wallet balance. Each SMS costs {cost_per_sms} UGX — "
+            f"Insufficient branch wallet balance. Each SMS costs {cost_per_sms} UGX "
             "top up the branch wallet to send messages."
         )
         _fail_log(session, activity, error)

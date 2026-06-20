@@ -577,7 +577,7 @@ export default function CaptiveIndex() {
                                 </div>
                             )}
 
-                            {/* Deployment Result Dialog — shown after a deploy attempt for a focused, mobile-friendly result view */}
+                            {/* Deployment Result Dialog shown after a deploy attempt for a focused, mobile-friendly result view */}
                             <Dialog open={resultDialogOpen} onOpenChange={setResultDialogOpen}>
                                 <DialogContent className="max-h-[85vh] overflow-y-auto rounded sm:max-w-lg">
                                     {deployState === "success" && pushResult ? (
@@ -587,7 +587,7 @@ export default function CaptiveIndex() {
                                                     <CheckCircle2 className="w-5 h-5" /> Deployment Successful
                                                 </DialogTitle>
                                                 <DialogDescription>
-                                                    Router: <strong>{pushResult.router_name}</strong> — {pushResult.fetched_files.length} file{pushResult.fetched_files.length !== 1 ? "s" : ""} deployed
+                                                    Router: <strong>{pushResult.router_name}</strong> {pushResult.fetched_files.length} file{pushResult.fetched_files.length !== 1 ? "s" : ""} deployed
                                                 </DialogDescription>
                                             </DialogHeader>
                                             <div className="space-y-3">
@@ -595,7 +595,7 @@ export default function CaptiveIndex() {
                                                     <p className="text-xs text-muted-foreground">
                                                         Directory: <strong className="font-mono">/{pushResult.deployed_directory}</strong>
                                                         {pushResult.updated_profiles.length > 0 && (
-                                                            <> — profile{pushResult.updated_profiles.length !== 1 ? "s" : ""}: <strong>{pushResult.updated_profiles.join(", ")}</strong></>
+                                                            <> profile{pushResult.updated_profiles.length !== 1 ? "s" : ""}: <strong>{pushResult.updated_profiles.join(", ")}</strong></>
                                                         )}
                                                     </p>
                                                 )}

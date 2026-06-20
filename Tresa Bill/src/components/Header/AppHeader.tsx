@@ -62,10 +62,10 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
   /**
    * Ping fallback: called after SNMP summary loads.
    * Fires a direct ping to any router that has no SNMP data (unconfigured or unknown).
-   * Vercel is serverless — the SNMP poller never runs, so these routers are always
+   * Vercel is serverless the SNMP poller never runs, so these routers are always
    * "waiting / offline" via SNMP alone. The ping gives us real reachability.
    *
-   * We ping ANY router not confirmed "online" by SNMP — because on Vercel
+   * We ping ANY router not confirmed "online" by SNMP because on Vercel
    * the poller never runs, so even configured routers stay "offline" forever.
    */
   const runPingFallback = useCallback(async (summary: RouterMonitorSummary) => {
@@ -209,7 +209,7 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
     snmpStatus: "online" | "offline" | "unknown",
     configured: boolean
   ): { status: "online" | "offline" | "unknown" | "checking"; method: "snmp" | "ping" } => {
-    // Only trust SNMP when it says "online" — that's a real confirmed reading
+    // Only trust SNMP when it says "online" that's a real confirmed reading
     if (snmpStatus === "online") {
       return { status: "online", method: "snmp" };
     }
@@ -355,10 +355,10 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
                     </button>
                     <span
                       className={`rounded px-2 py-1 text-[10px] font-bold ${overallStatus === "online"
-                          ? "bg-emerald-100 text-emerald-600"
-                          : overallStatus === "offline"
-                            ? "bg-red-100 text-red-600"
-                            : "bg-muted text-muted-foreground"
+                        ? "bg-emerald-100 text-emerald-600"
+                        : overallStatus === "offline"
+                          ? "bg-red-100 text-red-600"
+                          : "bg-muted text-muted-foreground"
                         }`}
                     >
                       {isBusy ? "Checking" : monitorLabel}
@@ -423,10 +423,10 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
                             {/* Status badge */}
                             <span
                               className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${eff.status === "online"
-                                  ? "bg-emerald-100 text-emerald-600"
-                                  : eff.status === "offline"
-                                    ? "bg-red-100 text-red-600"
-                                    : "bg-amber-100 text-amber-600"
+                                ? "bg-emerald-100 text-emerald-600"
+                                : eff.status === "offline"
+                                  ? "bg-red-100 text-red-600"
+                                  : "bg-amber-100 text-amber-600"
                                 }`}
                             >
                               {eff.status === "checking" ? "…" : eff.status}

@@ -1,8 +1,8 @@
 # ============================================================
-# RENULT BILLING — CHR CONCENTRATOR BOOTSTRAP v7
+# RENULT BILLING CHR CONCENTRATOR BOOTSTRAP v7
 # Platform: Renult / RENULT BILLING
 # Run once on the Cloud Hosted Router (CHR).
-# Safe to re-run — every step is idempotent.
+# Safe to re-run every step is idempotent.
 # ============================================================
 
 :local apiPassword   "ac23353c63370ee0e6e323f9e5fb9cd5"
@@ -18,7 +18,7 @@
 :put "========================================================"
 
 # ============================================================
-# STEP 0 — RouterOS VERSION GATE
+# STEP 0 RouterOS VERSION GATE
 # ============================================================
 :put "Step 0: Checking RouterOS version..."
 :local fullVersion [/system resource get version]
@@ -35,17 +35,17 @@
     :put (" FAIL: RouterOS " . $fullVersion . " is too old. Need >= 6.45.")
     :error "RouterOS version check failed"
 }
-:put (" RouterOS " . $fullVersion . " — OK")
+:put (" RouterOS " . $fullVersion . " OK")
 
 # ============================================================
-# STEP 1 — CHR IDENTITY
+# STEP 1 CHR IDENTITY
 # ============================================================
 :put "Step 1: Setting CHR identity..."
 /system identity set name=$chrIdentity
-:put ("Step 1: Done — " . $chrIdentity)
+:put ("Step 1: Done " . $chrIdentity)
 
 # ============================================================
-# STEP 2 — API USER GROUP AND USER
+# STEP 2 API USER GROUP AND USER
 # ============================================================
 :put "Step 2: Creating API user..."
 :if ([:len [/user group find where name="tresa-concentrator"]] = 0) do={
@@ -61,7 +61,7 @@
 :put "Step 2: Done."
 
 # ============================================================
-# STEP 3 — TUNNEL IP POOL
+# STEP 3 TUNNEL IP POOL
 # ============================================================
 :put "Step 3: Creating tunnel pool..."
 :if ([:len [/ip pool find where name="tresa-tunnel-pool"]] = 0) do={
@@ -72,7 +72,7 @@
 :put "Step 3: Done."
 
 # ============================================================
-# STEP 4 — PPP PROFILE
+# STEP 4 PPP PROFILE
 # ============================================================
 :put "Step 4: Creating PPP profile..."
 :if ([:len [/ppp profile find where name="tresa-l2tp-profile"]] = 0) do={
@@ -83,14 +83,14 @@
 :put "Step 4: Done."
 
 # ============================================================
-# STEP 5 — L2TP SERVER
+# STEP 5 L2TP SERVER
 # ============================================================
 :put "Step 5: Enabling L2TP/IPsec server..."
 /interface l2tp-server server set enabled=yes default-profile=tresa-l2tp-profile authentication=mschap2 use-ipsec=yes ipsec-secret=$ipsecSecret max-mtu=1460 max-mru=1460 keepalive-timeout=30
 :put "Step 5: Done."
 
 # ============================================================
-# STEP 6 — API SERVICE ON PORT 51847
+# STEP 6 API SERVICE ON PORT 51847
 # ============================================================
 :put "Step 6: Moving API to port 51847..."
 /ip service set api disabled=no port=51847 address=0.0.0.0/0
@@ -99,7 +99,7 @@
 :put "Step 6: Done."
 
 # ============================================================
-# STEP 7 — FIREWALL RULES (idempotent — removes Tresa rules then re-adds)
+# STEP 7 FIREWALL RULES (idempotent removes Tresa rules then re-adds)
 # ============================================================
 :put "Step 7: Installing firewall rules..."
 
@@ -123,7 +123,7 @@
 /ip firewall filter add chain=forward action=accept connection-state=established,related   comment="Tresa CHR: established forward"
 /ip firewall filter add chain=forward action=accept protocol=tcp dst-port=8728 connection-nat-state=dstnat comment="Tresa CHR: allow router API dstnat"
 
-# Move Tresa rules ahead of any pre-existing blanket drop — reverse desired order.
+# Move Tresa rules ahead of any pre-existing blanket drop reverse desired order.
 # Wrapped in on-error: RouterOS rejects "move X 0" with "can not move object
 # before itself" once X is already first, which is harmless on rerun.
 :do { /ip firewall filter move [find where comment="Tresa CHR: allow router API dstnat"]  0 } on-error={}
@@ -139,7 +139,7 @@
 :put "Step 7: Done."
 
 # ============================================================
-# STEP 7B — NAT MASQUERADE FOR TUNNEL-BOUND TRAFFIC
+# STEP 7B NAT MASQUERADE FOR TUNNEL-BOUND TRAFFIC
 # Without this, forwarded API/SNMP connections (CHR -> customer
 # router) reach the customer router with the original internet
 # source address. That fails the customer router's
@@ -155,7 +155,7 @@
 :put "Step 7b: Done."
 
 # ============================================================
-# STEP 8 — CONNECTIVITY SELF-TEST (backend reachability)
+# STEP 8 CONNECTIVITY SELF-TEST (backend reachability)
 # ============================================================
 :put "Step 8: Testing connectivity to Renult backend..."
 :local backendOk false
@@ -168,14 +168,14 @@
     :set backendOk false
 }
 :if ($backendOk = true) do={
-    :put "Step 8: Backend reachable — OK."
+    :put "Step 8: Backend reachable OK."
 } else={
-    :put ("Step 8: WARNING — Could not reach " . $backendHost . ". Check CHR internet and DNS.")
+    :put ("Step 8: WARNING Could not reach " . $backendHost . ". Check CHR internet and DNS.")
     :put "         The CHR is configured correctly. Verify manually if needed."
 }
 
 # ============================================================
-# STEP 9 — VERIFY ALL REQUIRED COMPONENTS
+# STEP 9 VERIFY ALL REQUIRED COMPONENTS
 # ============================================================
 :put "Step 9: Verifying CHR configuration..."
 :local verifyFailed false
@@ -243,13 +243,13 @@
 }
 
 :if ($verifyFailed = true) do={
-    :error "Tresa CHR verification failed — review errors above and re-run."
+    :error "Tresa CHR verification failed review errors above and re-run."
 }
 
 :put "Step 9: All checks passed."
 
 :put "========================================================"
-:put " RENULT BILLING CHR CONCENTRATOR — READY"
+:put " RENULT BILLING CHR CONCENTRATOR READY"
 :put (" Public IP         : " . $chrPublicIp)
 :put (" Backend URL       : https://" . $backendHost)
 :local reachableStr "no (check internet/DNS)"
@@ -263,6 +263,6 @@
 :put " NEXT: Open the Renult dashboard, go to Configure &"
 :put " Provision Router, enter a name, and click"
 :put " 'Generate Registration Script'. Give the customer"
-:put " the single-line command shown — no further CHR"
+:put " the single-line command shown no further CHR"
 :put " changes needed."
 :put "========================================================"
