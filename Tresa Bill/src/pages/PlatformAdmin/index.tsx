@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
@@ -123,6 +124,7 @@ export default function PlatformAdminPage() {
     queryKey: ["platformAdmin", "overview"],
     queryFn: renultApi.platformAdmin.overview,
     enabled: activeTab === "overview" && permissions.has("overview"),
+    staleTime: 30 * 1000,
   });
   const [userSearch, setUserSearch] = useState("");
   const usersQuery = useQuery({
@@ -130,38 +132,45 @@ export default function PlatformAdminPage() {
     queryFn: () => renultApi.platformAdmin.users(userSearch),
     enabled: (activeTab === "users" || activeTab === "subadmins" || activeTab === "broadcasts" || activeTab === "reports")
       && (permissions.has("users") || permissions.has("subadmins") || permissions.has("broadcasts") || permissions.has("reports")),
+    staleTime: 30 * 1000,
   });
   const settingsQuery = useQuery({
     queryKey: ["platformAdmin", "settings"],
     queryFn: renultApi.platformAdmin.settings,
     enabled: activeTab === "finance" && permissions.has("finance"),
+    staleTime: 60 * 1000,
   });
   const walletsQuery = useQuery({
     queryKey: ["platformAdmin", "wallets"],
     queryFn: renultApi.platformAdmin.wallets,
     enabled: activeTab === "finance" && permissions.has("finance"),
+    staleTime: 30 * 1000,
   });
   const ledgerQuery = useQuery({
     queryKey: ["platformAdmin", "ledger"],
     queryFn: () => renultApi.wallets.platformLedger(),
     enabled: activeTab === "finance" && permissions.has("finance"),
+    staleTime: 30 * 1000,
   });
   const allTxnsQuery = useQuery({
     queryKey: ["platformAdmin", "allTransactions"],
     queryFn: () => renultApi.wallets.platformAllTransactions(),
     enabled: (activeTab === "finance" && permissions.has("finance")) || (activeTab === "reports" && permissions.has("reports")),
+    staleTime: 30 * 1000,
   });
   const tunnels = useQuery({
     queryKey: ["platformAdmin", "tunnels"],
     queryFn: renultApi.platformAdmin.tunnels,
     enabled: activeTab === "tunnels" && permissions.has("tunnels"),
     refetchInterval: 30000,
+    staleTime: 15 * 1000,
   });
   const [voucherSearch, setVoucherSearch] = useState("");
   const voucherAudit = useQuery({
     queryKey: ["platformAdmin", "voucherAudit", voucherSearch],
     queryFn: () => renultApi.platformAdmin.voucherAudit(voucherSearch),
     enabled: (activeTab === "voucher_audit" && permissions.has("voucher_audit")) || (activeTab === "reports" && permissions.has("reports")),
+    staleTime: 30 * 1000,
   });
   const [messageSearch, setMessageSearch] = useState("");
   const [messageStatus, setMessageStatus] = useState("all");
@@ -173,6 +182,7 @@ export default function PlatformAdminPage() {
       limit: 500,
     }),
     enabled: activeTab === "message_diagnostics" && permissions.has("message_diagnostics"),
+    staleTime: 30 * 1000,
   });
   const [storagePrefix, setStoragePrefix] = useState("");
   const storage = useQuery({
@@ -180,12 +190,14 @@ export default function PlatformAdminPage() {
     queryFn: () => renultApi.platformAdmin.storage(storagePrefix),
     enabled: activeTab === "storage" && permissions.has("storage"),
     retry: false,
+    staleTime: 30 * 1000,
   });
   const dnsZones = useQuery({
     queryKey: ["platformAdmin", "dnsZones"],
     queryFn: renultApi.platformAdmin.dnsZones,
     enabled: activeTab === "dns" && permissions.has("dns"),
     retry: false,
+    staleTime: 60 * 1000,
   });
   const [zoneId, setZoneId] = useState("");
   const dnsRecords = useQuery({
@@ -193,32 +205,38 @@ export default function PlatformAdminPage() {
     queryFn: () => renultApi.platformAdmin.dnsRecords(zoneId),
     enabled: activeTab === "dns" && !!zoneId && permissions.has("dns"),
     retry: false,
+    staleTime: 30 * 1000,
   });
   const health = useQuery({
     queryKey: ["platformAdmin", "health"],
     queryFn: renultApi.platformAdmin.health,
     enabled: activeTab === "system" && permissions.has("system"),
     refetchInterval: 30000,
+    staleTime: 15 * 1000,
   });
   const adminAudit = useQuery({
     queryKey: ["platformAdmin", "audit"],
     queryFn: renultApi.platformAdmin.audit,
     enabled: (activeTab === "audit" && permissions.has("audit")) || (activeTab === "reports" && permissions.has("reports")),
+    staleTime: 30 * 1000,
   });
   const sessionsQuery = useQuery({
     queryKey: ["platformAdmin", "sessions"],
     queryFn: () => renultApi.platformAdmin.sessions(),
     enabled: activeTab === "sessions" && permissions.has("sessions"),
+    staleTime: 30 * 1000,
   });
   const loginAttemptsQuery = useQuery({
     queryKey: ["platformAdmin", "loginAttempts"],
     queryFn: () => renultApi.platformAdmin.loginAttempts(),
     enabled: activeTab === "sessions" && permissions.has("sessions"),
+    staleTime: 30 * 1000,
   });
   const notificationsQuery = useQuery({
     queryKey: ["platformAdmin", "notifications"],
     queryFn: () => renultApi.platformAdmin.notifications(),
     enabled: activeTab === "notifications" && permissions.has("notifications"),
+    staleTime: 30 * 1000,
   });
 
   const updateUser = useMutation({
@@ -226,6 +244,7 @@ export default function PlatformAdminPage() {
       renultApi.platformAdmin.updateUser(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platformAdmin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "overview"] });
       toast.success("User access updated.");
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update user."),
@@ -240,13 +259,17 @@ export default function PlatformAdminPage() {
       renultApi.platformAdmin.updateSubadmin(id, { role, permissions: next }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platformAdmin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "overview"] });
       toast.success("Platform admin privileges updated.");
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update subadmin."),
   });
   const tunnelMutation = useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) => renultApi.platformAdmin.setTunnelActive(id, active),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["platformAdmin", "tunnels"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "tunnels"] });
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "overview"] });
+    },
   });
   const deleteStorage = useMutation({
     mutationFn: renultApi.platformAdmin.deleteStorage,
@@ -267,6 +290,7 @@ export default function PlatformAdminPage() {
     mutationFn: ({ id, frozen }: { id: string; frozen: boolean }) => renultApi.platformAdmin.freezeWallet(id, frozen),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platformAdmin", "wallets"] });
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "overview"] });
       toast.success("Wallet status updated.");
     },
   });
@@ -274,6 +298,7 @@ export default function PlatformAdminPage() {
     mutationFn: renultApi.platformAdmin.createUser,
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["platformAdmin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "overview"] });
       toast.success(result.temp_password ? `User created. Temp password: ${result.temp_password}` : "User created.");
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not create user."),
@@ -282,6 +307,7 @@ export default function PlatformAdminPage() {
     mutationFn: renultApi.platformAdmin.deleteUser,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platformAdmin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "overview"] });
       toast.success("User removed.");
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not remove user."),
@@ -291,6 +317,7 @@ export default function PlatformAdminPage() {
       renultApi.platformAdmin.blockUser(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platformAdmin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "overview"] });
       toast.success("User blocked.");
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not block user."),
@@ -299,6 +326,7 @@ export default function PlatformAdminPage() {
     mutationFn: renultApi.platformAdmin.unblockUser,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platformAdmin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "overview"] });
       toast.success("User unblocked.");
     },
   });
@@ -311,6 +339,7 @@ export default function PlatformAdminPage() {
     mutationFn: renultApi.platformAdmin.revokeSession,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platformAdmin", "sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "overview"] });
       toast.success("Session revoked.");
     },
   });
@@ -409,10 +438,10 @@ export default function PlatformAdminPage() {
           <StoragePanel rows={storage.data || []} loading={storage.isLoading} error={storage.error} prefix={storagePrefix} onPrefix={setStoragePrefix} onDelete={(key) => deleteStorage.mutate(key)} />
         )}
         {activeTab === "dns" && (
-          <DnsPanel zones={dnsZones.data || []} records={dnsRecords.data || []} error={dnsZones.error || dnsRecords.error} zoneId={zoneId} onZone={setZoneId} onDelete={(record) => deleteDns.mutate({ zone: zoneId, record })} />
+          <DnsPanel zones={dnsZones.data || []} records={dnsRecords.data || []} error={dnsZones.error || dnsRecords.error} zoneId={zoneId} onZone={setZoneId} onDelete={(record) => deleteDns.mutate({ zone: zoneId, record })} loading={dnsZones.isLoading || (!!zoneId && dnsRecords.isLoading)} />
         )}
         {activeTab === "subadmins" && (
-          <SubadminsPanel users={usersQuery.data || []} onSave={(id, role, next) => updateSubadmin.mutate({ id, role, permissions: next })} />
+          <SubadminsPanel users={usersQuery.data || []} onSave={(id, role, next) => updateSubadmin.mutate({ id, role, permissions: next })} loading={usersQuery.isLoading} />
         )}
         {activeTab === "sessions" && (
           <SessionsPanel
@@ -451,7 +480,7 @@ export default function PlatformAdminPage() {
 }
 
 function Overview({ data, loading }: { data: Awaited<ReturnType<typeof renultApi.platformAdmin.overview>> | undefined; loading: boolean }) {
-  if (loading || !data) return <Loading />;
+  if (loading || !data) return <Loading type="overview" />;
   const cards = [
     ["Users", `${data.active_users}/${data.users} active`, Users],
     ["Branches", data.branches, Network],
@@ -517,7 +546,7 @@ function UsersPanel({ users, loading, search, onSearch, onUpdate, onSyncSubdomai
       <Button size="sm" className="h-9 gap-1.5 text-xs" onClick={handleCreate}><UserPlus className="h-3.5 w-3.5" />Add User</Button>
     </div>}
   >
-    {loading ? <Loading /> : <div className="overflow-x-auto"><table className="w-full text-xs">
+    {loading ? <Loading type="table" cols={8} rows={5} /> : <div className="overflow-x-auto"><table className="w-full text-xs">
       <thead><tr className="border-b text-left">{["User", "Phone", "Assets", "Wallet", "Sections", "Account Subdomain", "Status", "Actions"].map((x) => <th key={x} className="p-3">{x}</th>)}</tr></thead>
       <tbody>{users.map((item) => {
         const blocked = item.blocked_until && new Date(item.blocked_until) > new Date();
@@ -736,7 +765,7 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
   const pagedLedger = ledger.slice((ledgerPage - 1) * FEE_PAGE, ledgerPage * FEE_PAGE);
   const pagedTxns = filteredTxns.slice((txnPage - 1) * FEE_PAGE, txnPage * FEE_PAGE);
 
-  if (loading) return <Loading />;
+  if (loading) return <Loading type="finance" />;
 
   const TABS: { key: Tab; label: string }[] = [
     { key: "overview", label: "Overview" },
@@ -858,7 +887,7 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
             <Card className="shadow-none border border-border/20 rounded">
               <CardHeader className="pb-2"><CardTitle className="text-sm font-bold flex items-center gap-2">Current Fee Rates</CardTitle></CardHeader>
               <CardContent>
-                {!form ? <Loading /> : (
+                {!form ? <Loading type="list" rows={4} /> : (
                   <div className="space-y-2 text-sm">
                     {[
                       ["Deposit fee", `${form.deposit_fee_percentage}%`],
@@ -1198,7 +1227,7 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
             <CardDescription className="text-xs">Changes take effect immediately for new transactions.</CardDescription>
           </CardHeader>
           <CardContent>
-            {!form ? <Loading /> : (
+            {!form ? <Loading type="list" rows={4} /> : (
               <>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <Field label="Voucher fee type">
@@ -1276,7 +1305,7 @@ function BroadcastPanel({ users }: { users: PlatformUserResponse[] }) {
 
 function VoucherAuditPanel({ rows, search, onSearch, loading }: { rows: Awaited<ReturnType<typeof renultApi.platformAdmin.voucherAudit>>; search: string; onSearch: (v: string) => void; loading: boolean }) {
   return <Panel title="Voucher Activation Audit" icon={FileClock} action={<Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Voucher, router, event" className="h-9 w-64" />}>
-    {loading ? <Loading /> : <SimpleTable headers={["Time", "Voucher", "Router", "Event", "Status", "Activated", "Expires"]} rows={rows.map((x) => [formatDate(x.created_at), x.voucher_code, x.router_name, x.event, `${x.previous_status || "NEW"} → ${x.new_status}`, formatDate(x.activated_at), formatDate(x.expires_at)])} />}
+    {loading ? <Loading type="table" cols={7} rows={5} /> : <SimpleTable headers={["Time", "Voucher", "Router", "Event", "Status", "Activated", "Expires"]} rows={rows.map((x) => [formatDate(x.created_at), x.voucher_code, x.router_name, x.event, `${x.previous_status || "NEW"} → ${x.new_status}`, formatDate(x.activated_at), formatDate(x.expires_at)])} />}
   </Panel>;
 }
 
@@ -1323,7 +1352,7 @@ function MessageDiagnosticsPanel({
   );
   return (
     <Panel title="SMS Delivery Diagnostics" icon={MessageSquareWarning} action={action}>
-      {loading ? <Loading /> : (
+      {loading ? <Loading type="table" cols={8} rows={5} /> : (
         <SimpleTable
           headers={["Time", "Branch / Sender", "Message", "Recipients", "Delivery", "Charge", "Failure / Provider", ""]}
           rows={rows.map((row) => [
@@ -1351,7 +1380,7 @@ function MessageDiagnosticsPanel({
 
 function TunnelsPanel({ rows, loading, onToggle }: { rows: Awaited<ReturnType<typeof renultApi.platformAdmin.tunnels>>; loading: boolean; onToggle: (id: string, active: boolean) => void }) {
   return <Panel title="Tunnel Control" icon={Network}>
-    {loading ? <Loading /> : <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b text-left">{["Router", "Owner", "Status", "Tunnel", "Ports", "Last Seen", "Control"].map((x) => <th key={x} className="p-3">{x}</th>)}</tr></thead><tbody>{rows.map((x) => <tr key={x.id} className="border-b">
+    {loading ? <Loading type="table" cols={7} rows={5} /> : <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b text-left">{["Router", "Owner", "Status", "Tunnel", "Ports", "Last Seen", "Control"].map((x) => <th key={x} className="p-3">{x}</th>)}</tr></thead><tbody>{rows.map((x) => <tr key={x.id} className="border-b">
       <td className="p-3 font-bold">{x.router_name}<p className="font-normal text-muted-foreground">{x.branch_name}</p></td><td className="p-3">{x.owner_name}</td>
       <td className="p-3"><Status label={x.status} ok={["connected", "online"].includes(x.status)} /><p className="mt-1">Heartbeat: {x.heartbeat_status}</p><p>SNMP: {x.snmp_status}</p></td>
       <td className="p-3 font-mono">{x.tunnel_ip || "Not provisioned"}<p>{x.ppp_username || ""}</p></td><td className="p-3">API {x.nat_port || "N/A"}<br />Winbox {x.winbox_nat_port || "N/A"}<br />{x.tunnel_ip && <a href={`http://${x.tunnel_ip}`} target="_blank" rel="noreferrer" className="text-primary underline">WebFig ↗</a>}</td><td className="p-3">{formatDate(x.last_seen)}</td>
@@ -1362,11 +1391,11 @@ function TunnelsPanel({ rows, loading, onToggle }: { rows: Awaited<ReturnType<ty
 
 function StoragePanel({ rows, loading, error, prefix, onPrefix, onDelete }: { rows: Awaited<ReturnType<typeof renultApi.platformAdmin.storage>>; loading: boolean; error: unknown; prefix: string; onPrefix: (v: string) => void; onDelete: (key: string) => void }) {
   return <Panel title="Cloudflare R2 Files" icon={HardDrive} action={<Input value={prefix} onChange={(e) => onPrefix(e.target.value)} placeholder="Folder prefix" className="h-9 w-64" />}>
-    {error ? <ErrorText error={error} /> : loading ? <Loading /> : <div className="space-y-2">{rows.map((x) => <div key={x.key} className="flex items-center justify-between gap-3 rounded border p-3 text-xs"><div className="min-w-0"><a href={x.url} target="_blank" rel="noreferrer" className="font-mono font-bold text-primary break-all">{x.key}</a><p className="text-muted-foreground">{(x.size / 1024).toFixed(1)} KB · {formatDate(x.last_modified)}</p></div><Button size="icon" variant="ghost" className="text-destructive" onClick={() => window.confirm(`Delete ${x.key}?`) && onDelete(x.key)}><Trash2 className="h-4 w-4" /></Button></div>)}</div>}
+    {error ? <ErrorText error={error} /> : loading ? <Loading type="list" rows={5} /> : <div className="space-y-2">{rows.map((x) => <div key={x.key} className="flex items-center justify-between gap-3 rounded border p-3 text-xs"><div className="min-w-0"><a href={x.url} target="_blank" rel="noreferrer" className="font-mono font-bold text-primary break-all">{x.key}</a><p className="text-muted-foreground">{(x.size / 1024).toFixed(1)} KB · {formatDate(x.last_modified)}</p></div><Button size="icon" variant="ghost" className="text-destructive" onClick={() => window.confirm(`Delete ${x.key}?`) && onDelete(x.key)}><Trash2 className="h-4 w-4" /></Button></div>)}</div>}
   </Panel>;
 }
 
-function DnsPanel({ zones, records, error, zoneId, onZone, onDelete }: { zones: Awaited<ReturnType<typeof renultApi.platformAdmin.dnsZones>>; records: Awaited<ReturnType<typeof renultApi.platformAdmin.dnsRecords>>; error: unknown; zoneId: string; onZone: (v: string) => void; onDelete: (id: string) => void }) {
+function DnsPanel({ zones, records, error, zoneId, onZone, onDelete, loading }: { zones: Awaited<ReturnType<typeof renultApi.platformAdmin.dnsZones>>; records: Awaited<ReturnType<typeof renultApi.platformAdmin.dnsRecords>>; error: unknown; zoneId: string; onZone: (v: string) => void; onDelete: (id: string) => void; loading?: boolean }) {
   const queryClient = useQueryClient();
   const provider = zones[0]?.provider;
   const [record, setRecord] = useState({ name: "", type: "A", content: "", ttl: 3600, disabled: false, proxied: false });
@@ -1380,26 +1409,28 @@ function DnsPanel({ zones, records, error, zoneId, onZone, onDelete }: { zones: 
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not create DNS record."),
   });
   return <Panel title={`${providerLabel(provider)} DNS Management`} icon={Globe2}>
-    {error ? <ErrorText error={error} /> : <><select className="mb-4 h-10 min-w-72 rounded border bg-background px-3 text-sm" value={zoneId} onChange={(e) => onZone(e.target.value)}><option value="">Select zone</option>{zones.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+    {error ? <ErrorText error={error} /> : loading ? <Loading type="table" cols={6} rows={5} /> : <><select className="mb-4 h-10 min-w-72 rounded border bg-background px-3 text-sm" value={zoneId} onChange={(e) => onZone(e.target.value)}><option value="">Select zone</option>{zones.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
       {zoneId && <div className="mb-4 grid gap-2 rounded border p-3 sm:grid-cols-5"><Input placeholder="Name" value={record.name} onChange={(e) => setRecord({ ...record, name: e.target.value })} /><select className="h-10 rounded border bg-background px-2 text-sm" value={record.type} onChange={(e) => setRecord({ ...record, type: e.target.value })}>{["A", "AAAA", "CNAME", "TXT", "MX"].map((type) => <option key={type}>{type}</option>)}</select><Input placeholder="Content" value={record.content} onChange={(e) => setRecord({ ...record, content: e.target.value })} /><Input type="number" value={record.ttl} onChange={(e) => setRecord({ ...record, ttl: Number(e.target.value) })} /><Button disabled={!record.name || !record.content || create.isPending} onClick={() => create.mutate()}>Add Record</Button>{provider === "cloudflare" && <label className="flex items-center gap-2 text-xs sm:col-span-5"><input type="checkbox" checked={record.proxied} onChange={(e) => setRecord({ ...record, proxied: e.target.checked })} />Proxy supported A, AAAA, and CNAME records through Cloudflare</label>}</div>}
       {zoneId && <SimpleTable headers={["Name", "Type", "Content", "TTL", "Proxy", "Action"]} rows={records.map((x) => [x.name, x.type, x.content, x.ttl, x.proxied == null ? "N/A" : x.proxied ? "Proxied" : "DNS only", <Button key={x.id} size="icon" variant="ghost" className="text-destructive" onClick={() => window.confirm(`Delete ${x.name} ${x.type}?`) && onDelete(x.id)}><Trash2 className="h-4 w-4" /></Button>])} />}</>}
   </Panel>;
 }
 
-function SubadminsPanel({ users, onSave }: { users: PlatformUserResponse[]; onSave: (id: string, role: "subadmin" | "none", permissions: string[]) => void }) {
+function SubadminsPanel({ users, onSave, loading }: { users: PlatformUserResponse[]; onSave: (id: string, role: "subadmin" | "none", permissions: string[]) => void; loading?: boolean }) {
   const [drafts, setDrafts] = useState<Record<string, string[]>>({});
   const candidates = users.filter((x) => x.platform_role !== "superadmin");
-  return <Panel title="Subadmin Privileges" icon={UserCog}><div className="space-y-3">{candidates.map((item) => {
-    const values = drafts[item.id] || item.platform_permissions;
-    return <Card key={item.id} className="shadow-none rounded border-gray-100"><CardContent className="p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">{item.full_name}</p><p className="text-xs text-muted-foreground">{item.email}</p></div><Badge variant="outline">{item.platform_role || "User"}</Badge></div>
-      <div className="mt-3"><CheckboxGrid values={values} options={ADMIN_PERMISSIONS} onChange={(next) => setDrafts((old) => ({ ...old, [item.id]: next }))} /></div>
-      <div className="mt-3 flex gap-2"><Button size="sm" onClick={() => onSave(item.id, "subadmin", values)}>Save Subadmin</Button>{item.platform_role === "subadmin" && <Button size="sm" variant="destructive" onClick={() => onSave(item.id, "none", [])}>Remove</Button>}</div>
-    </CardContent></Card>;
-  })}</div></Panel>;
+  return <Panel title="Subadmin Privileges" icon={UserCog}>
+    {loading ? <Loading type="list" rows={4} /> : <div className="space-y-3">{candidates.map((item) => {
+      const values = drafts[item.id] || item.platform_permissions;
+      return <Card key={item.id} className="shadow-none rounded border-gray-100"><CardContent className="p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">{item.full_name}</p><p className="text-xs text-muted-foreground">{item.email}</p></div><Badge variant="outline">{item.platform_role || "User"}</Badge></div>
+        <div className="mt-3"><CheckboxGrid values={values} options={ADMIN_PERMISSIONS} onChange={(next) => setDrafts((old) => ({ ...old, [item.id]: next }))} /></div>
+        <div className="mt-3 flex gap-2"><Button size="sm" onClick={() => onSave(item.id, "subadmin", values)}>Save Subadmin</Button>{item.platform_role === "subadmin" && <Button size="sm" variant="destructive" onClick={() => onSave(item.id, "none", [])}>Remove</Button>}</div>
+      </CardContent></Card>;
+    })}</div>}
+  </Panel>;
 }
 
 function HealthPanel({ data, loading, onRefresh }: { data: Awaited<ReturnType<typeof renultApi.platformAdmin.health>> | undefined; loading: boolean; onRefresh: () => void }) {
-  if (loading || !data) return <Loading />;
+  if (loading || !data) return <Loading type="health" />;
   const services = [["Database", data.database], ["Cloudflare R2", data.r2], [`${providerLabel(data.dns_provider)} DNS`, data.dns], ["Email", data.email], ["SMS", data.sms], ["Payments", data.payment_gateway]];
   return <Panel title="System Health" icon={Activity} action={<Button size="sm" variant="outline" onClick={onRefresh}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>}>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{services.map(([name, value]) => <Card key={name} className="shadow-none"><CardContent className="p-4"><p className="text-xs font-bold text-muted-foreground">{name}</p><p className="mt-2 font-bold">{value}</p></CardContent></Card>)}</div>
@@ -1408,7 +1439,7 @@ function HealthPanel({ data, loading, onRefresh }: { data: Awaited<ReturnType<ty
 }
 
 function AdminAuditPanel({ rows, loading }: { rows: Awaited<ReturnType<typeof renultApi.platformAdmin.audit>>; loading: boolean }) {
-  return <Panel title="Platform Admin Audit" icon={ShieldCheck}>{loading ? <Loading /> : <SimpleTable headers={["Time", "Admin", "Action", "Target", "Details"]} rows={rows.map((x) => [formatDate(x.created_at), x.actor_name || "System", x.action, `${x.target_type}${x.target_id ? ` / ${x.target_id}` : ""}`, JSON.stringify(x.details || {})])} />}</Panel>;
+  return <Panel title="Platform Admin Audit" icon={ShieldCheck}>{loading ? <Loading type="table" cols={5} rows={5} /> : <SimpleTable headers={["Time", "Admin", "Action", "Target", "Details"]} rows={rows.map((x) => [formatDate(x.created_at), x.actor_name || "System", x.action, `${x.target_type}${x.target_id ? ` / ${x.target_id}` : ""}`, JSON.stringify(x.details || {})])} />}</Panel>;
 }
 
 function SessionsPanel({ sessions, loginAttempts, loading, onRevoke }: {
@@ -1420,7 +1451,7 @@ function SessionsPanel({ sessions, loginAttempts, loading, onRevoke }: {
   return (
     <div className="space-y-5">
       <Panel title="Active Sessions" icon={KeyRound}>
-        {loading ? <Loading /> : <SimpleTable
+        {loading ? <Loading type="table" cols={6} rows={3} /> : <SimpleTable
           headers={["User", "IP Address", "Device", "Started", "Last Seen", "Action"]}
           rows={sessions.map((s) => [
             s.user_name,
@@ -1433,7 +1464,7 @@ function SessionsPanel({ sessions, loginAttempts, loading, onRevoke }: {
         />}
       </Panel>
       <Panel title="Login Attempts" icon={ShieldCheck}>
-        {loading ? <Loading /> : <SimpleTable
+        {loading ? <Loading type="table" cols={5} rows={3} /> : <SimpleTable
           headers={["Time", "Email", "Result", "IP Address", "Failure Reason"]}
           rows={loginAttempts.map((a) => [
             formatDate(a.created_at),
@@ -1460,7 +1491,7 @@ function NotificationsPanel({ rows, loading, onDelete, onClearAll }: {
       icon={Bell}
       action={<Button size="sm" variant="destructive" className="h-9 text-xs" onClick={onClearAll}>Clear All</Button>}
     >
-      {loading ? <Loading /> : <SimpleTable
+      {loading ? <Loading type="table" cols={6} rows={5} /> : <SimpleTable
         headers={["Time", "User", "Category", "Title", "Body", ""]}
         rows={rows.map((n) => [
           formatDate(n.created_at),
@@ -1504,8 +1535,160 @@ function SimpleTable({ headers, rows }: { headers: string[]; rows: React.ReactNo
   return <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b text-left">{headers.map((x) => <th key={x} className="p-3">{x}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index} className="border-b">{row.map((cell, cellIndex) => <td key={cellIndex} className="max-w-sm break-words p-3">{cell}</td>)}</tr>)}</tbody></table></div>;
 }
 
-function Loading() {
-  return <div className="flex h-40 items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Loading platform data...</div>;
+function Loading({
+  type = "default",
+  rows = 5,
+  cols = 5,
+}: {
+  type?: "default" | "overview" | "table" | "finance" | "list" | "health";
+  rows?: number;
+  cols?: number;
+}) {
+  if (type === "overview") {
+    return (
+      <div className="space-y-4 w-full">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <Card key={i} className="shadow-none rounded border border-gray-100 p-5">
+              <div className="flex items-center justify-between">
+                <div className="space-y-2 w-full pr-4">
+                  <Skeleton className="h-3 w-16 bg-muted/65 animate-pulse" />
+                  <Skeleton className="h-7 w-28 bg-muted/80 animate-pulse" />
+                </div>
+                <Skeleton className="h-8 w-8 rounded-full bg-muted/70 flex-shrink-0 animate-pulse" />
+              </div>
+            </Card>
+          ))}
+          <Card className="shadow-none rounded sm:col-span-2 xl:col-span-3 p-4">
+            <div className="flex gap-4">
+              <Skeleton className="h-4 w-28 bg-muted/70 animate-pulse" />
+              <Skeleton className="h-4 w-28 bg-muted/70 animate-pulse" />
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "table") {
+    return (
+      <div className="w-full space-y-3">
+        {/* Table Header Placeholder */}
+        <div className="flex items-center space-x-4 border-b pb-3">
+          {Array.from({ length: cols }).map((_, i) => (
+            <Skeleton key={i} className="h-4 flex-1 bg-muted/80 animate-pulse" />
+          ))}
+        </div>
+        {/* Table Rows Placeholders */}
+        {Array.from({ length: rows }).map((_, r) => (
+          <div key={r} className="flex items-center space-x-4 border-b py-3.5">
+            {Array.from({ length: cols }).map((_, c) => (
+              <Skeleton
+                key={c}
+                className={cn(
+                  "h-3 flex-1 bg-muted/60 animate-pulse",
+                  c === 0 && "w-1/3 flex-none",
+                  c === cols - 1 && "w-1/4 flex-none"
+                )}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (type === "list") {
+    return (
+      <div className="space-y-2 w-full">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="flex items-center justify-between rounded border p-3">
+            <div className="space-y-2 w-1/2">
+              <Skeleton className="h-4 w-3/4 bg-muted/80 animate-pulse" />
+              <Skeleton className="h-3 w-1/2 bg-muted/60 animate-pulse" />
+            </div>
+            <Skeleton className="h-8 w-8 rounded bg-muted/70 animate-pulse" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (type === "health") {
+    return (
+      <div className="space-y-4 w-full">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i} className="shadow-none p-4 space-y-2">
+              <Skeleton className="h-3 w-1/3 bg-muted/70 animate-pulse" />
+              <Skeleton className="h-5 w-2/3 bg-muted/80 animate-pulse" />
+            </Card>
+          ))}
+        </div>
+        <Card className="p-4 space-y-3">
+          <Skeleton className="h-4 w-1/4 bg-muted/80 animate-pulse" />
+          <Skeleton className="h-4 w-1/3 bg-muted/70 animate-pulse" />
+          <Skeleton className="h-4 w-1/2 bg-muted/70 animate-pulse" />
+        </Card>
+      </div>
+    );
+  }
+
+  if (type === "finance") {
+    return (
+      <div className="space-y-6 w-full">
+        {/* KPI card grid skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="p-4 space-y-4 min-h-[130px] flex flex-col justify-between">
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-20 bg-muted/70 animate-pulse" />
+                <Skeleton className="h-6 w-32 bg-muted/80 animate-pulse" />
+              </div>
+              <div className="h-8 w-full bg-muted/30 rounded animate-pulse" />
+              <div className="flex justify-between items-center mt-2">
+                <Skeleton className="h-3 w-3/4 bg-muted/60 animate-pulse" />
+                <Skeleton className="h-5 w-5 rounded bg-muted/70 animate-pulse" />
+              </div>
+            </Card>
+          ))}
+        </div>
+        {/* Table skeleton below */}
+        <Card className="p-4">
+          <div className="space-y-3">
+            <div className="flex gap-4 border-b pb-2">
+              <Skeleton className="h-4 w-1/4 bg-muted/80 animate-pulse" />
+              <Skeleton className="h-4 w-1/4 bg-muted/80 animate-pulse" />
+            </div>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex justify-between py-2 border-b">
+                <Skeleton className="h-3 w-1/3 bg-muted/60 animate-pulse" />
+                <Skeleton className="h-3 w-20 bg-muted/60 animate-pulse" />
+                <Skeleton className="h-3 w-28 bg-muted/60 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // default compact skeleton
+  return (
+    <div className="flex flex-col space-y-3 w-full p-4 border border-dashed rounded-md bg-muted/5">
+      <div className="flex items-center space-x-3">
+        <Skeleton className="h-8 w-8 rounded-full bg-muted/85 animate-pulse" />
+        <div className="space-y-2 flex-1">
+          <Skeleton className="h-4 w-1/3 bg-muted/85 animate-pulse" />
+          <Skeleton className="h-3 w-1/2 bg-muted/70 animate-pulse" />
+        </div>
+      </div>
+      <div className="space-y-2 pt-2">
+        <Skeleton className="h-3 w-full bg-muted/60 animate-pulse" />
+        <Skeleton className="h-3 w-5/6 bg-muted/60 animate-pulse" />
+      </div>
+    </div>
+  );
 }
 
 function ErrorText({ error }: { error: unknown }) {

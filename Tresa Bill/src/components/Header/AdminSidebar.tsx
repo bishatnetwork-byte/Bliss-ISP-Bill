@@ -41,6 +41,21 @@ export const PLATFORM_ADMIN_SECTIONS = [
 
 export type PlatformAdminSection = typeof PLATFORM_ADMIN_SECTIONS[number]["id"];
 
+const SECTIONS_GROUPS = [
+  {
+    title: "Core Operations",
+    items: ["overview", "users", "finance", "subadmins", "broadcasts"],
+  },
+  {
+    title: "Infrastructure",
+    items: ["voucher_audit", "message_diagnostics", "tunnels", "storage", "dns"],
+  },
+  {
+    title: "System & Security",
+    items: ["sessions", "notifications", "system", "audit", "reports"],
+  },
+] as const;
+
 interface AdminSidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -91,8 +106,8 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
 
       <aside
         className={cn(
-          "fixed top-0 left-0 z-50 h-full bg-white border-r border-border/80 shadow-2xl md:shadow-none md:z-20",
-          "flex flex-col custom-scrollbar transition-all duration-300 md:translate-x-0",
+          "fixed top-0 left-0 z-50 h-full overflow-y-auto custom-scrollbar bg-white border-r border-border/80 shadow-2xl md:shadow-none md:z-20",
+          "flex flex-col transition-all duration-300 md:translate-x-0",
           isCollapsed ? "w-[72px]" : "w-[280px]",
           isOpen ? "translate-x-0" : "-translate-x-full",
         )}
@@ -105,26 +120,41 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
           )}
         </div>
         <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4">
-          <div className="space-y-0.5">
-            {visibleSections.map((item) => {
-              const Icon = item.icon;
-              const active = item.id === activeSection;
+          <div className="space-y-4">
+            {SECTIONS_GROUPS.map((group, groupIndex) => {
+              const groupVisibleItems = visibleSections.filter((item) =>
+                (group.items as readonly string[]).includes(item.id)
+              );
+
+              if (groupVisibleItems.length === 0) return null;
+
               return (
-                <button
-                  key={item.id}
-                  onClick={() => selectSection(item.id)}
-                  className={cn(
-                    "flex w-full min-w-0 items-center gap-2.5 rounded px-3 py-2 text-left text-sm font-medium transition-colors",
-                    isCollapsed && "justify-center px-0",
-                    active
-                      ? "bg-primary text-white"
-                      : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                <div key={group.title} className="space-y-0.5">
+                  {groupIndex > 0 && (
+                    <div className="mx-[-8px] border-t border-border/80 my-3" />
                   )}
-                  title={isCollapsed ? item.label : undefined}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {!isCollapsed && <span className="truncate">{item.label}</span>}
-                </button>
+                  {groupVisibleItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = item.id === activeSection;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => selectSection(item.id)}
+                        className={cn(
+                          "flex w-full min-w-0 items-center gap-2.5 rounded px-3 py-2 text-left text-sm font-medium transition-colors",
+                          isCollapsed && "justify-center px-0",
+                          active
+                            ? "bg-primary text-white"
+                            : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                        )}
+                        title={isCollapsed ? item.label : undefined}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        {!isCollapsed && <span className="truncate">{item.label}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
               );
             })}
           </div>
