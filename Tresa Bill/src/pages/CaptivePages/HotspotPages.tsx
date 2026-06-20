@@ -10,7 +10,8 @@ import {
     ArrowRight,
     Eye,
     Megaphone,
-    TicketCheck
+    TicketCheck,
+    LayoutGrid
 } from "lucide-react";
 
 const TEMPLATES = [
@@ -53,6 +54,16 @@ const TEMPLATES = [
         badgeColor: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
         gradient: "from-purple-500/10 via-indigo-500/5 to-transparent",
         borderHover: "hover:border-purple-500 hover:shadow-purple-500/10"
+    },
+    {
+        id: "grid_portal",
+        title: "Grid Portal",
+        description: "2-column package grid with mobile money and a custom brand color.",
+        icon: <LayoutGrid className="w-8 h-8 text-orange-500" />,
+        badge: "Customizable Color",
+        badgeColor: "bg-orange-100 text-orange-800 dark:bg-orange-950/40 dark:text-orange-300",
+        gradient: "from-orange-500/10 via-amber-500/5 to-transparent",
+        borderHover: "hover:border-orange-500 hover:shadow-orange-500/10"
     },
 ];
 

@@ -38,8 +38,26 @@ export interface CaptivePortal {
   phone_one?: string | null;
   phone_two?: string | null;
   logo_url?: string | null;
+  primary_color?: string | null;
   portal_template: string;
   last_pushed_at?: string | null;
+}
+
+// Blends a hex color toward white (positive percent) or black (negative percent),
+// used to derive hover/gradient shades from the single admin-picked brand color.
+function shadeColor(hex: string, percent: number): string {
+  const match = /^#([0-9a-fA-F]{6})$/.exec(hex);
+  if (!match) return hex;
+  const num = parseInt(match[1], 16);
+  let r = (num >> 16) & 0xff;
+  let g = (num >> 8) & 0xff;
+  let b = num & 0xff;
+  const t = percent < 0 ? 0 : 255;
+  const p = Math.abs(percent) / 100;
+  r = Math.round((t - r) * p + r);
+  g = Math.round((t - g) * p + g);
+  b = Math.round((t - b) * p + b);
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 }
 
 const FALLBACK_PORTAL: CaptivePortal = {
@@ -320,7 +338,10 @@ export default function CaptivePreview() {
   };
 
   const style = getThemeClasses(config.portal_template);
-  const usesRenaultLayout = config.portal_template === "renault" || config.portal_template === "adsmob";
+  const usesRenaultLayout = config.portal_template === "renault" || config.portal_template === "adsmob" || config.portal_template === "grid_portal";
+  const isGridPortal = config.portal_template === "grid_portal";
+  const accent = config.primary_color && /^#[0-9a-fA-F]{6}$/.test(config.primary_color) ? config.primary_color : "#FF6000";
+  const accentDark = shadeColor(accent, -15);
 
   return (
     <div className={`min-h-screen flex flex-col justify-between transition-all duration-300 ${usesRenaultLayout ? (renaultTheme === "dark" ? "bg-[#000000] text-slate-100" : "bg-[#f9f9f9] text-slate-900") : style.wrapper}`}>
@@ -347,20 +368,20 @@ export default function CaptivePreview() {
            ════════════════════════════════════════════════════════ */
         <div className="flex-1 flex flex-col justify-between w-full max-w-[480px] mx-auto min-h-full shadow-2xl relative bg-inherit">
           {/* Header Banner */}
-          <div className="relative min-h-[190px] flex flex-col justify-end p-6 bg-gradient-to-b from-[#1a1a1a] via-[#0d0d0d] to-[#000000] text-white overflow-hidden border-b-2 border-[#FF6000]">
+          <div className="relative min-h-[190px] flex flex-col justify-end p-6 bg-gradient-to-b from-[#1a1a1a] via-[#0d0d0d] to-[#000000] text-white overflow-hidden border-b-2" style={{ borderBottomColor: accent }}>
             <div className="absolute inset-0 opacity-10 pointer-events-none">
               {/* Decorative grid pattern */}
               <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                   <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#FF6000" strokeWidth="1" />
+                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke={accent} strokeWidth="1" />
                   </pattern>
                 </defs>
                 <rect width="100%" height="100%" fill="url(#grid)" />
               </svg>
             </div>
             {/* Orange Radial Glow Blob */}
-            <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-[#FF6000] filter blur-3xl opacity-30 pointer-events-none" />
+            <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full filter blur-3xl opacity-30 pointer-events-none" style={{ backgroundColor: accent }} />
 
             <div className="relative flex items-center justify-between gap-3 z-10 w-full">
               <div className="flex items-center gap-3">
@@ -445,7 +466,7 @@ export default function CaptivePreview() {
 
             {step === "connecting" && (
               <div className="py-12 text-center space-y-4">
-                <Loader2 className="w-12 h-12 animate-spin mx-auto text-[#FF6000]" />
+                <Loader2 className="w-12 h-12 animate-spin mx-auto" style={{ color: accent }} />
                 <h3 className="text-base font-bold">Verifying Voucher...</h3>
                 <p className="text-xs text-muted-foreground">Connecting you to Uganda's premium hotspot network tunnel...</p>
               </div>
@@ -484,7 +505,7 @@ export default function CaptivePreview() {
                 <Card className={`border-none shadow-lg ${renaultTheme === "dark" ? "bg-slate-900 text-white" : "bg-white text-slate-900"}`}>
                   <CardContent className="p-4 space-y-4">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      <Key className="w-4 h-4 text-[#FF6000]" />
+                      <Key className="w-4 h-4" style={{ color: accent }} />
                       Voucher Code
                     </div>
                     <div className="flex gap-2">
@@ -496,7 +517,8 @@ export default function CaptivePreview() {
                       />
                       <Button
                         onClick={() => handleVoucherConnect(voucher)}
-                        className="bg-gradient-to-r from-[#FF6000] to-[#E55000] hover:opacity-95 text-white font-bold shadow-lg"
+                        className="hover:opacity-95 text-white font-bold shadow-lg"
+                        style={{ backgroundImage: `linear-gradient(to right, ${accent}, ${accentDark})` }}
                       >
                         Connect
                       </Button>
@@ -508,44 +530,67 @@ export default function CaptivePreview() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b pb-2">
                     <h3 className="text-sm font-bold flex items-center gap-1.5">
-                      <Wifi className="w-4 h-4 text-[#FF6000]" />
-                      Internet Packages
+                      <Wifi className="w-4 h-4" style={{ color: accent }} />
+                      {isGridPortal ? "Choose a WiFi Package" : "Internet Packages"}
                     </h3>
-                    <span className="text-xs font-semibold text-[#FF6000] uppercase">{config.logo_url || "RENAULT"}</span>
+                    {!isGridPortal && (
+                      <span className="text-xs font-semibold uppercase" style={{ color: accent }}>{config.logo_url || "RENAULT"}</span>
+                    )}
                   </div>
 
-                  {/* Tabs */}
-                  <div className="grid grid-cols-3 gap-1 p-1 bg-slate-500/10 rounded-lg">
-                    {["Lite", "Normal", "SuperFast"].map((tab) => (
-                      <button
-                        key={tab}
-                        onClick={() => setRenaultSpeedTab(tab as any)}
-                        className={`py-1.5 text-xs font-bold rounded-md transition-all ${renaultSpeedTab === tab ? "bg-[#FF6000] text-white shadow" : "text-muted-foreground hover:text-inherit"}`}
-                      >
-                        {tab}
-                      </button>
-                    ))}
-                  </div>
+                  {!isGridPortal && (
+                    <div className="grid grid-cols-3 gap-1 p-1 bg-slate-500/10 rounded-lg">
+                      {["Lite", "Normal", "SuperFast"].map((tab) => (
+                        <button
+                          key={tab}
+                          onClick={() => setRenaultSpeedTab(tab as any)}
+                          className="py-1.5 text-xs font-bold rounded-md transition-all"
+                          style={renaultSpeedTab === tab ? { backgroundColor: accent, color: "#fff" } : undefined}
+                        >
+                          {tab}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
-                  {/* Package List */}
-                  <div className="space-y-2">
-                    {RENAULT_PACKAGES[renaultSpeedTab].map((pkg) => (
-                      <div
-                        key={pkg.id}
-                        onClick={() => { setSelectedPkg(pkg); setMmNumber(""); }}
-                        className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer hover:border-[#FF6000] hover:bg-[#FF6000]/5 ${renaultTheme === "dark" ? "bg-slate-900/40 border-slate-800" : "bg-white border-slate-200"}`}
-                      >
-                        <div>
-                          <div className="font-bold text-sm">{pkg.data}</div>
-                          <div className="text-xs text-muted-foreground">{pkg.limit} · {pkg.devices} device{pkg.devices > 1 ? "s" : ""}</div>
+                  {isGridPortal ? (
+                    /* Grid Portal: flat 2-column package grid (no speed tabs) */
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {Object.values(RENAULT_PACKAGES).flat().map((pkg) => (
+                        <div
+                          key={pkg.id}
+                          onClick={() => { setSelectedPkg(pkg); setMmNumber(""); }}
+                          className={`flex flex-col items-center text-center gap-1 p-3 rounded-xl border transition-all cursor-pointer hover:-translate-y-0.5 ${renaultTheme === "dark" ? "bg-slate-900/40 border-slate-800" : "bg-white border-slate-200"}`}
+                          onMouseEnter={(e) => (e.currentTarget.style.borderColor = accent)}
+                          onMouseLeave={(e) => (e.currentTarget.style.borderColor = "")}
+                        >
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{pkg.limit}</span>
+                          <span className="font-bold text-sm">{pkg.data}</span>
+                          <span className="font-extrabold text-sm" style={{ color: accent }}>UGX {pkg.total.toLocaleString()}</span>
+                          <span className="w-full text-white text-[10px] font-bold px-2 py-1.5 rounded-md mt-1" style={{ backgroundColor: accent }}>Buy Now</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-sm text-[#FF6000]">UGX {pkg.total.toLocaleString()}</span>
-                          <span className="bg-[#FF6000] text-white text-[10px] font-bold px-2 py-1 rounded">Buy</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {RENAULT_PACKAGES[renaultSpeedTab].map((pkg) => (
+                        <div
+                          key={pkg.id}
+                          onClick={() => { setSelectedPkg(pkg); setMmNumber(""); }}
+                          className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${renaultTheme === "dark" ? "bg-slate-900/40 border-slate-800" : "bg-white border-slate-200"}`}
+                        >
+                          <div>
+                            <div className="font-bold text-sm">{pkg.data}</div>
+                            <div className="text-xs text-muted-foreground">{pkg.limit} · {pkg.devices} device{pkg.devices > 1 ? "s" : ""}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-sm" style={{ color: accent }}>UGX {pkg.total.toLocaleString()}</span>
+                            <span className="text-white text-[10px] font-bold px-2 py-1 rounded" style={{ backgroundColor: accent }}>Buy</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -572,7 +617,7 @@ export default function CaptivePreview() {
                   </button>
                 </div>
 
-                <div className="bg-[#FF6000]/10 border border-[#FF6000]/20 p-3 rounded-lg text-xs leading-relaxed text-[#FF6000]">
+                <div className="p-3 rounded-lg text-xs leading-relaxed" style={{ backgroundColor: `${accent}1a`, border: `1px solid ${accent}33`, color: accent }}>
                   <strong>Uganda Mobile Money Payment:</strong> Enter your MTN or Airtel Money phone number below to proceed. A prompt will be sent directly to your phone to authorise payment of <strong>UGX {selectedPkg.total.toLocaleString()}</strong>.
                 </div>
 
@@ -589,15 +634,15 @@ export default function CaptivePreview() {
 
                 {isProcessingPayment ? (
                   <div className="py-4 text-center space-y-2">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#FF6000]" />
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto" style={{ color: accent }} />
                     <p className="text-xs text-muted-foreground font-semibold">Processing Mobile Money Transaction... check phone prompt</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-2 pt-2">
-                    <Button onClick={() => handleInitiatePayment('self')} className="bg-[#FF6000] hover:bg-[#E55000] text-white text-xs font-bold py-2">
+                    <Button onClick={() => handleInitiatePayment('self')} className="text-white text-xs font-bold py-2 hover:opacity-90" style={{ backgroundColor: accent }}>
                       Buy for Self
                     </Button>
-                    <Button onClick={() => handleInitiatePayment('another')} variant="outline" className="border-[#FF6000]/40 text-[#FF6000] hover:bg-[#FF6000]/5 text-xs font-bold py-2">
+                    <Button onClick={() => handleInitiatePayment('another')} variant="outline" className="text-xs font-bold py-2 hover:opacity-80" style={{ borderColor: `${accent}66`, color: accent }}>
                       Buy for Another
                     </Button>
                   </div>
@@ -629,7 +674,7 @@ export default function CaptivePreview() {
                     placeholder="e.g. 0771234567"
                     className={`text-sm ${renaultTheme === "dark" ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-200"}`}
                   />
-                  <Button onClick={handleSearchVoucher} className="bg-[#FF6000] text-white text-xs font-bold" disabled={isSearching}>
+                  <Button onClick={handleSearchVoucher} className="text-white text-xs font-bold hover:opacity-90" style={{ backgroundColor: accent }} disabled={isSearching}>
                     {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
                   </Button>
                 </div>
@@ -640,10 +685,10 @@ export default function CaptivePreview() {
                     {searchResults.map((res, i) => (
                       <div key={i} className={`p-3 rounded border flex items-center justify-between ${renaultTheme === "dark" ? "bg-slate-800/40 border-slate-800" : "bg-slate-50 border-slate-200"}`}>
                         <div>
-                          <div className="font-bold text-sm font-mono text-[#FF6000]">{res.code}</div>
+                          <div className="font-bold text-sm font-mono" style={{ color: accent }}>{res.code}</div>
                           <div className="text-[10px] text-muted-foreground">{res.profile} · UGX {res.amount}</div>
                         </div>
-                        <Button onClick={() => handleConnectVoucher(res.code)} size="sm" className="bg-[#FF6000] hover:bg-[#E55000] text-[10px] h-7 px-2">
+                        <Button onClick={() => handleConnectVoucher(res.code)} size="sm" className="text-[10px] h-7 px-2 hover:opacity-90" style={{ backgroundColor: accent }}>
                           Connect
                         </Button>
                       </div>
