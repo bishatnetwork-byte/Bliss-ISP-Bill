@@ -83,6 +83,7 @@ def init_db() -> None:
     _ensure_portal_ad_columns()
     _ensure_branch_wallet_transaction_columns()
     _ensure_telegram_connection_columns()
+    _ensure_captive_portal_columns()
     _bootstrap_platform_admins()
 
     # Seed ticket categories
@@ -162,6 +163,20 @@ def _ensure_user_admin_columns() -> None:
         for name, sql_type in column_types.items():
             if name not in columns:
                 conn.execute(sa.text(f'ALTER TABLE "user" ADD COLUMN {name} {sql_type}'))
+
+
+def _ensure_captive_portal_columns() -> None:
+    inspector = sa.inspect(engine)
+    if not inspector.has_table("captiveportal"):
+        return
+    columns = {column["name"] for column in inspector.get_columns("captiveportal")}
+    column_types = {
+        "primary_color": "VARCHAR",
+    }
+    with engine.begin() as conn:
+        for name, sql_type in column_types.items():
+            if name not in columns:
+                conn.execute(sa.text(f"ALTER TABLE captiveportal ADD COLUMN {name} {sql_type}"))
 
 
 def _ensure_telegram_connection_columns() -> None:

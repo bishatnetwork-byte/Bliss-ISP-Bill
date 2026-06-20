@@ -25,6 +25,7 @@ class CaptivePortal(SQLModel, table=True):
     phone_one: Optional[str] = Field(default=None)
     phone_two: Optional[str] = Field(default=None)
     logo_url: Optional[str] = Field(default=None)
+    primary_color: Optional[str] = Field(default=None)
     portal_template: str = Field(default="renault")
     last_pushed_at: Optional[datetime] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)

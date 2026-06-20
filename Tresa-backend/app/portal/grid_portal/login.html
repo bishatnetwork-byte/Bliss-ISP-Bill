@@ -1,0 +1,2596 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1"
+    />
+    <title>Renault WIFI</title>
+    <meta name="theme-color" content="#FF6000" />
+    <style>
+      /* ── Reset ── */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      /* ── CSS Variables ── */
+      :root {
+        --or: #ff6000;
+        --or-mid: #ff7a1a;
+        --or-light: #ff9940;
+        --or-pale: #fff3ec;
+        --or-dark: #e55000;
+        --white: #ffffff;
+        --gray-50: #f9f9f9;
+        --gray-100: #f2f2f2;
+        --gray-200: #e5e5e5;
+        --gray-300: #cccccc;
+        --gray-400: #999999;
+        --gray-500: #666666;
+        --gray-600: #444444;
+        --gray-700: #2d2d2d;
+        --gray-800: #1a1a1a;
+        --gray-900: #0d0d0d;
+        --green: #25d366;
+        --gold: #ffd700;
+        --red: #ef4444;
+
+        --bg: var(--gray-50);
+        --surface: var(--white);
+        --surface2: var(--gray-100);
+        --border: var(--gray-200);
+        --text: var(--gray-900);
+        --text-2: var(--gray-700);
+        --text-muted: var(--gray-500);
+        --text-light: var(--gray-400);
+        --primary: var(--or);
+        --primary-mid: var(--or-mid);
+        --primary-lt: var(--or-light);
+        --primary-pale: var(--or-pale);
+
+        --radius-sm: 2px;
+        --radius: 2px;
+        --radius-lg: 2px;
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+        --shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.15);
+        --primary-shadow: rgba(255, 96, 0, 0.28);
+        --focus-ring: rgba(255, 96, 0, 0.15);
+      }
+
+      [data-theme="dark"] {
+        --bg: #000000;
+        --surface: #111111;
+        --surface2: #1a1a1a;
+        --border: #2a2a2a;
+        --text: #f0f0f0;
+        --text-2: #bbbbbb;
+        --text-muted: #777777;
+        --text-light: #444444;
+        --primary: #ff6000;
+        --primary-mid: #ff7a1a;
+        --primary-lt: #ff9940;
+        --primary-pale: #1f0e00;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+        --shadow: 0 4px 14px rgba(0, 0, 0, 0.42);
+        --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.55);
+        --primary-shadow: rgba(0, 0, 0, 0.32);
+        --focus-ring: rgba(255, 96, 0, 0.1);
+      }
+
+      body {
+        font-family:
+          "Inter",
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        line-height: 1.5;
+        transition:
+          background 0.3s,
+          color 0.3s;
+        overflow-x: hidden;
+      }
+
+      /* ── App wrapper ── */
+      .app-wrap {
+        max-width: 480px;
+        margin: 0 auto;
+        min-height: 100vh;
+        background: var(--bg);
+        position: relative;
+      }
+
+      /* ── Hero Banner ── */
+      .hero-banner {
+        width: 100%;
+        background: linear-gradient(
+          160deg,
+          #1a1a1a 0%,
+          #0d0d0d 60%,
+          #000000 100%
+        );
+        padding: 0;
+        position: relative;
+        overflow: hidden;
+        min-height: 190px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+      }
+
+      .hero-waves {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+
+      .hero-waves svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      /* Orange glow blob */
+      .hero-glow {
+        position: absolute;
+        width: 260px;
+        height: 260px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(255, 96, 0, 0.35) 0%,
+          rgba(255, 96, 0, 0) 70%
+        );
+        top: -60px;
+        right: -60px;
+        pointer-events: none;
+      }
+
+      .hero-content {
+        position: relative;
+        padding: 28px 20px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .hero-logo-circle {
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(8px);
+        border: 1.5px solid rgba(255, 255, 255, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .hero-logo-circle svg {
+        width: 28px;
+        height: 28px;
+        stroke: #fff;
+      }
+
+      .hero-logo-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 12px;
+      }
+
+      .hero-text {
+        flex: 1;
+      }
+
+      .hero-title {
+        font-size: 1.3rem;
+        font-weight: 900;
+        color: #fff;
+        letter-spacing: -0.02em;
+      }
+
+      .hero-subtitle {
+        font-size: 0.78rem;
+        color: rgba(255, 255, 255, 0.78);
+        margin-top: 2px;
+      }
+
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        background: rgba(255, 255, 255, 0.18);
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #fff;
+        margin-top: 6px;
+      }
+
+      .online-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #4ade80;
+        box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.4);
+        animation: dot-pulse 2s infinite;
+      }
+
+      @keyframes dot-pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.4);
+        }
+
+        50% {
+          box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.1);
+        }
+      }
+
+      .theme-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.18);
+        border: 1.5px solid rgba(255, 255, 255, 0.3);
+        color: #fff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 17px;
+        transition: background 0.2s;
+      }
+
+      .theme-btn:hover {
+        background: rgba(255, 255, 255, 0.28);
+      }
+
+      .icon-sun {
+        display: none;
+      }
+
+      [data-theme="dark"] .icon-sun {
+        display: block;
+      }
+
+      [data-theme="dark"] .icon-moon {
+        display: none;
+      }
+
+      [data-theme="dark"] .connect-btn,
+      [data-theme="dark"] .speed-tab.active,
+      [data-theme="dark"] .pkg-buy-btn,
+      [data-theme="dark"] .btn-primary,
+      [data-theme="dark"] .btn-success,
+      [data-theme="dark"] .btn-warning {
+        box-shadow: 0 2px 7px rgba(0, 0, 0, 0.38);
+      }
+
+      [data-theme="dark"] .pkg-tile:hover {
+        box-shadow: 0 5px 14px rgba(0, 0, 0, 0.42);
+      }
+
+      /* ── Connect bar ── */
+      .connect-section {
+        padding: 14px 16px 0;
+        margin-top: -1px;
+      }
+
+      .connect-card {
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        padding: 18px 16px 16px;
+        transition:
+          background 0.3s,
+          border-color 0.3s;
+      }
+
+      .connect-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .connect-label svg {
+        width: 13px;
+        height: 13px;
+        color: var(--primary);
+      }
+
+      .connect-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--surface2);
+        border: 1.5px solid var(--border);
+        border-radius: 4px;
+        padding: 6px 6px 6px 14px;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .connect-bar:focus-within {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--focus-ring);
+      }
+
+      .connect-input {
+        flex: 1;
+        border: none;
+        background: transparent;
+        font-size: 0.9rem;
+        font-family: inherit;
+        color: var(--text);
+        outline: none;
+        padding: 5px 0;
+      }
+
+      .connect-input::placeholder {
+        color: var(--text-2);
+        font-size: 0.88rem;
+      }
+
+      .connect-btn {
+        padding: 9px 18px;
+        background: linear-gradient(135deg, var(--or) 0%, var(--or-mid) 100%);
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition:
+          opacity 0.2s,
+          transform 0.1s;
+        box-shadow: 0 3px 10px var(--primary-shadow);
+      }
+
+      .connect-btn:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+      }
+
+      .connect-btn:active {
+        transform: none;
+      }
+
+      .connect-btn svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      .router-alert {
+        margin: 14px 16px 0;
+        padding: 11px 13px;
+        border: 1px solid rgba(239, 68, 68, 0.24);
+        background: rgba(239, 68, 68, 0.09);
+        color: var(--red);
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+
+      .trial-link {
+        display: block;
+        margin-top: 10px;
+        padding: 9px 4px;
+        color: var(--primary);
+        font-size: 0.78rem;
+        font-weight: 800;
+        text-align: center;
+        text-decoration: none;
+        border-radius: 4px;
+        transition: background 0.15s;
+      }
+
+      .trial-link:active {
+        background: var(--primary-pale);
+      }
+
+      .router-template {
+        display: none !important;
+      }
+
+      /* ── Section ── */
+      .section-wrap {
+        padding: 16px 16px 0;
+      }
+
+      .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+
+      .section-title {
+        font-size: 0.9rem;
+        font-weight: 800;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .section-title svg {
+        width: 16px;
+        height: 16px;
+        color: var(--primary);
+      }
+
+      /* ── Speed tabs ── */
+      .speed-tabs {
+        display: flex;
+        gap: 6px;
+        background: var(--surface2);
+        border-radius: 10px;
+        padding: 4px;
+        margin-bottom: 12px;
+        border: 1px solid var(--border);
+      }
+
+      .speed-tab {
+        flex: 1;
+        text-align: center;
+        padding: 7px 4px;
+        border-radius: 7px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        font-family: inherit;
+        transition:
+          background 0.2s,
+          color 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .speed-tab.active {
+        background: linear-gradient(135deg, var(--or) 0%, var(--or-mid) 100%);
+        color: #fff;
+        box-shadow: 0 2px 8px rgba(255, 96, 0, 0.35);
+      }
+
+      /* ── Package grid ── */
+      .package-list {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+      }
+
+      .pkg-tile {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 6px;
+        padding: 16px 10px 14px;
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+        cursor: pointer;
+        font: inherit;
+        color: inherit;
+        transition:
+          transform 0.18s,
+          box-shadow 0.18s,
+          border-color 0.18s;
+        position: relative;
+        overflow: hidden;
+      }
+
+      [data-theme="dark"] .pkg-tile {
+        border-color: var(--border);
+        background: #111111;
+      }
+
+      .pkg-tile::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--primary), var(--primary-lt));
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+
+      .pkg-tile:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px var(--primary-shadow);
+        border-color: var(--primary);
+      }
+
+      .pkg-tile:hover::before {
+        opacity: 1;
+      }
+
+      .pkg-tile:active {
+        transform: none;
+      }
+
+      .pkg-body {
+        width: 100%;
+      }
+
+      .pkg-name {
+        font-size: 0.72rem;
+        font-weight: 800;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .pkg-desc {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--text);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .pkg-price-mid {
+        padding: 8px 0 2px;
+      }
+
+      .pkg-amount {
+        font-size: 1.05rem;
+        font-weight: 900;
+        color: var(--primary);
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+
+      .pkg-buy-btn {
+        width: 100%;
+        margin-top: 4px;
+        padding: 9px 0;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-mid) 100%);
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.72rem;
+        font-weight: 800;
+        font-family: inherit;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        cursor: pointer;
+        white-space: nowrap;
+        box-shadow: 0 3px 10px var(--primary-shadow);
+        transition:
+          opacity 0.2s,
+          transform 0.1s;
+      }
+
+      .pkg-buy-btn:hover {
+        opacity: 0.88;
+        transform: scale(1.03);
+      }
+
+      .pkg-tile:hover .pkg-buy-btn {
+        opacity: 1;
+      }
+
+      @media (max-width: 360px) {
+        .package-list {
+          gap: 8px;
+        }
+      }
+
+      /* ── Support Section ── */
+      .support-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .support-header {
+        background: linear-gradient(100deg, #1a1a1a 0%, #2a2a2a 100%);
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .support-header span:first-child {
+        font-size: 0.86rem;
+        font-weight: 700;
+        color: #fff;
+      }
+
+      .support-header span:last-child {
+        font-size: 0.7rem;
+        color: rgba(255, 255, 255, 0.7);
+        font-weight: 500;
+      }
+
+      .support-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 16px;
+        text-decoration: none;
+        color: inherit;
+        border-bottom: 1px solid var(--border);
+        cursor: pointer;
+        transition: background 0.15s;
+        background: var(--surface);
+      }
+
+      .support-row:last-child {
+        border-bottom: none;
+      }
+
+      .support-row:hover {
+        background: var(--surface2);
+      }
+
+      .support-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .support-icon svg {
+        display: block;
+      }
+
+      .support-text {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .support-name {
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: var(--text);
+        line-height: 1.2;
+      }
+
+      .support-num {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+
+      .support-chevron {
+        color: var(--text-light);
+      }
+
+      .support-chevron svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── Page spacer ── */
+      .page-bottom {
+        height: 32px;
+      }
+
+      /* ── Full-screen modals ── */
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(3px);
+        z-index: 200;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+      }
+
+      .modal-overlay.open {
+        opacity: 1;
+        pointer-events: all;
+      }
+
+      .modal-sheet {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--bg);
+        z-index: 210;
+        transform: translateX(100%);
+        transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow-y: auto;
+      }
+
+      .modal-sheet.open {
+        transform: translateX(0);
+      }
+
+      /* Bottom sheet (slides up, partial height) */
+      .bottom-sheet {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--surface);
+        z-index: 210;
+        border-radius: 20px 20px 0 0;
+        transform: translateY(100%);
+        transition: transform 0.32s cubic-bezier(0.34, 1.1, 0.7, 1);
+        overflow-y: auto;
+        max-height: 85vh;
+        box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.18);
+      }
+
+      .bottom-sheet.open {
+        transform: translateY(0);
+      }
+
+      .bottom-sheet-handle {
+        width: 40px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--border);
+        margin: 12px auto 0;
+      }
+
+      .bottom-sheet-header {
+        padding: 16px 20px 12px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .bottom-sheet-title {
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--text);
+      }
+
+      .bottom-sheet-sub {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+
+      .bottom-sheet-close {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 1px solid var(--border);
+        background: var(--surface2);
+        color: var(--text-muted);
+        font-size: 19px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: background 0.15s;
+      }
+
+      .bottom-sheet-close:hover {
+        background: var(--border);
+        color: var(--text);
+      }
+
+      .modal-header {
+        background: linear-gradient(
+          135deg,
+          #1a1a1a 0%,
+          #111111 60%,
+          #0d0d0d 100%
+        );
+        border-bottom: 3px solid var(--or);
+        padding: 16px 16px 48px;
+        position: relative;
+      }
+
+      .modal-header-plain {
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+        position: sticky;
+        top: 0;
+        z-index: 5;
+      }
+
+      .modal-back {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 1.5px solid var(--border);
+        background: var(--surface2);
+        color: var(--text);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: background 0.2s;
+      }
+
+      .modal-back:hover {
+        background: var(--border);
+      }
+
+      .modal-back svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .modal-header-title {
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--text);
+      }
+
+      .modal-header-sub {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        margin-top: 1px;
+      }
+
+      .modal-header h4 {
+        font-size: 1.25rem;
+        font-weight: 900;
+        color: #fff;
+        margin-bottom: 4px;
+      }
+
+      .modal-header p {
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.8);
+      }
+
+      .modal-close-btn {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: #fff;
+        cursor: pointer;
+        font-size: 20px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Floating voucher card */
+      .voucher-float {
+        margin: -32px 16px 0;
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        border: 1px solid var(--border);
+        padding: 16px;
+        position: relative;
+      }
+
+      .voucher-float-label {
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--primary);
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: var(--primary-pale);
+        display: inline-block;
+        margin-bottom: 8px;
+      }
+
+      .voucher-float-name {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: var(--text);
+        line-height: 1.2;
+      }
+
+      .voucher-float-limit {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+
+      .voucher-float-price {
+        font-size: 1.5rem;
+        font-weight: 900;
+        color: var(--primary);
+        margin-top: 10px;
+      }
+
+      .voucher-float hr {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 10px 0;
+      }
+
+      .modal-body {
+        padding: 16px;
+      }
+
+      /* Form elements */
+      .form-label {
+        display: block;
+        font-size: 0.76rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+      }
+
+      .form-input {
+        width: 100%;
+        padding: 13px 14px;
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--surface2);
+        color: var(--text);
+        font-size: 0.92rem;
+        font-family: inherit;
+        outline: none;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s,
+          background 0.3s;
+      }
+
+      .form-input::placeholder {
+        color: var(--text-light);
+      }
+
+      .form-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 96, 0, 0.15);
+        background: var(--surface);
+      }
+
+      .form-group {
+        margin-bottom: 14px;
+      }
+
+      .note-box {
+        background: rgba(255, 193, 7, 0.1);
+        border: 1px solid rgba(255, 193, 7, 0.3);
+        border-radius: var(--radius-sm);
+        padding: 11px 13px;
+        font-size: 0.8rem;
+        color: var(--text-2);
+        margin-bottom: 16px;
+        line-height: 1.55;
+      }
+
+      .note-box strong {
+        color: var(--gray-800);
+      }
+
+      /* Buttons */
+      .btn {
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 0.92rem;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition:
+          opacity 0.2s,
+          transform 0.1s;
+        margin-bottom: 10px;
+      }
+
+      .btn:last-child {
+        margin-bottom: 0;
+      }
+
+      .btn:hover {
+        opacity: 0.92;
+      }
+
+      .btn:active {
+        transform: scale(0.98);
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, var(--or) 0%, var(--or-mid) 100%);
+        color: #fff;
+        box-shadow: 0 4px 14px rgba(255, 96, 0, 0.35);
+      }
+
+      .btn-success {
+        background: linear-gradient(135deg, #16a34a, #15803d);
+        color: #fff;
+        box-shadow: 0 4px 14px rgba(22, 163, 74, 0.3);
+      }
+
+      .btn-warning {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: #fff;
+        box-shadow: 0 4px 14px rgba(245, 158, 11, 0.3);
+      }
+
+      .btn-outline {
+        background: transparent;
+        color: var(--primary);
+        border: 1.5px solid var(--primary);
+        box-shadow: none;
+      }
+
+      .btn-outline:hover {
+        background: var(--primary-pale);
+      }
+
+      .btn svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* Spinner */
+      .spinner-wrap {
+        text-align: center;
+        padding: 24px 0;
+        display: none;
+      }
+
+      .spinner {
+        display: inline-block;
+        width: 30px;
+        height: 30px;
+        border: 3px solid var(--border);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+
+      .spinner-sm {
+        display: inline-block;
+        width: 17px;
+        height: 17px;
+        border: 2.5px solid rgba(255, 255, 255, 0.35);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Toast */
+      .toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(40px);
+        background: var(--gray-900);
+        color: #fff;
+        padding: 11px 20px;
+        border-radius: 999px;
+        font-size: 0.83rem;
+        font-weight: 600;
+        white-space: nowrap;
+        z-index: 999;
+        box-shadow: var(--shadow-lg);
+        opacity: 0;
+        transition:
+          opacity 0.3s,
+          transform 0.3s;
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      /* Find code result cards */
+      .result-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px;
+        margin-bottom: 10px;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .result-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+      }
+
+      .result-code {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: var(--primary);
+      }
+
+      .result-date {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+      }
+
+      .result-meta {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+      }
+
+      /* Progress bar */
+      .progress-bar-wrap {
+        height: 8px;
+        background: var(--surface2);
+        border-radius: 999px;
+        overflow: hidden;
+        margin-bottom: 10px;
+      }
+
+      .progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--or), var(--or-light));
+        border-radius: 999px;
+        transition: width 0.5s;
+      }
+
+      /*  */
+      .support-numbers {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        color: var(--primary);
+        text-decoration: none;
+        font-size: 0.7rem;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+
+      .sppport {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+        margin-top: 10px;
+      }
+
+      /* Phone layouts keep the primary action large and easy to tap. */
+      @media (max-width: 480px) {
+        .connect-bar {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 12px;
+          padding: 0;
+          background: transparent;
+          border: none;
+          box-shadow: none;
+        }
+
+        .connect-bar:focus-within {
+          border-color: transparent;
+          box-shadow: none;
+        }
+
+        .connect-input {
+          width: 100%;
+          min-height: 46px;
+          padding: 11px 12px;
+          background: var(--surface);
+          border: 1.5px solid var(--border);
+          border-radius: 4px;
+          transition:
+            border-color 0.2s,
+            box-shadow 0.2s;
+        }
+
+        .connect-input:focus {
+          border-color: var(--primary);
+          box-shadow: 0 0 0 3px var(--focus-ring);
+        }
+
+        .connect-btn {
+          width: 100%;
+          min-height: 46px;
+          justify-content: center;
+          box-shadow: 0 2px 7px var(--primary-shadow);
+        }
+      }
+
+      /* ── Mobile fine-tuning for smaller phones ── */
+      @media (max-width: 380px) {
+        .hero-content {
+          padding: 22px 14px;
+          gap: 10px;
+        }
+
+        .hero-title {
+          font-size: 1.12rem;
+        }
+
+        .hero-subtitle {
+          font-size: 0.72rem;
+        }
+
+        .hero-logo-circle {
+          width: 44px;
+          height: 44px;
+        }
+
+        .hero-logo-circle svg {
+          width: 24px;
+          height: 24px;
+        }
+
+        .connect-section,
+        .section-wrap {
+          padding-left: 12px;
+          padding-right: 12px;
+        }
+
+        .connect-card {
+          padding: 14px 12px 12px;
+        }
+
+        .connect-input {
+          font-size: 0.85rem;
+        }
+
+        .connect-btn {
+          padding: 8px 12px;
+          font-size: 0.8rem;
+        }
+
+        .pkg-tile {
+          padding: 13px 8px 11px;
+          gap: 4px;
+        }
+
+        .pkg-name {
+          font-size: 0.66rem;
+        }
+
+        .pkg-price-mid {
+          padding: 6px 0 0;
+        }
+
+        .pkg-amount {
+          font-size: 0.92rem;
+        }
+
+        .pkg-buy-btn {
+          padding: 8px 0;
+          font-size: 0.66rem;
+        }
+
+        .trial-link {
+          font-size: 0.82rem;
+        }
+      }
+
+      /* ── Short / landscape screens ── */
+      @media (max-height: 560px) and (orientation: landscape) {
+        .bottom-sheet {
+          max-height: 96vh;
+        }
+
+        .hero-banner {
+          min-height: 140px;
+        }
+
+        .hero-content {
+          padding: 18px 20px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <form
+      name="sendin"
+      action="$(link-login-only)"
+      method="post"
+      style="display: none"
+    >
+      <input type="hidden" name="username" />
+      <input type="hidden" name="password" />
+      <input type="hidden" name="dst" value="$(link-orig)" />
+      <input type="hidden" name="popup" value="true" />
+    </form>
+    <script src="md5.js"></script>
+
+    <div class="app-wrap">
+      <!-- ① HERO BANNER -->
+      <div class="hero-banner">
+        <!-- Orange glow blob -->
+        <div class="hero-glow"></div>
+        <!-- Subtle grid lines texture -->
+        <div class="hero-waves">
+          <svg
+            viewBox="0 0 480 190"
+            preserveAspectRatio="xMidYMid slice"
+            xmlns="http://www.w3.org/2000/svg"
+            opacity="0.06"
+          >
+            <line
+              x1="0"
+              y1="40"
+              x2="480"
+              y2="40"
+              stroke="#FF6000"
+              stroke-width="1"
+            />
+            <line
+              x1="0"
+              y1="80"
+              x2="480"
+              y2="80"
+              stroke="#FF6000"
+              stroke-width="1"
+            />
+            <line
+              x1="0"
+              y1="120"
+              x2="480"
+              y2="120"
+              stroke="#FF6000"
+              stroke-width="1"
+            />
+            <line
+              x1="0"
+              y1="160"
+              x2="480"
+              y2="160"
+              stroke="#FF6000"
+              stroke-width="1"
+            />
+            <line
+              x1="80"
+              y1="0"
+              x2="80"
+              y2="190"
+              stroke="#FF6000"
+              stroke-width="1"
+            />
+            <line
+              x1="160"
+              y1="0"
+              x2="160"
+              y2="190"
+              stroke="#FF6000"
+              stroke-width="1"
+            />
+            <line
+              x1="240"
+              y1="0"
+              x2="240"
+              y2="190"
+              stroke="#FF6000"
+              stroke-width="1"
+            />
+            <line
+              x1="320"
+              y1="0"
+              x2="320"
+              y2="190"
+              stroke="#FF6000"
+              stroke-width="1"
+            />
+            <line
+              x1="400"
+              y1="0"
+              x2="400"
+              y2="190"
+              stroke="#FF6000"
+              stroke-width="1"
+            />
+          </svg>
+        </div>
+        <div class="hero-content">
+          <div class="hero-logo-circle" id="portalLogoWrap">
+            <img class="hero-logo-img" id="portalLogo" alt="" style="display: none" />
+            <svg
+              id="portalLogoIcon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#fff"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M1.5 8.5a18.5 18.5 0 0 1 21 0" />
+              <path d="M5 12a14 14 0 0 1 14 0" />
+              <path d="M9 15.5a8.5 8.5 0 0 1 6 0" />
+              <line x1="12" y1="19" x2="12.01" y2="19" />
+            </svg>
+          </div>
+          <div class="hero-text">
+            <div class="hero-title" id="portalTitle">__ROUTER_NAME__</div>
+            <div class="hero-subtitle" id="portalDescription">
+              WiFi internet access
+            </div>
+            <div class="sppport" id="portalSupport" style="display: none">
+              <a
+                href="#"
+                class="support-numbers"
+                id="portalPhoneOne"
+                style="display: none"
+              ></a>
+              <a
+                href="#"
+                class="support-numbers"
+                id="portalPhoneTwo"
+                style="display: none"
+              ></a>
+            </div>
+          </div>
+          <div
+            style="display: flex; align-items: center; gap: 8px; flex-shrink: 0"
+          >
+            <button
+              class="theme-btn"
+              onclick="openModal('findCodeModal')"
+              aria-label="Find my voucher"
+              title="Find My Voucher"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </button>
+            <button
+              class="theme-btn"
+              id="themeToggle"
+              aria-label="Toggle dark mode"
+            >
+              <svg
+                class="icon-moon"
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+              <svg
+                class="icon-sun"
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <span class="router-template">$(if error)</span>
+      <div class="router-alert" id="routerError">$(error)</div>
+      <span class="router-template">$(endif)</span>
+
+      <!-- ② CONNECT BAR -->
+      <div class="connect-section">
+        <div class="connect-card">
+          <div class="connect-label">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            Voucher Code
+          </div>
+          <form
+            name="login"
+            action="$(link-login-only)"
+            method="post"
+            onsubmit="return handleConnect(event);"
+          >
+            <input type="hidden" name="dst" value="$(link-orig)" />
+            <input type="hidden" name="popup" value="true" />
+            <input type="hidden" id="password" name="password" />
+            <div class="connect-bar">
+              <input
+                class="connect-input"
+                id="voucherInput"
+                name="username"
+                type="text"
+                placeholder="e.g. RC-A3F9B1 "
+                autocorrect="off"
+                autocapitalize="off"
+                value="$(username)"
+                required
+              />
+              <button class="connect-btn" id="connectBtn" type="submit">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    clip-rule="evenodd"
+                    d="M5.63604 4.57538C5.92893 4.86828 5.92893 5.34315 5.63604 5.63604C2.12132 9.15076 2.12132 14.8492 5.63604 18.364C5.92893 18.6569 5.92893 19.1317 5.63604 19.4246C5.34315 19.7175 4.86827 19.7175 4.57538 19.4246C0.474874 15.3241 0.474873 8.67589 4.57538 4.57538C4.86827 4.28249 5.34315 4.28249 5.63604 4.57538ZM18.364 4.57538C18.6569 4.28249 19.1317 4.28249 19.4246 4.57538C23.5251 8.67589 23.5251 15.3241 19.4246 19.4246C19.1317 19.7175 18.6569 19.7175 18.364 19.4246C18.0711 19.1317 18.0711 18.6569 18.364 18.364C21.8787 14.8492 21.8787 9.15076 18.364 5.63604C18.0711 5.34315 18.0711 4.86828 18.364 4.57538ZM7.75736 6.6967C8.05025 6.9896 8.05025 7.46447 7.75736 7.75736C5.41421 10.1005 5.41421 13.8995 7.75736 16.2426C8.05025 16.5355 8.05025 17.0104 7.75736 17.3033C7.46447 17.5962 6.98959 17.5962 6.6967 17.3033C3.76777 14.3744 3.76777 9.62564 6.6967 6.6967C6.98959 6.40381 7.46447 6.40381 7.75736 6.6967ZM16.2426 6.6967C16.5355 6.40381 17.0104 6.40381 17.3033 6.6967C20.2322 9.62564 20.2322 14.3744 17.3033 17.3033C17.0104 17.5962 16.5355 17.5962 16.2426 17.3033C15.9497 17.0104 15.9497 16.5355 16.2426 16.2426C18.5858 13.8995 18.5858 10.1005 16.2426 7.75736C15.9497 7.46447 15.9497 6.9896 16.2426 6.6967ZM9.87868 8.81802C10.1716 9.11092 10.1716 9.58579 9.87868 9.87868C8.70711 11.0503 8.70711 12.9498 9.87868 14.1213C10.1716 14.4142 10.1716 14.8891 9.87868 15.182C9.58579 15.4749 9.11091 15.4749 8.81802 15.182C7.06066 13.4246 7.06066 10.5754 8.81802 8.81802C9.11091 8.52513 9.58579 8.52513 9.87868 8.81802ZM14.1213 8.81802C14.4142 8.52513 14.8891 8.52513 15.182 8.81802C16.9393 10.5754 16.9393 13.4246 15.182 15.182C14.8891 15.4749 14.4142 15.4749 14.1213 15.182C13.8284 14.8891 13.8284 14.4142 14.1213 14.1213C15.2929 12.9498 15.2929 11.0503 14.1213 9.87868C13.8284 9.58579 13.8284 9.11092 14.1213 8.81802ZM10.875 12C10.875 11.3787 11.3787 10.875 12 10.875C12.6213 10.875 13.125 11.3787 13.125 12C13.125 12.6213 12.6213 13.125 12 13.125C11.3787 13.125 10.875 12.6213 10.875 12Z"
+                    fill="#ffffff"
+                  />
+                </svg>
+                Connect
+              </button>
+            </div>
+          </form>
+          <span class="router-template">$(if trial == 'yes')</span>
+          <a
+            class="trial-link"
+            id="trialLink"
+            href="$(link-login-only)?dst=$(link-orig-esc)&amp;username=T-$(mac-esc)"
+          >
+            Try free internet access
+          </a>
+          <span class="router-template">$(endif)</span>
+        </div>
+      </div>
+
+      <!-- ③ PACKAGES SECTION -->
+      <div class="section-wrap" style="margin-top: 20px">
+        <div class="section-header">
+          <div class="section-title">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M13 2L3 14h6l-2 8 10-12h-6l2-8z" />
+            </svg>
+            Packages
+          </div>
+        </div>
+
+        <div class="package-list" id="packageListHome"></div>
+      </div>
+
+      <div class="page-bottom"></div>
+    </div>
+    <!-- /app-wrap -->
+
+    <!-- ════════════════════════════════════════
+     MODAL: ALL PACKAGES
+═════════════════════════════════════════ -->
+    <div
+      class="modal-overlay"
+      id="packagesOverlay"
+      onclick="closeModal('packagesModal')"
+    ></div>
+    <div class="modal-sheet" id="packagesModal">
+      <div class="modal-header-plain">
+        <button class="modal-back" onclick="closeModal('packagesModal')">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <div>
+          <div class="modal-header-title">Voucher Packages</div>
+          <div class="modal-header-sub">Tap any package to buy</div>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="speed-tabs" id="speedTabsModal">
+          <button
+            class="speed-tab active"
+            data-speed="Lite"
+            onclick="switchSpeedModal('Lite')"
+          >
+            Lite
+          </button>
+          <button
+            class="speed-tab"
+            data-speed="Normal"
+            onclick="switchSpeedModal('Normal')"
+          >
+            Normal
+          </button>
+          <button
+            class="speed-tab"
+            data-speed="SuperFast"
+            onclick="switchSpeedModal('SuperFast')"
+          >
+            SuperFast
+          </button>
+        </div>
+        <div class="package-list" id="packageListModal"></div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════
+     MODAL: PAYMENT (Full-screen)
+═════════════════════════════════════════ -->
+    <div class="modal-overlay" id="paymentOverlay"></div>
+    <div class="modal-sheet" id="paymentModal">
+      <div class="modal-header">
+        <button class="modal-close-btn" onclick="closeModal('paymentModal')">
+          &times;
+        </button>
+        <h4>Package <span id="payTitle"></span></h4>
+      </div>
+
+      <!-- Floating voucher summary card -->
+      <div class="voucher-float">
+        <div class="voucher-float-label">Voucher</div>
+        <div class="voucher-float-name" id="payVoucherName">—</div>
+        <div class="voucher-float-limit" id="payVoucherLimit">—</div>
+        <hr />
+        <div class="voucher-float-price" id="payVoucherPrice">—</div>
+      </div>
+
+      <div class="modal-body">
+        <div class="note-box">
+          <strong>Note:</strong><br />
+          Enter your Mobile Money number to pay for the voucher. A payment
+          prompt will be sent to your phone.
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="payPhone"
+            >Enter Mobile Money Number</label
+          >
+          <input
+            class="form-input"
+            type="tel"
+            id="payPhone"
+            placeholder="e.g. 0771234567 or 0752345678"
+          />
+          <div
+            style="font-size: 0.76rem; color: #ef4444; margin-top: 4px"
+            id="payPhoneErr"
+          ></div>
+        </div>
+
+        <input type="hidden" id="payVoucherId" />
+        <input type="hidden" id="payAmount" />
+        <input type="hidden" id="paySpeedType" />
+
+        <div id="paySpinner" class="spinner-wrap">
+          <div class="spinner"></div>
+          <p
+            id="paySpinnerText"
+            style="
+              font-size: 0.8rem;
+              color: var(--text-muted);
+              margin-top: 10px;
+            "
+          >
+            Check your phone for a Mobile Money prompt and enter your PIN to
+            approve. Please don't close this page.
+          </p>
+        </div>
+
+        <div id="payButtons">
+          <button
+            class="btn btn-success"
+            id="buyForSelf"
+            onclick="initiatePayment('self')"
+          >
+            Buy Now
+          </button>
+          <button
+            class="btn btn-outline"
+            id="buyForAnother"
+            onclick="initiatePayment('another')"
+          >
+            Buy for Another
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════
+     MODAL: FIND MY CODE
+═════════════════════════════════════════ -->
+    <div
+      class="modal-overlay"
+      id="findCodeOverlay"
+      onclick="closeModal('findCodeModal')"
+    ></div>
+    <div class="bottom-sheet" id="findCodeModal">
+      <div class="bottom-sheet-handle"></div>
+      <div class="bottom-sheet-header">
+        <div>
+          <div class="bottom-sheet-title">Search Lost Voucher</div>
+          <div class="bottom-sheet-sub">
+            Purchase Number is required to search
+          </div>
+        </div>
+        <button
+          class="bottom-sheet-close"
+          onclick="closeModal('findCodeModal')"
+        >
+          &times;
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="findForm">
+          <div class="form-group">
+            <label class="form-label" for="findPhone">Mobile Number</label>
+            <input
+              class="form-input"
+              type="tel"
+              id="findPhone"
+              placeholder="e.g. 0771234567"
+            />
+          </div>
+          <button class="btn btn-primary" onclick="submitFind()">
+            Search Voucher
+          </button>
+        </div>
+        <div id="findSpinner" class="spinner-wrap">
+          <div class="spinner"></div>
+        </div>
+        <div id="findResults"></div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- ════════════════════════════════════════  JS  ═══════════════════════════════════════ -->
+    <script>
+      /* ── Theme ── */
+      var html = document.documentElement;
+      html.setAttribute(
+        "data-theme",
+        localStorage.getItem("cp_theme") || "light",
+      );
+      document
+        .getElementById("themeToggle")
+        .addEventListener("click", function () {
+          var next =
+            html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+          html.setAttribute("data-theme", next);
+          localStorage.setItem("cp_theme", next);
+        });
+
+      /* ── Toast ── */
+      function showToast(msg, dur) {
+        dur = dur || 3000;
+        var t = document.getElementById("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        setTimeout(function () {
+          t.classList.remove("show");
+        }, dur);
+      }
+
+      /* ── Modal helpers ── */
+      function openModal(id) {
+        var sheet = document.getElementById(id);
+        var overlay = document.getElementById(
+          id.replace("Modal", "") + "Overlay",
+        );
+        if (sheet) {
+          sheet.classList.add("open");
+          document.body.style.overflow = "hidden";
+        }
+        if (overlay) {
+          overlay.classList.add("open");
+        }
+      }
+      function closeModal(id) {
+        var sheet = document.getElementById(id);
+        var overlay = document.getElementById(
+          id.replace("Modal", "") + "Overlay",
+        );
+        if (sheet) sheet.classList.remove("open");
+        if (overlay) overlay.classList.remove("open");
+        document.body.style.overflow = "";
+        if (id === "paymentModal") {
+          stopPaymentPolling();
+          document.getElementById("paySpinner").style.display = "none";
+          document.getElementById("payButtons").style.display = "block";
+          payActionType = "";
+        }
+      }
+
+      /* ── Router and API configuration ── */
+      var API_BASE = "__PORTAL_API_BASE__";
+      var ROUTER_ID = "__ROUTER_PUBLIC_ID__";
+      var currency = "UGX";
+      var currentSpeed = "Lite";
+      var currentSpeedModal = "Lite";
+      var allPackages = [];
+      var payActionType = "";
+      var routerTemplate = {
+        loginOnly: "$(link-login-only)",
+        chapId: "$(chap-id)",
+        chapChallenge: "$(chap-challenge)",
+      };
+
+      function hasRouterValue(value) {
+        return value && value.indexOf("$(") === -1;
+      }
+
+      function setVoucherStorage(key, value) {
+        try {
+          localStorage.setItem(key, value);
+        } catch (e) {}
+      }
+      function getVoucherStorage(key) {
+        try {
+          return localStorage.getItem(key);
+        } catch (e) {
+          return null;
+        }
+      }
+      function removeVoucherStorage(key) {
+        try {
+          localStorage.removeItem(key);
+        } catch (e) {}
+      }
+      function setVoucherCredentials(voucher, mode) {
+        document.getElementById("voucherInput").value = voucher;
+        document.getElementById("password").value =
+          mode === "username" ? voucher : "";
+      }
+      function rememberVoucherAttempt(voucher, mode) {
+        setVoucherStorage("voucher-attempt-username", voucher);
+        setVoucherStorage("voucher-attempt-mode", mode);
+      }
+      function clearVoucherAttempt() {
+        removeVoucherStorage("voucher-attempt-username");
+        removeVoucherStorage("voucher-attempt-mode");
+      }
+
+      function submitRouterLogin(mode) {
+        var voucher = document.getElementById("voucherInput").value.trim();
+        if (!voucher) return false;
+        setVoucherCredentials(voucher, mode || "empty");
+        rememberVoucherAttempt(voucher, mode || "empty");
+        var password = document.getElementById("password").value;
+        if (
+          hasRouterValue(routerTemplate.chapId) &&
+          hasRouterValue(routerTemplate.chapChallenge)
+        ) {
+          document.sendin.username.value = voucher;
+          document.sendin.password.value = hexMD5(
+            routerTemplate.chapId + password + routerTemplate.chapChallenge,
+          );
+          document.sendin.submit();
+        } else if (hasRouterValue(routerTemplate.loginOnly)) {
+          document.forms.login.submit();
+        } else {
+          showToast(
+            "Preview mode: packages are live; voucher login activates on MikroTik.",
+            5000,
+          );
+          var button = document.getElementById("connectBtn");
+          button.disabled = false;
+          button.textContent = "Connect";
+        }
+        return false;
+      }
+
+      function formatPrice(total) {
+        return currency + " " + parseInt(total).toLocaleString();
+      }
+      function formatDevices(d) {
+        d = parseInt(d, 10);
+        if (isNaN(d) || d < 1) d = 1;
+        return d + " device" + (d === 1 ? "" : "s");
+      }
+
+      function safeHtml(value) {
+        return String(value == null ? "" : value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function setSupportPhone(elementId, phone) {
+        var link = document.getElementById(elementId);
+        if (!link) return;
+        var value = String(phone || "").trim();
+        link.style.display = value ? "" : "none";
+        if (!value) return;
+        link.textContent = value;
+        link.setAttribute("href", "tel:" + value.replace(/[^\d+]/g, ""));
+      }
+
+      // Derives the light/dark/shadow variants RouterOS templates expect
+      // from a single admin-picked hex color, so the whole palette stays
+      // consistent without asking the admin to pick 5 separate colors.
+      function applyPrimaryColor(hex) {
+        if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+        var r = parseInt(hex.slice(1, 3), 16);
+        var g = parseInt(hex.slice(3, 5), 16);
+        var b = parseInt(hex.slice(5, 7), 16);
+        var mix = function (amount) {
+          var nr = Math.round(r + (255 - r) * amount);
+          var ng = Math.round(g + (255 - g) * amount);
+          var nb = Math.round(b + (255 - b) * amount);
+          return "rgb(" + nr + "," + ng + "," + nb + ")";
+        };
+        var root = document.documentElement.style;
+        root.setProperty("--primary", hex);
+        root.setProperty("--primary-mid", mix(0.15));
+        root.setProperty("--primary-lt", mix(0.3));
+        root.setProperty("--primary-pale", mix(0.92));
+        root.setProperty(
+          "--primary-shadow",
+          "rgba(" + r + "," + g + "," + b + ",0.28)",
+        );
+        root.setProperty("--focus-ring", "rgba(" + r + "," + g + "," + b + ",0.15)");
+      }
+
+      function loadPortalConfig() {
+        var xhr = new XMLHttpRequest();
+        xhr.open(
+          "GET",
+          API_BASE + "/portal/" + encodeURIComponent(ROUTER_ID),
+          true,
+        );
+        xhr.timeout = 15000;
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState !== 4 || xhr.status !== 200) return;
+          try {
+            var config = JSON.parse(xhr.responseText);
+            if (config.title)
+              document.getElementById("portalTitle").textContent = config.title;
+            if (config.description)
+              document.getElementById("portalDescription").textContent =
+                config.description;
+            if (config.primary_color) applyPrimaryColor(config.primary_color);
+            setSupportPhone("portalPhoneOne", config.phone_one);
+            setSupportPhone("portalPhoneTwo", config.phone_two);
+            var support = document.getElementById("portalSupport");
+            if (support) {
+              support.style.display =
+                config.phone_one || config.phone_two ? "flex" : "none";
+            }
+            if (config.logo_url) {
+              var logoImg = document.getElementById("portalLogo");
+              var logoIcon = document.getElementById("portalLogoIcon");
+              if (logoImg && logoIcon) {
+                logoImg.onload = function () {
+                  logoImg.style.display = "block";
+                  logoIcon.style.display = "none";
+                };
+                logoImg.onerror = function () {
+                  logoImg.style.display = "none";
+                  logoIcon.style.display = "block";
+                };
+                logoImg.src = config.logo_url;
+              }
+            }
+          } catch (e) {}
+        };
+        xhr.send();
+      }
+
+      function renderPkgTile(v, speed) {
+        return (
+          '<button type="button" class="pkg-tile" data-id="' +
+          safeHtml(v.package_id || v.id) +
+          '" data-name="' +
+          safeHtml(v.name || v.data || v.limit) +
+          '" data-limit="' +
+          safeHtml(v.limit) +
+          '" data-data="' +
+          safeHtml(v.data) +
+          '" data-total="' +
+          safeHtml(v.total) +
+          '" data-speed="' +
+          safeHtml(v.speed_type || speed) +
+          '">' +
+          '<div class="pkg-body">' +
+          '<div class="pkg-name">' +
+          safeHtml(v.data || v.name || v.limit) +
+          "</div>" +
+          '<div class="pkg-desc">' +
+          safeHtml(v.limit) +
+          " &bull; " +
+          formatDevices(v.devices) +
+          "</div>" +
+          "</div>" +
+          '<div class="pkg-price-mid">' +
+          '<div class="pkg-amount">' +
+          formatPrice(v.total) +
+          "</div>" +
+          "</div>" +
+          '<div class="pkg-buy-btn">Buy Now</div>' +
+          "</button>"
+        );
+      }
+
+      function renderPackages(list, containerId, speed) {
+        var el = document.getElementById(containerId);
+        if (!list || !list.length) {
+          el.innerHTML =
+            '<p style="text-align:center;color:var(--text-muted);padding:20px 0;">No packages available.</p>';
+          return;
+        }
+        el.innerHTML = list
+          .map(function (v) {
+            return renderPkgTile(v, speed);
+          })
+          .join("");
+        el.querySelectorAll(".pkg-tile").forEach(function (tile) {
+          tile.addEventListener("click", function () {
+            openPayment(
+              tile.getAttribute("data-id"),
+              tile.getAttribute("data-name"),
+              tile.getAttribute("data-limit"),
+              tile.getAttribute("data-data"),
+              tile.getAttribute("data-total"),
+              tile.getAttribute("data-speed"),
+            );
+          });
+        });
+      }
+
+      function normalizeSpeed(value) {
+        return String(value || "")
+          .replace(/\s+/g, "")
+          .toLowerCase();
+      }
+
+      function packagesFor(speed) {
+        return allPackages.filter(function (item) {
+          return normalizeSpeed(item.speed_type) === normalizeSpeed(speed);
+        });
+      }
+
+      function activateSpeedTabs(speed) {
+        document.querySelectorAll(".speed-tab").forEach(function (tab) {
+          tab.classList.toggle(
+            "active",
+            normalizeSpeed(tab.getAttribute("data-speed")) ===
+              normalizeSpeed(speed),
+          );
+        });
+      }
+
+      function loadPackages() {
+        var loadingHtml =
+          '<div class="spinner-wrap" style="display:block;"><div class="spinner"></div></div>';
+        document.getElementById("packageListHome").innerHTML = loadingHtml;
+        document.getElementById("packageListModal").innerHTML = loadingHtml;
+        var xhr = new XMLHttpRequest();
+        xhr.open(
+          "GET",
+          API_BASE + "/packages?router_id=" + encodeURIComponent(ROUTER_ID),
+          true,
+        );
+        xhr.timeout = 15000;
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState !== 4) return;
+          if (xhr.status === 200) {
+            try {
+              var response = JSON.parse(xhr.responseText);
+              if (response.success && response.data && response.data.voucher) {
+                allPackages = response.data.voucher;
+                if (allPackages.length && !packagesFor(currentSpeed).length) {
+                  currentSpeed = allPackages[0].speed_type || currentSpeed;
+                  currentSpeedModal = currentSpeed;
+                  activateSpeedTabs(currentSpeed);
+                }
+              }
+            } catch (e) {}
+          }
+          renderPackages(
+            packagesFor(currentSpeed),
+            "packageListHome",
+            currentSpeed,
+          );
+          renderPackages(
+            packagesFor(currentSpeedModal),
+            "packageListModal",
+            currentSpeedModal,
+          );
+        };
+        xhr.ontimeout = xhr.onerror = function () {
+          renderPackages(
+            packagesFor(currentSpeed),
+            "packageListHome",
+            currentSpeed,
+          );
+          renderPackages(
+            packagesFor(currentSpeedModal),
+            "packageListModal",
+            currentSpeedModal,
+          );
+        };
+        xhr.send();
+      }
+
+      function switchSpeed(s) {
+        currentSpeed = s;
+        document
+          .querySelectorAll("#speedTabs .speed-tab")
+          .forEach(function (t) {
+            t.classList.toggle("active", t.getAttribute("data-speed") === s);
+          });
+        renderPackages(packagesFor(s), "packageListHome", s);
+      }
+
+      function switchSpeedModal(s) {
+        currentSpeedModal = s;
+        document
+          .querySelectorAll("#speedTabsModal .speed-tab")
+          .forEach(function (t) {
+            t.classList.toggle("active", t.getAttribute("data-speed") === s);
+          });
+        renderPackages(packagesFor(s), "packageListModal", s);
+      }
+
+      /* ── Payment ── */
+      function openPayment(id, name, limit, data, total, speed) {
+        document.getElementById("payTitle").textContent = data;
+        document.getElementById("payVoucherName").textContent = name;
+        document.getElementById("payVoucherLimit").textContent =
+          "Package " + limit;
+        document.getElementById("payVoucherPrice").textContent =
+          formatPrice(total);
+        document.getElementById("payVoucherId").value = id;
+        document.getElementById("payAmount").value = total;
+        document.getElementById("paySpeedType").value = speed || currentSpeed;
+        document.getElementById("payPhone").value = "";
+        document.getElementById("payPhoneErr").textContent = "";
+        document.getElementById("payButtons").style.display = "block";
+        document.getElementById("paySpinner").style.display = "none";
+        // Close packages modal if open
+        closeModal("packagesModal");
+        setTimeout(function () {
+          openModal("paymentModal");
+        }, 180);
+      }
+
+      function isValidPhone(p) {
+        p = p.toString().replace(/[-\s]/g, "").trim();
+        return /^(07\d{8}|\+2567\d{8}|2567\d{8}|7\d{8})$/.test(p);
+      }
+      function formatPhone(p) {
+        p = p.replace(/[-\s]/g, "").trim();
+        if (/^07\d{8}$/.test(p)) return p.replace(/^0/, "256");
+        if (/^\+2567\d{8}$/.test(p)) return p.substring(1);
+        if (/^7\d{8}$/.test(p)) return "256" + p;
+        return p;
+      }
+
+      var payActionType = "";
+      var paymentPollTimer = null;
+      var paymentPollAttempts = 0;
+      var paymentPollNetworkErrors = 0;
+      var PAYMENT_POLL_INTERVAL_MS = 3000;
+      var PAYMENT_POLL_MAX_ATTEMPTS = 60; // ~3 minutes
+      var PAYMENT_POLL_MAX_NETWORK_ERRORS = 10;
+
+      function setPaySpinnerText(text) {
+        var el = document.getElementById("paySpinnerText");
+        if (el) el.textContent = text;
+      }
+
+      function initiatePayment(type) {
+        var phone = document.getElementById("payPhone").value;
+        if (!isValidPhone(phone)) {
+          document.getElementById("payPhoneErr").textContent =
+            "Please enter a valid MTN or Airtel number.";
+          return;
+        }
+        document.getElementById("payPhoneErr").textContent = "";
+        payActionType = type || "self";
+        document.getElementById("payButtons").style.display = "none";
+        setPaySpinnerText(
+          "Sending a payment prompt to your phone. This can take a few seconds...",
+        );
+        document.getElementById("paySpinner").style.display = "block";
+        var xhr = new XMLHttpRequest();
+        xhr.open(
+          "POST",
+          API_BASE + "/portal/" + encodeURIComponent(ROUTER_ID) + "/payments",
+          true,
+        );
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.timeout = 30000;
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState !== 4) return;
+          if (xhr.status === 200) {
+            try {
+              var response = JSON.parse(xhr.responseText);
+              if (response.reference && response.status !== "FAILED") {
+                pollPaymentStatus(response.reference);
+                return;
+              }
+              failPayment(response.message || "Payment could not be started.");
+            } catch (e) {
+              failPayment("The payment service returned an invalid response.");
+            }
+          } else {
+            failPayment("Payment could not be started. Please try again.");
+          }
+        };
+        xhr.ontimeout = function () {
+          failPayment("The payment request timed out. Please try again.");
+        };
+        xhr.send(
+          JSON.stringify({
+            phone_number: formatPhone(phone),
+            package_id: parseInt(
+              document.getElementById("payVoucherId").value,
+              10,
+            ),
+            buy_for: type === "another" ? "another" : "self",
+          }),
+        );
+      }
+
+      function stopPaymentPolling() {
+        if (paymentPollTimer) {
+          clearTimeout(paymentPollTimer);
+          paymentPollTimer = null;
+        }
+        paymentPollAttempts = 0;
+        paymentPollNetworkErrors = 0;
+      }
+
+      function pollPaymentStatus(reference) {
+        stopPaymentPolling();
+        setPaySpinnerText(
+          "Check your phone for a Mobile Money prompt and enter your PIN to approve. Please don't close this page.",
+        );
+
+        function checkOnce() {
+          var xhr = new XMLHttpRequest();
+          xhr.open(
+            "GET",
+            API_BASE +
+              "/portal/" +
+              encodeURIComponent(ROUTER_ID) +
+              "/payments/" +
+              encodeURIComponent(reference),
+            true,
+          );
+          xhr.timeout = 15000;
+          xhr.onreadystatechange = function () {
+            if (xhr.readyState !== 4) return;
+            if (xhr.status === 0) return; // network error - onerror/ontimeout handles scheduling
+            paymentPollNetworkErrors = 0;
+            if (xhr.status === 200) {
+              try {
+                var response = JSON.parse(xhr.responseText);
+                var paymentStatus = String(response.status || "").toUpperCase();
+                if (
+                  paymentStatus === "SUCCESS" &&
+                  response.voucher &&
+                  response.voucher.voucher_code
+                ) {
+                  completePayment(response.voucher.voucher_code);
+                  return;
+                }
+                if (paymentStatus === "FAILED") {
+                  failPayment(
+                    response.message || "The payment was not completed.",
+                  );
+                  return;
+                }
+                if (response.message) {
+                  setPaySpinnerText(response.message);
+                }
+              } catch (e) {
+                // Ignore parse errors and keep polling.
+              }
+            }
+            scheduleNext();
+          };
+          xhr.ontimeout = function () {
+            paymentPollNetworkErrors++;
+            scheduleNext();
+          };
+          xhr.onerror = function () {
+            paymentPollNetworkErrors++;
+            scheduleNext();
+          };
+          xhr.send();
+        }
+
+        function scheduleNext() {
+          if (paymentPollNetworkErrors >= PAYMENT_POLL_MAX_NETWORK_ERRORS) {
+            failPayment(
+              "We're having trouble reaching the payment service. If you already approved the payment, wait a moment and tap Find My Code.",
+            );
+            return;
+          }
+          paymentPollAttempts++;
+          if (paymentPollAttempts >= PAYMENT_POLL_MAX_ATTEMPTS) {
+            failPayment(
+              "We couldn't confirm your payment yet. If money was deducted, tap Find My Code in a moment or contact support.",
+            );
+            return;
+          }
+          paymentPollTimer = setTimeout(checkOnce, PAYMENT_POLL_INTERVAL_MS);
+        }
+
+        checkOnce();
+      }
+
+      function completePayment(voucher) {
+        stopPaymentPolling();
+        var actionType = payActionType;
+        document.getElementById("paySpinner").style.display = "none";
+        document.getElementById("payButtons").style.display = "block";
+        closeModal("paymentModal");
+        if (actionType === "self") {
+          setVoucherCredentials(voucher, "empty");
+          showToast("Payment successful. Connecting your voucher...", 4000);
+          setTimeout(function () {
+            submitRouterLogin("empty");
+          }, 250);
+        } else {
+          showToast("Voucher code: " + voucher, 8000);
+        }
+        payActionType = "";
+      }
+
+      function failPayment(message) {
+        stopPaymentPolling();
+        document.getElementById("paySpinner").style.display = "none";
+        document.getElementById("payButtons").style.display = "block";
+        payActionType = "";
+        showToast(message, 5000);
+      }
+
+      /* ── Connect ── */
+      function handleConnect(event) {
+        if (event) event.preventDefault();
+        var code = document.getElementById("voucherInput").value.trim();
+        if (!code) {
+          showToast("Please enter your token or voucher code.");
+          return false;
+        }
+        var btn = document.getElementById("connectBtn");
+        btn.innerHTML = '<span class="spinner-sm"></span> Connecting...';
+        btn.disabled = true;
+        return submitRouterLogin("empty");
+      }
+      document
+        .getElementById("voucherInput")
+        .addEventListener("keydown", function (e) {
+          if (e.key === "Enter") handleConnect(e);
+        });
+      document
+        .getElementById("voucherInput")
+        .addEventListener("input", function () {
+          clearVoucherAttempt();
+        });
+
+      /* ── Find My Code ── */
+      function submitFind() {
+        var phone = document.getElementById("findPhone").value.trim();
+        if (!isValidPhone(phone)) {
+          showToast("Please enter a valid phone number.");
+          return;
+        }
+        document.getElementById("findForm").style.display = "none";
+        document.getElementById("findSpinner").style.display = "block";
+        document.getElementById("findResults").innerHTML = "";
+
+        var xhr = new XMLHttpRequest();
+        xhr.open(
+          "GET",
+          API_BASE +
+            "/portal/" +
+            encodeURIComponent(ROUTER_ID) +
+            "/vouchers/find?phone_number=" +
+            encodeURIComponent(formatPhone(phone)),
+          true,
+        );
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState !== 4) return;
+          document.getElementById("findSpinner").style.display = "none";
+          var vouchers = [];
+          if (xhr.status === 200) {
+            try {
+              var response = JSON.parse(xhr.responseText);
+              vouchers =
+                response.success && response.vouchers ? response.vouchers : [];
+            } catch (e) {}
+          }
+          if (!vouchers.length) {
+            document.getElementById("findResults").innerHTML =
+              '<div class="note-box">No vouchers were found for that number.</div>' +
+              '<button class="btn btn-outline" onclick="resetFind()">Search Again</button>';
+            return;
+          }
+          var html =
+            '<h6 style="font-weight:800;margin-bottom:12px;color:var(--text);">Your Vouchers:</h6>';
+          vouchers.forEach(function (v) {
+            html +=
+              '<div class="result-card">' +
+              '<div class="result-card-header">' +
+              '<span class="result-code">' +
+              safeHtml(v.voucher_code) +
+              "</span>" +
+              '<span class="result-date">' +
+              new Date(v.created_at).toLocaleDateString() +
+              "</span>" +
+              "</div>" +
+              '<div class="result-meta">Package: ' +
+              safeHtml(v.profile) +
+              " &bull; Amount: " +
+              formatPrice(v.amount) +
+              "</div>" +
+              '<button class="btn btn-success voucher-result-connect" style="margin-bottom:0;" data-voucher="' +
+              safeHtml(v.voucher_code) +
+              '">Connect Voucher</button>' +
+              "</div>";
+          });
+          html +=
+            '<button class="btn btn-outline" style="margin-top:8px;" onclick="resetFind()">Search Again</button>';
+          document.getElementById("findResults").innerHTML = html;
+          document
+            .querySelectorAll(".voucher-result-connect")
+            .forEach(function (button) {
+              button.addEventListener("click", function () {
+                connectVoucher(button.getAttribute("data-voucher"));
+              });
+            });
+        };
+        xhr.send();
+      }
+
+      function resetFind() {
+        document.getElementById("findResults").innerHTML = "";
+        document.getElementById("findPhone").value = "";
+        document.getElementById("findForm").style.display = "block";
+      }
+
+      function connectVoucher(code) {
+        closeModal("findCodeModal");
+        setVoucherCredentials(code, "empty");
+        showToast("Voucher found. Connecting...", 3000);
+        setTimeout(function () {
+          submitRouterLogin("empty");
+        }, 250);
+      }
+
+      /* ── Init ── */
+      document.addEventListener("DOMContentLoaded", function () {
+        var routerError = document.getElementById("routerError");
+        var trialLink = document.getElementById("trialLink");
+        var voucherInput = document.getElementById("voucherInput");
+        var attemptedVoucher = getVoucherStorage("voucher-attempt-username");
+        var attemptedMode =
+          getVoucherStorage("voucher-attempt-mode") || "empty";
+
+        if (voucherInput && !hasRouterValue(voucherInput.value)) {
+          voucherInput.value = "";
+        }
+        if (routerError && !hasRouterValue(routerError.textContent.trim())) {
+          routerError.style.display = "none";
+          routerError = null;
+        }
+        if (trialLink && !hasRouterValue(trialLink.getAttribute("href"))) {
+          trialLink.style.display = "none";
+        }
+
+        if (routerError && attemptedVoucher && attemptedMode === "empty") {
+          setVoucherCredentials(attemptedVoucher, "username");
+          rememberVoucherAttempt(attemptedVoucher, "username");
+          setTimeout(function () {
+            submitRouterLogin("username");
+          }, 250);
+          return;
+        }
+        if (routerError && attemptedMode === "username") clearVoucherAttempt();
+        loadPortalConfig();
+        loadPackages();
+      });
+    </script>
+  </body>
+</html>

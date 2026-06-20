@@ -11,6 +11,7 @@ class CaptivePortalUpsert(BaseModel):
     phone_one: Optional[str] = Field(default=None, max_length=30)
     phone_two: Optional[str] = Field(default=None, max_length=30)
     logo_url: Optional[str] = Field(default=None, max_length=1000)
+    primary_color: Optional[str] = Field(default=None, max_length=9)
     portal_template: str = Field(default="renault", min_length=1, max_length=80)
 
 
@@ -29,6 +30,7 @@ class CaptivePortalResponse(BaseModel):
     phone_one: Optional[str] = None
     phone_two: Optional[str] = None
     logo_url: Optional[str] = None
+    primary_color: Optional[str] = None
     portal_template: str = "renault"
     last_pushed_at: Optional[datetime] = None
 

@@ -103,6 +103,7 @@ def serialize_captive(captive: CaptivePortal) -> CaptivePortalResponse:
         phone_one=captive.phone_one,
         phone_two=captive.phone_two,
         logo_url=refresh_logo_url(captive.logo_url),
+        primary_color=captive.primary_color,
         portal_template=captive.portal_template,
         last_pushed_at=captive.last_pushed_at,
     )
@@ -266,6 +267,7 @@ def upsert_router_captive(
     captive.phone_one = payload.phone_one.strip() if payload.phone_one else None
     captive.phone_two = payload.phone_two.strip() if payload.phone_two else None
     captive.logo_url = payload.logo_url.strip() if payload.logo_url else None
+    captive.primary_color = payload.primary_color.strip() if payload.primary_color else None
     captive.portal_template = payload.portal_template.strip()
     captive.updated_at = datetime.utcnow()
     session.add(captive)

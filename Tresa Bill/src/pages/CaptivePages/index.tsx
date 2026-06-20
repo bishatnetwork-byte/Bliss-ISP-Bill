@@ -173,6 +173,7 @@ export default function CaptiveIndex() {
                 phone_one: draft.phone_one || "",
                 phone_two: draft.phone_two || "",
                 logo_url: draft.logo_url || "",
+                primary_color: draft.primary_color || "",
                 portal_template: draft.portal_template || "renault"
             });
             toast.success("Portal configuration saved to server.");
@@ -198,6 +199,7 @@ export default function CaptiveIndex() {
                 phone_one: draft.phone_one || "",
                 phone_two: draft.phone_two || "",
                 logo_url: draft.logo_url || "",
+                primary_color: draft.primary_color || "",
                 portal_template: draft.portal_template || "renault"
             });
 
@@ -236,6 +238,7 @@ export default function CaptiveIndex() {
             phone_one: draft.phone_one,
             phone_two: draft.phone_two,
             logo_url: draft.logo_url,
+            primary_color: draft.primary_color,
             portal_template: draft.portal_template,
             last_pushed_at: draft.last_pushed_at
         }));
@@ -453,31 +456,51 @@ export default function CaptiveIndex() {
                                                 />
                                             </div>
                                         </div>
-                                        <div>
-                                            <Label htmlFor="themeSelector" className="text-xs font-bold mb-1.5 block">Visual Palette Theme</Label>
-                                            <Select
-                                                value={draft.portal_template || "renault"}
-                                                onValueChange={(val) => updateDraft({ portal_template: val })}
-                                            >
-                                                <SelectTrigger id="themeSelector" className="bg-background">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-popover border border-border">
-                                                    <SelectItem value="classic">Classic (Clean & Professional)</SelectItem>
-                                                    <SelectItem value="modern">Modern (Sleek & Smooth)</SelectItem>
-                                                    <SelectItem value="blue_modern">Blue Modern (Carousel Ads Support)</SelectItem>
-                                                    <SelectItem value="brown_cards">Brown Cards (Warm Earth Tones)</SelectItem>
-                                                    <SelectItem value="adsmob">AdsMob Portal (Banner, Flash & Video Ads)</SelectItem>
-                                                    <SelectItem value="offline">Offline Voucher Portal (No Mobile Money)</SelectItem>
-                                                    <SelectItem value="renault">Renault Custom Portal (UGX Mobile Money & Voucher)</SelectItem>
-                                                    <SelectItem value="auroaa">Auroraa RouterOS Portal (Full Hotspot Bundle)</SelectItem>
-                                                    <SelectItem value="light">Classic Clean (Light)</SelectItem>
-                                                    <SelectItem value="dark">Stealth Slate (Dark)</SelectItem>
-                                                    <SelectItem value="glassmorphic">Frosted Neon (Glassmorphic)</SelectItem>
-                                                    <SelectItem value="sunset">Sunset Glow (Warm Gradient)</SelectItem>
-                                                    <SelectItem value="ocean">Ocean Breeze (Teal-Emerald Gradient)</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <Label htmlFor="themeSelector" className="text-xs font-bold mb-1.5 block">Visual Palette Theme</Label>
+                                                <Select
+                                                    value={draft.portal_template || "renault"}
+                                                    onValueChange={(val) => updateDraft({ portal_template: val })}
+                                                >
+                                                    <SelectTrigger id="themeSelector" className="bg-background">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-popover border border-border">
+                                                        <SelectItem value="classic">Classic (Clean & Professional)</SelectItem>
+                                                        <SelectItem value="modern">Modern (Sleek & Smooth)</SelectItem>
+                                                        <SelectItem value="blue_modern">Blue Modern (Carousel Ads Support)</SelectItem>
+                                                        <SelectItem value="brown_cards">Brown Cards (Warm Earth Tones)</SelectItem>
+                                                        <SelectItem value="adsmob">AdsMob Portal (Banner, Flash & Video Ads)</SelectItem>
+                                                        <SelectItem value="offline">Offline Voucher Portal (No Mobile Money)</SelectItem>
+                                                        <SelectItem value="renault">Renault Custom Portal (UGX Mobile Money & Voucher)</SelectItem>
+                                                        <SelectItem value="grid_portal">Grid Portal (2-Column Package Grid)</SelectItem>
+                                                        <SelectItem value="auroaa">Auroraa RouterOS Portal (Full Hotspot Bundle)</SelectItem>
+                                                        <SelectItem value="light">Classic Clean (Light)</SelectItem>
+                                                        <SelectItem value="dark">Stealth Slate (Dark)</SelectItem>
+                                                        <SelectItem value="glassmorphic">Frosted Neon (Glassmorphic)</SelectItem>
+                                                        <SelectItem value="sunset">Sunset Glow (Warm Gradient)</SelectItem>
+                                                        <SelectItem value="ocean">Ocean Breeze (Teal-Emerald Gradient)</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div>
+                                                <Label htmlFor="primaryColor" className="text-xs font-bold mb-1.5 block">Brand Color</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        id="primaryColor"
+                                                        type="color"
+                                                        value={draft.primary_color || "#ff6000"}
+                                                        onChange={(e) => updateDraft({ primary_color: e.target.value })}
+                                                        className="h-10 w-12 shrink-0 rounded border border-border/40 bg-background p-1"
+                                                    />
+                                                    <Input
+                                                        value={draft.primary_color || ""}
+                                                        onChange={(e) => updateDraft({ primary_color: e.target.value })}
+                                                        placeholder="#ff6000 (defaults to template color)"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     </CardContent>
                                 </Card>

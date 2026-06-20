@@ -728,6 +728,7 @@ export interface CaptivePortalResponse {
   phone_one: string | null;
   phone_two: string | null;
   logo_url: string | null;
+  primary_color: string | null;
   portal_template: string;
   last_pushed_at: string | null;
 }
@@ -738,6 +739,7 @@ export interface CaptivePortalUpsert {
   phone_one?: string | null;
   phone_two?: string | null;
   logo_url?: string | null;
+  primary_color?: string | null;
   portal_template?: string;
 }
 

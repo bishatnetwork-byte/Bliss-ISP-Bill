@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="-1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff6000">
+  <title>Renault WIFI | Connected</title>
+  <link rel="stylesheet" href="portal.css">
+  $(if popup == 'true')
+  <meta http-equiv="refresh" content="2; url=$(link-redirect)">
+  $(endif)
+</head>
+<body>
+  <main class="portal-card">
+    <header class="portal-head">
+      <div class="portal-mark"></div>
+      <h1>Renault WIFI</h1>
+      <p>Your internet session is ready.</p>
+    </header>
+    <section class="portal-body">
+      <h2>Connected successfully</h2>
+      <p>If your destination does not open automatically, continue below.</p>
+      <a class="portal-button" href="$(link-redirect)">Continue online</a>
+      <a class="portal-button secondary" href="$(link-status)">View connection status</a>
+    </section>
+  </main>
+</body>
+</html>

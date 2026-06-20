@@ -128,6 +128,7 @@ def default_captive_config(router_name: str) -> dict[str, Any]:
         "phone_one": None,
         "phone_two": None,
         "logo_url": None,
+        "primary_color": None,
         "portal_template": "renault",
         "last_pushed_at": None,
     }
@@ -157,6 +158,7 @@ def get_public_captive_config(session: Session, router_name: str) -> dict[str, A
         "phone_one": captive.phone_one,
         "phone_two": captive.phone_two,
         "logo_url": refresh_logo_url(captive.logo_url),
+        "primary_color": captive.primary_color,
         "portal_template": captive.portal_template,
         "last_pushed_at": captive.last_pushed_at,
     }

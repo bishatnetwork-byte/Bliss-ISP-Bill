@@ -1,0 +1,18 @@
+You are not logged in
+You are already logged in
+invalid username or password
+session limit reached
+trial access denied
+chap-missing = CHAP connection is not available
+not allowed
+hotspot service is shutting down
+uptime limit reached
+traffic limit reached
+account expired
+trial uptime limit reached
+trial traffic limit reached
+auth server timeout
+auth server error
+radius server error
+not enough credits
+internal error
