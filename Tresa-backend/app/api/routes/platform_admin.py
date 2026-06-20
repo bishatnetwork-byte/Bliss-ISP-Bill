@@ -14,11 +14,13 @@ from app.core.config import settings
 from app.db.session import SessionDep
 from app.models.branch import Branch
 from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
+from app.models.captive_portal import CaptivePortal
 from app.models.login_attempt import LoginAttempt
 from app.models.notification import Notification
 from app.models.platform_admin import PlatformAuditLog, VoucherActivationAudit
 from app.models.platform_ledger import PlatformLedgerEntry
 from app.models.message import MessageLog
+from app.models.portal_ad import PortalAd
 from app.models.router import Router
 from app.models.router_event import RouterErrorLog
 from app.models.telegram_connection import TelegramConnection
@@ -59,6 +61,16 @@ from app.schemas.platform_admin import (
     PlatformLedgerEntryFullResponse,
     PlatformAllTransactionResponse,
 )
+from app.schemas.ads import PortalAdCreate, PortalAdResponse, PortalAdUpdate
+from app.schemas.portal import CaptivePortalPushRequest, PushCaptiveResponse
+from app.schemas.router import RouterCredentialsUpdate
+from app.services.ads import (
+    create_router_ad,
+    get_ad_metrics,
+    get_router_ads,
+    serialize_portal_ad,
+    update_router_ad,
+)
 from app.services.dns_provider import (
     DnsProviderError,
     create_record,
@@ -78,6 +90,8 @@ from app.services.platform_admin import (
     set_settings,
     settings_snapshot,
 )
+from app.services.portal import normalize_router_name, push_captive_files_to_mikrotik
+from app.services.routers.credentials import encrypt_secret
 from app.services.security import hash_password, normalize_email
 from app.services.storage import STORAGE_ERRORS, delete_object, list_objects
 from app.services.wallet import freeze_wallet
@@ -946,6 +960,128 @@ def set_tunnel_active(
     session.commit()
     audit(session, admin, "router_activation_changed", "router", str(target.id), {"active": active})
     return MessageResponse(message=f"{target.name} {'enabled' if active else 'disabled'}")
+
+
+def _admin_get_router(session: SessionDep, router_id: UUID) -> Router:
+    db_router = session.get(Router, router_id)
+    if not db_router:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Router not found")
+    return db_router
+
+
+@router.get("/routers/{router_id}/ads", response_model=list[PortalAdResponse])
+def admin_list_router_ads(
+    router_id: UUID,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> list[PortalAdResponse]:
+    del admin
+    db_router = _admin_get_router(session, router_id)
+    ads = get_router_ads(session, db_router.id)
+    metrics = get_ad_metrics(session, [ad.id for ad in ads])
+    return [PortalAdResponse(**serialize_portal_ad(ad, metrics.get(ad.id))) for ad in ads]
+
+
+@router.post("/routers/{router_id}/ads", response_model=PortalAdResponse, status_code=status.HTTP_201_CREATED)
+def admin_create_router_ad(
+    router_id: UUID,
+    payload: PortalAdCreate,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> PortalAdResponse:
+    db_router = _admin_get_router(session, router_id)
+    ad = create_router_ad(session, db_router.id, payload)
+    audit(session, admin, "ad_pushed", "router", str(db_router.id), {"ad_id": str(ad.id), "advertiser_name": ad.advertiser_name})
+    return PortalAdResponse(**serialize_portal_ad(ad))
+
+
+@router.put("/routers/{router_id}/ads/{ad_id}", response_model=PortalAdResponse)
+def admin_update_router_ad(
+    router_id: UUID,
+    ad_id: UUID,
+    payload: PortalAdUpdate,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> PortalAdResponse:
+    _admin_get_router(session, router_id)
+    existing = session.get(PortalAd, ad_id)
+    if not existing or existing.router_id != router_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ad not found")
+    ad = update_router_ad(session, existing, payload)
+    metrics = get_ad_metrics(session, [ad.id])
+    audit(session, admin, "ad_updated", "router", str(router_id), {"ad_id": str(ad.id)})
+    return PortalAdResponse(**serialize_portal_ad(ad, metrics.get(ad.id)))
+
+
+@router.delete("/routers/{router_id}/ads/{ad_id}", response_model=MessageResponse)
+def admin_delete_router_ad(
+    router_id: UUID,
+    ad_id: UUID,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> MessageResponse:
+    existing = session.get(PortalAd, ad_id)
+    if not existing or existing.router_id != router_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ad not found")
+    session.delete(existing)
+    session.commit()
+    audit(session, admin, "ad_removed", "router", str(router_id), {"ad_id": str(ad_id)})
+    return MessageResponse(message="Ad removed.")
+
+
+@router.post("/routers/{router_id}/captive/push", response_model=PushCaptiveResponse)
+def admin_push_router_captive(
+    router_id: UUID,
+    session: SessionDep,
+    admin: User = _admin("users"),
+    payload: CaptivePortalPushRequest | None = None,
+) -> PushCaptiveResponse:
+    db_router = _admin_get_router(session, router_id)
+    payload = payload or CaptivePortalPushRequest()
+    captive = session.exec(select(CaptivePortal).where(CaptivePortal.router_id == db_router.id)).first()
+    template = captive.portal_template if captive else "renault"
+    result = push_captive_files_to_mikrotik(
+        db_router,
+        template,
+        ftp_username=payload.ftp_username,
+        ftp_password=payload.ftp_password,
+        ftp_port=payload.ftp_port,
+        session=session,
+    )
+    if captive and result["success"]:
+        captive.last_pushed_at = datetime.utcnow()
+        captive.router_name = normalize_router_name(db_router.name)
+        captive.updated_at = datetime.utcnow()
+        session.add(captive)
+        session.commit()
+    audit(session, admin, "captive_portal_pushed", "router", str(db_router.id), {"template": template, "success": result["success"]})
+    return PushCaptiveResponse(
+        success=result["success"],
+        router_id=db_router.id,
+        router_name=db_router.name,
+        pushed_files=result["pushed_files"],
+        deployed_directory=result.get("deployed_directory"),
+        updated_profiles=result.get("updated_profiles", []),
+        error=result["error"],
+        diagnostics=result.get("diagnostics", {}),
+    )
+
+
+@router.post("/routers/{router_id}/credentials", response_model=MessageResponse)
+def admin_set_router_credentials(
+    router_id: UUID,
+    payload: RouterCredentialsUpdate,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> MessageResponse:
+    db_router = _admin_get_router(session, router_id)
+    db_router.username = payload.username.strip()
+    db_router.password = encrypt_secret(payload.password)
+    db_router.updated_at = datetime.utcnow()
+    session.add(db_router)
+    session.commit()
+    audit(session, admin, "router_credentials_reset", "router", str(db_router.id), {"username": payload.username})
+    return MessageResponse(message=f"Mikrotik login updated for {db_router.name}.")
 
 
 @router.get("/voucher-audit", response_model=list[PlatformVoucherAuditResponse])

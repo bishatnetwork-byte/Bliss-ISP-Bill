@@ -31,6 +31,11 @@ class RouterUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class RouterCredentialsUpdate(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=255)
+
+
 class RouterResponse(BaseModel):
     id: UUID
     branch_id: UUID

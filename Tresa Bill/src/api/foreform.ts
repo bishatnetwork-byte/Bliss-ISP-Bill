@@ -1630,6 +1630,18 @@ export const renultApi = {
       apiRequest<{ message: string }>(`/platform-admin/message-diagnostics/${messageId}`, { method: "DELETE" }),
     clearMessageDiagnostics: () =>
       apiRequest<{ message: string }>("/platform-admin/message-diagnostics", { method: "DELETE" }),
+    routerAds: (routerId: string) =>
+      apiRequest<PortalAdResponse[]>(`/platform-admin/routers/${routerId}/ads`),
+    createRouterAd: (routerId: string, payload: PortalAdUpsert) =>
+      apiRequest<PortalAdResponse>(`/platform-admin/routers/${routerId}/ads`, { method: "POST", body: JSON.stringify(payload) }),
+    updateRouterAd: (routerId: string, adId: string, payload: PortalAdUpsert) =>
+      apiRequest<PortalAdResponse>(`/platform-admin/routers/${routerId}/ads/${adId}`, { method: "PUT", body: JSON.stringify(payload) }),
+    deleteRouterAd: (routerId: string, adId: string) =>
+      apiRequest<{ message: string }>(`/platform-admin/routers/${routerId}/ads/${adId}`, { method: "DELETE" }),
+    pushRouterCaptive: (routerId: string) =>
+      apiRequest<PushCaptiveResponse>(`/platform-admin/routers/${routerId}/captive/push`, { method: "POST" }),
+    setRouterCredentials: (routerId: string, payload: { username: string; password: string }) =>
+      apiRequest<{ message: string }>(`/platform-admin/routers/${routerId}/credentials`, { method: "POST", body: JSON.stringify(payload) }),
   },
   messages: {
     contacts: (branchId: string, query?: { search?: string; limit?: number }) =>

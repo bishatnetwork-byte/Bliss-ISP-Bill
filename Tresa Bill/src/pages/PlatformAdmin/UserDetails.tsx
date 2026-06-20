@@ -1,12 +1,14 @@
-import { getAccountBaseDomain, renultApi } from "@/api/foreform";
+import { PortalAdUpsert, getAccountBaseDomain, renultApi } from "@/api/foreform";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Building2, Loader2, Router, Ticket, Wallet } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Building2, KeyRound, Loader2, Megaphone, Router, Ticket, Wallet } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import PlatformAdminLayout from "./PlatformAdminLayout";
 
 const formatDate = (value?: string | null) =>
@@ -47,6 +49,7 @@ export default function PlatformUserDetailsPage() {
 
 function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platformAdmin.user>> }) {
   const user = data.user;
+  const [managingRouter, setManagingRouter] = useState<{ id: string; name: string } | null>(null);
   return (
     <>
       <Card className="shadow-none">
@@ -112,17 +115,28 @@ function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platf
         <CardHeader><CardTitle className="text-sm">Routers</CardTitle></CardHeader>
         <CardContent>
           <Table
-            headers={["Router", "Branch", "Location", "Status", "Last seen"]}
+            headers={["Router", "Branch", "Location", "Status", "Last seen", ""]}
             rows={data.routers.map((router) => [
               router.name,
               router.branch_name,
               router.location || "N/A",
               router.is_active ? router.status : "Disabled",
               formatDate(router.last_seen),
+              <Button
+                key={`${router.id}-manage`}
+                size="sm"
+                variant={managingRouter?.id === router.id ? "default" : "outline"}
+                className="h-8 text-xs"
+                onClick={() => setManagingRouter(managingRouter?.id === router.id ? null : { id: router.id, name: router.name })}
+              >
+                {managingRouter?.id === router.id ? "Close" : "Manage"}
+              </Button>,
             ])}
           />
         </CardContent>
       </Card>
+
+      {managingRouter && <RouterManagement router={managingRouter} />}
 
       <Card className="shadow-none">
         <CardHeader><CardTitle className="text-sm">Recent vouchers</CardTitle></CardHeader>
@@ -142,6 +156,104 @@ function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platf
         </CardContent>
       </Card>
     </>
+  );
+}
+
+function RouterManagement({ router }: { router: { id: string; name: string } }) {
+  const queryClient = useQueryClient();
+  const adsQuery = useQuery({
+    queryKey: ["platformAdmin", "routerAds", router.id],
+    queryFn: () => renultApi.platformAdmin.routerAds(router.id),
+  });
+  const createAd = useMutation({
+    mutationFn: (payload: PortalAdUpsert) => renultApi.platformAdmin.createRouterAd(router.id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "routerAds", router.id] });
+      toast.success("Ad pushed to captive portal.");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not push ad."),
+  });
+  const deleteAd = useMutation({
+    mutationFn: (adId: string) => renultApi.platformAdmin.deleteRouterAd(router.id, adId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["platformAdmin", "routerAds", router.id] }),
+  });
+  const pushCaptive = useMutation({
+    mutationFn: () => renultApi.platformAdmin.pushRouterCaptive(router.id),
+    onSuccess: (result) => result.success
+      ? toast.success(`Captive portal pushed to ${router.name}.`)
+      : toast.error(result.error || "Push failed."),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not push captive portal."),
+  });
+  const setCredentials = useMutation({
+    mutationFn: (payload: { username: string; password: string }) => renultApi.platformAdmin.setRouterCredentials(router.id, payload),
+    onSuccess: (result) => toast.success(result.message),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update Mikrotik login."),
+  });
+
+  const handleAddAd = () => {
+    const advertiser_name = window.prompt("Advertiser name:");
+    if (!advertiser_name) return;
+    const media_url = window.prompt("Image/video URL to display:");
+    if (!media_url) return;
+    const target_url = window.prompt("Click-through URL (optional):") || null;
+    createAd.mutate({
+      enabled: true,
+      advertiser_name,
+      business_type: "other",
+      placement: "banner",
+      media_type: "image",
+      title: "Sponsored",
+      description: "",
+      media_url,
+      target_url,
+      duration_seconds: 5,
+      sort_order: 0,
+    });
+  };
+
+  const handleSetCredentials = () => {
+    const username = window.prompt("New Mikrotik login username:", "admin");
+    if (!username) return;
+    const password = window.prompt("New Mikrotik login password:");
+    if (!password) return;
+    if (!window.confirm(`This overwrites the stored RouterOS login for ${router.name}. Make sure it matches the password actually set on the device.`)) return;
+    setCredentials.mutate({ username, password });
+  };
+
+  return (
+    <Card className="shadow-none border-primary/30">
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+        <CardTitle className="text-sm">Manage {router.name}</CardTitle>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => pushCaptive.mutate()} disabled={pushCaptive.isPending}>
+            Push Captive Portal
+          </Button>
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={handleSetCredentials}>
+            <KeyRound className="h-3.5 w-3.5" />Set Mikrotik Login
+          </Button>
+          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={handleAddAd}>
+            <Megaphone className="h-3.5 w-3.5" />Push Ad
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {adsQuery.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading ads...</p>
+        ) : (
+          <Table
+            headers={["Ad", "Type", "Target", "Impressions", "Clicks", ""]}
+            rows={(adsQuery.data || []).map((ad) => [
+              <div key={`${ad.id}-name`}><b>{ad.advertiser_name}</b><p className="text-muted-foreground">{ad.title}</p></div>,
+              ad.media_type,
+              ad.target_url || "N/A",
+              ad.impressions,
+              ad.clicks,
+              <Button key={`${ad.id}-del`} size="sm" variant="ghost" className="text-destructive" onClick={() => window.confirm(`Remove ad "${ad.advertiser_name}"?`) && deleteAd.mutate(ad.id)}>Remove</Button>,
+            ])}
+          />
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
