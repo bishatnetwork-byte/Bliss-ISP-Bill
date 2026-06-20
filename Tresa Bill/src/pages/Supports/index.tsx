@@ -13,6 +13,14 @@ import { voucherUiStatus } from "@/lib/voucherStatus";
 import { ChevronLeft, ChevronRight, Loader2, Search, Ticket, TrendingUp, Wifi } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+type SupportVoucherStatus = "Online" | "Offline" | "Expired" | "Unactivated" | "Sync Issue";
+
+function registryStatus(status: string): SupportVoucherStatus {
+  if (status === "ONLINE") return "Online";
+  if (status === "OFFLINE" || status === "ACTIVE") return "Offline";
+  return voucherUiStatus(status) as Exclude<SupportVoucherStatus, "Online" | "Offline">;
+}
+
 function normalizeUgandanPhone(value: string): string | null {
   const digits = value.replace(/\D/g, "");
   if (/^2567\d{8}$/.test(digits)) return `+${digits}`;
@@ -88,18 +96,19 @@ export default function SupportsIndex() {
     packageName: `${voucher.speed_type} ${voucher.profile}`,
     amount: voucher.amount,
     createdAt: voucher.created_at,
-    status: voucherUiStatus(voucher.status),
+    status: registryStatus(voucher.status),
     reference: voucher.payment_reference || "N/A",
   })), [data]);
 
   const total = data?.total || 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  const statusClass = (value: string) => {
-    if (value === "Active") return "bg-emerald-500/10 text-emerald-600";
-    if (value === "Expired") return "bg-slate-500/10 text-slate-600";
-    if (value === "Sync Issue") return "bg-orange-500/10 text-orange-600";
-    return "bg-amber-500/10 text-amber-600";
+  const statusClass = (value: SupportVoucherStatus) => {
+    if (value === "Online") return "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+    if (value === "Offline") return "bg-blue-500/10 text-blue-600 border-blue-500/20";
+    if (value === "Expired") return "bg-slate-500/10 text-slate-500 border-slate-500/20";
+    if (value === "Sync Issue") return "bg-orange-500/10 text-orange-500 border-orange-500/20";
+    return "bg-amber-500/10 text-amber-500 border-amber-500/20";
   };
 
   return (
@@ -130,9 +139,11 @@ export default function SupportsIndex() {
                 <SelectTrigger className="sm:w-44"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="All">All statuses</SelectItem>
-                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="Online">Online</SelectItem>
+                  <SelectItem value="Offline">Offline</SelectItem>
                   <SelectItem value="Unactivated">Unactivated</SelectItem>
                   <SelectItem value="Expired">Expired</SelectItem>
+                  <SelectItem value="Sync Issue">Sync Issue</SelectItem>
                 </SelectContent>
               </Select>
             </div>

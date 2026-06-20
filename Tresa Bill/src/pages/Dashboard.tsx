@@ -87,6 +87,10 @@ function LiveBadge() {
   );
 }
 
+function isActivatedVoucher(voucher: { activated_at?: string | null; status: string }) {
+  return Boolean(voucher.activated_at) || voucher.status === "ACTIVE" || voucher.status === "EXPIRED";
+}
+
 // Small bar-chart glyph used in place of a static icon on the stat cards.
 function MiniBarChart({ bars }: { bars: { value: number; color: string }[] }) {
   const data = bars.map((bar, index) => ({ index, value: bar.value }));
@@ -218,7 +222,9 @@ export default function Dashboard() {
       const sortKey = voucher.created_at.slice(0, 10);
       const key = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
       if (!grouped[key]) grouped[key] = { sales: 0, responses: 0, sortKey };
-      grouped[key].sales += voucher.amount;
+      if (isActivatedVoucher(voucher)) {
+        grouped[key].sales += voucher.amount;
+      }
       grouped[key].responses += 1;
     });
     return Object.entries(grouped)
@@ -231,6 +237,7 @@ export default function Dashboard() {
     const today = new Date().toISOString().slice(0, 10);
     return (vouchersData?.vouchers || [])
       .filter((voucher) => voucher.created_at.slice(0, 10) === today)
+      .filter(isActivatedVoucher)
       .reduce((sum, voucher) => sum + voucher.amount, 0);
   }, [vouchersData]);
 
@@ -422,7 +429,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-foreground leading-none">{isOnline ? activeClients : "–"}</h4>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-none">Clients</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-none overflow-auto">DHCP Leases</p>
                     </div>
                   </div>
 
