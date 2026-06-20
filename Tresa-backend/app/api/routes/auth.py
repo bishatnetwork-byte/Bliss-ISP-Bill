@@ -7,6 +7,7 @@ from sqlmodel import select
 from app.api.deps import CurrentUser
 from app.db.session import SessionDep
 from app.models import User, Branch
+from app.models.login_attempt import LoginAttempt
 from app.services.avatar import get_user_avatar, get_branch_avatar
 from app.schemas.auth import (
     AuthResponse,
@@ -106,20 +107,44 @@ def resend_code(payload: ResendCodeRequest, session: SessionDep) -> MessageRespo
 
 
 @router.post("/login", response_model=AuthResponse)
-def login(payload: LoginRequest, session: SessionDep) -> AuthResponse:
+def login(payload: LoginRequest, request: Request, session: SessionDep) -> AuthResponse:
     email = normalize_email(str(payload.email))
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    def _log_attempt(success: bool, user_id: UUID | None, reason: str | None = None) -> None:
+        session.add(LoginAttempt(
+            email=email,
+            user_id=user_id,
+            success=success,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            failure_reason=reason,
+        ))
+        session.commit()
+
     user = session.exec(select(User).where(User.email == email)).first()
     if not user or not verify_password(payload.password, user.password_hash):
+        _log_attempt(False, user.id if user else None, "Invalid email or password")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     if not user.is_active:
+        _log_attempt(False, user.id, "Account suspended")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is suspended")
+    if user.blocked_until and user.blocked_until > datetime.utcnow():
+        _log_attempt(False, user.id, "Account blocked")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Account is blocked until {user.blocked_until.isoformat()}",
+        )
     if not user.is_verified:
         code = create_verification_code(session, email)
         send_verification_email(email, user.full_name, code)
+        _log_attempt(False, user.id, "Email not verified")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email not verified. A new code has been sent.")
 
+    _log_attempt(True, user.id)
     notify_login(session, user.id)
-    return auth_response(user, session)
+    return auth_response(user, session, ip_address=ip_address, user_agent=user_agent)
 
 
 @router.get("/google/login-url", response_model=GoogleLoginUrlResponse)

@@ -22,6 +22,8 @@ from app.models.portal_ad import PortalAd
 from app.models.portal_ad_event import PortalAdEvent
 from app.models.platform_admin import PlatformAuditLog, PlatformSetting, VoucherActivationAudit
 from app.models.message import MessageDraft, MessageLog
+from app.models.login_attempt import LoginAttempt
+from app.models.user_session import UserSession
 
 __all__ = [
     "EmailVerification",
@@ -54,4 +56,6 @@ __all__ = [
     "VoucherActivationAudit",
     "MessageDraft",
     "MessageLog",
+    "LoginAttempt",
+    "UserSession",
 ]

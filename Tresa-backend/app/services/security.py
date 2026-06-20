@@ -51,7 +51,7 @@ def b64url_decode(data: str) -> bytes:
     return base64.urlsafe_b64decode((data + padding).encode())
 
 
-def create_access_token(user: User) -> str:
+def create_access_token(user: User, jti: Optional[str] = None) -> str:
     now = datetime.utcnow()
     header = {"alg": "HS256", "typ": "JWT"}
     payload = {
@@ -61,6 +61,8 @@ def create_access_token(user: User) -> str:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=settings.access_token_expire_minutes)).timestamp()),
     }
+    if jti:
+        payload["jti"] = jti
     signing_input = ".".join(
         [
             b64url_encode(json.dumps(header, separators=(",", ":")).encode()),

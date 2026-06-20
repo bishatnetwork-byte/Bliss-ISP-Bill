@@ -34,7 +34,6 @@ import {
   PanelLeft,
   Plus,
   Settings,
-  ShieldCheck,
   Ticket,
   Users
 } from "lucide-react";
@@ -695,12 +694,6 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
     return buttonContent;
   };
 
-  const platformAdminItem: NavItem = {
-    label: "Platform Admin",
-    icon: <ShieldCheck className="w-5 h-5" />,
-    path: "/platform-admin",
-  };
-
   return (
     <TooltipProvider>
       {/* Backdrop overlay */}
@@ -899,11 +892,6 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
               {secondaryNavItems.map(renderNavItem)}
             </div>
           </nav>
-          {user?.platform_role && (
-            <nav className="py-3 px-2 border-t border-border/40">
-              <div className="space-y-0.5">{renderNavItem(platformAdminItem)}</div>
-            </nav>
-          )}
         </div>
 
         {/* Collapse / Expand Toggle at the bottom */}

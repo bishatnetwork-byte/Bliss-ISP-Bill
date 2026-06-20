@@ -23,6 +23,7 @@ import { Loader2, Menu, PanelLeft, RadioTower, RefreshCw, User } from "lucide-re
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import AdminSidebar from "./AdminSidebar";
 import NotificationsDialog from "./NotificationsDialog";
 import SideBar from "./SideBar";
 
@@ -525,7 +526,11 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
       </header>
 
       {/* Sidebar */}
-      <SideBar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      {user?.platform_role ? (
+        <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      ) : (
+        <SideBar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      )}
     </>
   );
 }

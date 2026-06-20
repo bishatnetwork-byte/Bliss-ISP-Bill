@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta
 from html import escape
 from uuid import UUID
@@ -8,10 +9,13 @@ from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app.api.deps import platform_admin, platform_admin_any
+from app.services.avatar import get_branch_avatar
 from app.core.config import settings
 from app.db.session import SessionDep
 from app.models.branch import Branch
 from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
+from app.models.login_attempt import LoginAttempt
+from app.models.notification import Notification
 from app.models.platform_admin import PlatformAuditLog, VoucherActivationAudit
 from app.models.platform_ledger import PlatformLedgerEntry
 from app.models.message import MessageLog
@@ -19,24 +23,32 @@ from app.models.router import Router
 from app.models.router_event import RouterErrorLog
 from app.models.telegram_connection import TelegramConnection
 from app.models.user import User
+from app.models.user_session import UserSession
 from app.models.voucher_purchase import VoucherPurchase
 from app.schemas.auth import MessageResponse
 from app.schemas.platform_admin import (
     PlatformAuditResponse,
+    PlatformBlockRequest,
     PlatformBroadcastRequest,
     PlatformBroadcastResponse,
     PlatformDnsRecordResponse,
     PlatformDnsRecordCreate,
     PlatformDnsZoneResponse,
     PlatformHealthResponse,
+    PlatformLoginAttemptResponse,
     PlatformMessageDiagnosticResponse,
+    PlatformNotificationResponse,
     PlatformOverviewResponse,
+    PlatformPasswordResetResponse,
+    PlatformSessionResponse,
     PlatformSettingsResponse,
     PlatformSettingsUpdate,
     PlatformStorageObjectResponse,
     PlatformSubadminUpdate,
     PlatformTunnelResponse,
     PlatformUserBranchResponse,
+    PlatformUserCreate,
+    PlatformUserCreateResponse,
     PlatformUserDetailResponse,
     PlatformUserResponse,
     PlatformUserRouterResponse,
@@ -66,6 +78,7 @@ from app.services.platform_admin import (
     set_settings,
     settings_snapshot,
 )
+from app.services.security import hash_password, normalize_email
 from app.services.storage import STORAGE_ERRORS, delete_object, list_objects
 from app.services.wallet import freeze_wallet
 
@@ -163,6 +176,8 @@ def _user_response(session: Session, user: User) -> PlatformUserResponse:
         vouchers=voucher_count,
         wallet_balance=wallet_balance,
         created_at=user.created_at,
+        blocked_until=user.blocked_until,
+        force_password_change=user.force_password_change,
     )
 
 
@@ -273,6 +288,8 @@ def users(
             vouchers=int(vouchers),
             wallet_balance=int(balance),
             created_at=user.created_at,
+            blocked_until=user.blocked_until,
+            force_password_change=user.force_password_change,
         )
         for user, branches, routers, vouchers, balance in rows
     ]
@@ -455,6 +472,282 @@ def user_detail(
             for voucher in vouchers
         ],
     )
+
+
+@router.post("/users", response_model=PlatformUserCreateResponse, status_code=status.HTTP_201_CREATED)
+def create_user(
+    payload: PlatformUserCreate,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> PlatformUserCreateResponse:
+    email = normalize_email(str(payload.email))
+    existing = session.exec(select(User).where(User.email == email)).first()
+    if existing:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Email is already registered")
+
+    temp_password = payload.password or secrets.token_urlsafe(9)
+    user = User(
+        email=email,
+        full_name=payload.full_name.strip(),
+        phone_number=(payload.phone_number or "").strip() or None,
+        password_hash=hash_password(temp_password),
+        is_verified=True,
+        force_password_change=payload.password is None,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    branch_name = f"{user.full_name} Branch"
+    session.add(Branch(name=branch_name, avatar_url=get_branch_avatar(branch_name), user_id=user.id))
+    session.commit()
+
+    audit(session, admin, "user_created", "user", str(user.id), {"email": email})
+    return PlatformUserCreateResponse(
+        user=_user_response(session, user),
+        temp_password=temp_password if payload.password is None else None,
+    )
+
+
+@router.delete("/users/{user_id}", response_model=MessageResponse)
+def delete_user(
+    user_id: UUID,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> MessageResponse:
+    target = session.get(User, user_id)
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if target.id == admin.id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot remove your own account")
+    branch_count = session.exec(select(func.count(Branch.id)).where(Branch.user_id == target.id)).one()
+    if int(branch_count) > 0:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "This user still owns branches/routers — suspend or transfer them before removal",
+        )
+    email = target.email
+    session.delete(target)
+    session.commit()
+    audit(session, admin, "user_deleted", "user", str(user_id), {"email": email})
+    return MessageResponse(message="User removed.")
+
+
+@router.post("/users/{user_id}/block", response_model=PlatformUserResponse)
+def block_user(
+    user_id: UUID,
+    payload: PlatformBlockRequest,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> PlatformUserResponse:
+    target = session.get(User, user_id)
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if target.id == admin.id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot block your own account")
+    if payload.permanent:
+        target.is_active = False
+        target.blocked_until = None
+    else:
+        target.blocked_until = payload.blocked_until
+    target.updated_at = datetime.utcnow()
+    session.add(target)
+    session.commit()
+    session.refresh(target)
+    audit(session, admin, "user_blocked", "user", str(target.id), payload.model_dump(mode="json"))
+    return _user_response(session, target)
+
+
+@router.post("/users/{user_id}/unblock", response_model=PlatformUserResponse)
+def unblock_user(
+    user_id: UUID,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> PlatformUserResponse:
+    target = session.get(User, user_id)
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    target.blocked_until = None
+    target.is_active = True
+    target.updated_at = datetime.utcnow()
+    session.add(target)
+    session.commit()
+    session.refresh(target)
+    audit(session, admin, "user_unblocked", "user", str(target.id))
+    return _user_response(session, target)
+
+
+@router.post("/users/{user_id}/reset-password", response_model=PlatformPasswordResetResponse)
+def reset_user_password(
+    user_id: UUID,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> PlatformPasswordResetResponse:
+    target = session.get(User, user_id)
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    temp_password = secrets.token_urlsafe(9)
+    target.password_hash = hash_password(temp_password)
+    target.force_password_change = True
+    target.updated_at = datetime.utcnow()
+    session.add(target)
+    session.commit()
+    audit(session, admin, "user_password_reset", "user", str(target.id))
+    return PlatformPasswordResetResponse(user_id=target.id, temp_password=temp_password)
+
+
+@router.get("/login-attempts", response_model=list[PlatformLoginAttemptResponse])
+def login_attempts(
+    session: SessionDep,
+    admin: User = _admin("sessions"),
+    limit: int = Query(default=200, ge=1, le=1000),
+) -> list[PlatformLoginAttemptResponse]:
+    del admin
+    rows = session.exec(
+        select(LoginAttempt, User.full_name)
+        .join(User, LoginAttempt.user_id == User.id, isouter=True)
+        .order_by(LoginAttempt.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [
+        PlatformLoginAttemptResponse(
+            id=attempt.id,
+            email=attempt.email,
+            user_id=attempt.user_id,
+            user_name=name,
+            success=attempt.success,
+            ip_address=attempt.ip_address,
+            user_agent=attempt.user_agent,
+            failure_reason=attempt.failure_reason,
+            created_at=attempt.created_at,
+        )
+        for attempt, name in rows
+    ]
+
+
+@router.get("/sessions", response_model=list[PlatformSessionResponse])
+def list_sessions(
+    session: SessionDep,
+    admin: User = _admin("sessions"),
+    limit: int = Query(default=200, ge=1, le=1000),
+) -> list[PlatformSessionResponse]:
+    del admin
+    rows = session.exec(
+        select(UserSession, User.full_name)
+        .join(User, UserSession.user_id == User.id)
+        .where(col(UserSession.revoked_at).is_(None))
+        .order_by(UserSession.last_seen_at.desc())
+        .limit(limit)
+    ).all()
+    return [
+        PlatformSessionResponse(
+            id=row.id,
+            user_id=row.user_id,
+            user_name=name,
+            ip_address=row.ip_address,
+            user_agent=row.user_agent,
+            created_at=row.created_at,
+            last_seen_at=row.last_seen_at,
+            revoked_at=row.revoked_at,
+        )
+        for row, name in rows
+    ]
+
+
+@router.post("/sessions/{session_id}/revoke", response_model=MessageResponse)
+def revoke_session(
+    session_id: UUID,
+    session: SessionDep,
+    admin: User = _admin("sessions"),
+) -> MessageResponse:
+    target = session.get(UserSession, session_id)
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
+    target.revoked_at = datetime.utcnow()
+    session.add(target)
+    session.commit()
+    audit(session, admin, "session_revoked", "user_session", str(session_id), {"user_id": str(target.user_id)})
+    return MessageResponse(message="Session revoked.")
+
+
+@router.get("/notifications", response_model=list[PlatformNotificationResponse])
+def list_notifications(
+    session: SessionDep,
+    admin: User = _admin("notifications"),
+    limit: int = Query(default=200, ge=1, le=1000),
+) -> list[PlatformNotificationResponse]:
+    del admin
+    rows = session.exec(
+        select(Notification, User.full_name)
+        .join(User, Notification.user_id == User.id)
+        .order_by(Notification.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [
+        PlatformNotificationResponse(
+            id=row.id,
+            user_id=row.user_id,
+            user_name=name,
+            category=row.category,
+            title=row.title,
+            body=row.body,
+            is_read=row.is_read,
+            created_at=row.created_at,
+        )
+        for row, name in rows
+    ]
+
+
+@router.delete("/notifications/{notification_id}", response_model=MessageResponse)
+def delete_notification(
+    notification_id: UUID,
+    session: SessionDep,
+    admin: User = _admin("notifications"),
+) -> MessageResponse:
+    target = session.get(Notification, notification_id)
+    if target:
+        session.delete(target)
+        session.commit()
+    audit(session, admin, "notification_cleared", "notification", str(notification_id))
+    return MessageResponse(message="Notification cleared.")
+
+
+@router.delete("/notifications", response_model=MessageResponse)
+def clear_notifications(
+    session: SessionDep,
+    admin: User = _admin("notifications"),
+) -> MessageResponse:
+    count = session.exec(select(func.count(Notification.id))).one()
+    session.exec(sa.delete(Notification))
+    session.commit()
+    audit(session, admin, "notifications_cleared", "notification", None, {"count": int(count)})
+    return MessageResponse(message=f"Cleared {int(count)} notifications.")
+
+
+@router.delete("/message-diagnostics/{message_id}", response_model=MessageResponse)
+def delete_message_diagnostic(
+    message_id: UUID,
+    session: SessionDep,
+    admin: User = _admin("message_diagnostics"),
+) -> MessageResponse:
+    target = session.get(MessageLog, message_id)
+    if target:
+        session.delete(target)
+        session.commit()
+    audit(session, admin, "message_log_cleared", "message_log", str(message_id))
+    return MessageResponse(message="Message log entry cleared.")
+
+
+@router.delete("/message-diagnostics", response_model=MessageResponse)
+def clear_message_diagnostics(
+    session: SessionDep,
+    admin: User = _admin("message_diagnostics"),
+) -> MessageResponse:
+    count = session.exec(select(func.count(MessageLog.id))).one()
+    session.exec(sa.delete(MessageLog))
+    session.commit()
+    audit(session, admin, "message_logs_cleared", "message_log", None, {"count": int(count)})
+    return MessageResponse(message=f"Cleared {int(count)} message log entries.")
 
 
 @router.put("/subadmins/{user_id}", response_model=PlatformUserResponse)

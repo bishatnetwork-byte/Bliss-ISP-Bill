@@ -1,10 +1,13 @@
+from datetime import datetime
 from typing import Annotated, Optional
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Request, status
+from sqlmodel import select
 
 from app.db.session import SessionDep
 from app.models.user import User
+from app.models.user_session import UserSession
 from app.services.security import decode_access_token
 
 
@@ -21,11 +24,24 @@ def current_user(
     except (TypeError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject")
 
+    jti = payload.get("jti")
+    if jti:
+        user_session = session.exec(
+            select(UserSession).where(UserSession.jti == jti)
+        ).first()
+        if not user_session or user_session.revoked_at is not None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session has been revoked")
+        user_session.last_seen_at = datetime.utcnow()
+        session.add(user_session)
+        session.commit()
+
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User no longer exists")
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is suspended")
+    if user.blocked_until and user.blocked_until > datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is temporarily blocked")
     return user
 
 

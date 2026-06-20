@@ -55,9 +55,25 @@ def _fee_rate(session: Session, key: str, fallback: float) -> float:
     return percentage / 100
 
 
+def _fee_amount(
+    session: Session,
+    amount: int,
+    type_key: str,
+    fixed_key: str,
+    rate_key: str,
+    rate_fallback: float,
+) -> int:
+    """Admin-configurable fee — either a flat amount or a percentage of `amount`."""
+    fee_type = get_setting(session, type_key, "percentage")
+    if fee_type == "fixed":
+        return int(get_setting(session, fixed_key, 0))
+    return _calc_fee(amount, _fee_rate(session, rate_key, rate_fallback))
+
+
 def withdrawal_net_amount(amount: int, session: Session) -> int:
     """The amount the recipient actually receives after the withdrawal fee."""
-    return amount - _calc_fee(amount, _fee_rate(session, "withdrawal_fee_percentage", WITHDRAW_FEE_RATE))
+    fee = _fee_amount(session, amount, "withdrawal_fee_type", "withdrawal_fee_fixed_amount", "withdrawal_fee_percentage", WITHDRAW_FEE_RATE)
+    return amount - fee
 
 
 def withdrawal_fee_rate(session: Session) -> float:
@@ -134,8 +150,8 @@ def deposit(
     if wallet.is_frozen:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Wallet is frozen")
 
-    fee_rate = _fee_rate(session, "deposit_fee_percentage", DEPOSIT_FEE_RATE)
-    fee = fee_amount_override if fee_amount_override is not None else _calc_fee(amount, fee_rate)
+    computed_fee = _fee_amount(session, amount, "deposit_fee_type", "deposit_fee_fixed_amount", "deposit_fee_percentage", DEPOSIT_FEE_RATE)
+    fee = fee_amount_override if fee_amount_override is not None else computed_fee
     fee = max(0, min(amount, fee))
     net = amount - fee
 
@@ -185,8 +201,7 @@ def withdraw(
     if wallet.is_frozen:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Wallet is frozen")
 
-    fee_rate = _fee_rate(session, "withdrawal_fee_percentage", WITHDRAW_FEE_RATE)
-    fee = _calc_fee(amount, fee_rate)
+    fee = _fee_amount(session, amount, "withdrawal_fee_type", "withdrawal_fee_fixed_amount", "withdrawal_fee_percentage", WITHDRAW_FEE_RATE)
 
     if wallet.balance < amount:
         raise HTTPException(
@@ -219,7 +234,7 @@ def withdraw(
         amount=fee,
         fee_type="WITHDRAWAL_FEE",
         source_amount=amount,
-        fee_rate=fee_rate,
+        fee_rate=(fee / amount) if amount else 0,
         reference=reference,
     )
     session.add(ledger)

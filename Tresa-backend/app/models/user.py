@@ -25,5 +25,7 @@ class User(SQLModel, table=True):
     account_subdomain: Optional[str] = Field(default=None, index=True, unique=True)
     subdomain_enabled: bool = Field(default=False, index=True)
     avatar_url: Optional[str] = Field(default=None)
+    force_password_change: bool = Field(default=False)
+    blocked_until: Optional[datetime] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

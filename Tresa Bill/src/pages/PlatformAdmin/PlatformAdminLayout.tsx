@@ -1,40 +1,13 @@
 import AppHeader from "@/components/Header/AppHeader";
+import { PLATFORM_ADMIN_SECTIONS, PlatformAdminSection } from "@/components/Header/AdminSidebar";
 import SEO from "@/components/SEO";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import {
-  Activity,
-  Banknote,
-  Cloud,
-  FileClock,
-  Globe2,
-  LayoutDashboard,
-  Mail,
-  MessageSquareWarning,
-  Network,
-  ShieldCheck,
-  UserCog,
-  Users,
-} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-export const PLATFORM_ADMIN_SECTIONS = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "users", label: "Users", icon: Users },
-  { id: "finance", label: "Fees & Wallets", icon: Banknote },
-  { id: "broadcasts", label: "Broadcasts", icon: Mail },
-  { id: "voucher_audit", label: "Voucher Audit", icon: FileClock },
-  { id: "message_diagnostics", label: "Message Diagnostics", icon: MessageSquareWarning },
-  { id: "tunnels", label: "Tunnels", icon: Network },
-  { id: "storage", label: "Cloud Files", icon: Cloud },
-  { id: "dns", label: "DNS", icon: Globe2 },
-  { id: "subadmins", label: "Subadmins", icon: UserCog },
-  { id: "system", label: "Health", icon: Activity },
-  { id: "audit", label: "Admin Audit", icon: ShieldCheck },
-] as const;
-
-export type PlatformAdminSection = typeof PLATFORM_ADMIN_SECTIONS[number]["id"];
+export { PLATFORM_ADMIN_SECTIONS };
+export type { PlatformAdminSection };
 
 interface PlatformAdminLayoutProps {
   activeSection: PlatformAdminSection;
@@ -103,36 +76,6 @@ export default function PlatformAdminLayout({
       </div>
 
       <div className="flex min-h-[calc(100vh-57px)]">
-        <aside className="hidden w-[250px] shrink-0 flex-col border-r border-border/50 bg-white lg:flex">
-          <div className="px-5 pb-3 pt-6">
-            <p className="text-lg font-semibold">Platform Admin</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {user?.platform_role === "superadmin" ? "Superadmin access" : "Scoped administration"}
-            </p>
-          </div>
-          <nav className="flex-1 px-2 pb-4">
-            {visibleSections.map((item) => {
-              const Icon = item.icon;
-              const active = item.id === activeSection;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => selectSection(item.id)}
-                  className={cn(
-                    "m-0.5 flex w-full items-center gap-2.5 rounded px-3 py-2 text-left text-sm font-medium transition-colors",
-                    active
-                      ? "bg-primary text-white"
-                      : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
-
         <main className="min-w-0 flex-1 overflow-y-auto">
           {children}
         </main>

@@ -82,6 +82,7 @@ class UserResponse(BaseModel):
     staff_role: Optional[str] = None
     staff_permissions: list[str] = Field(default_factory=list)
     share_percentage: float = 0
+    force_password_change: bool = False
 
 
 class AuthResponse(BaseModel):

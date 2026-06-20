@@ -40,6 +40,8 @@ class PlatformUserResponse(BaseModel):
     vouchers: int
     wallet_balance: int
     created_at: datetime
+    blocked_until: Optional[datetime] = None
+    force_password_change: bool = False
 
 
 class PlatformUserUpdate(BaseModel):
@@ -101,8 +103,12 @@ class PlatformSubadminUpdate(BaseModel):
 class PlatformSettingsResponse(BaseModel):
     voucher_fee_type: str
     voucher_fee_value: float
+    deposit_fee_type: str = "percentage"
     deposit_fee_percentage: float
+    deposit_fee_fixed_amount: float = 0
+    withdrawal_fee_type: str = "percentage"
     withdrawal_fee_percentage: float
+    withdrawal_fee_fixed_amount: float = 0
     withdrawal_min_amount: int
     withdrawal_max_amount: int
     voucher_prefix: str
@@ -113,8 +119,12 @@ class PlatformSettingsResponse(BaseModel):
 class PlatformSettingsUpdate(BaseModel):
     voucher_fee_type: str = Field(pattern="^(fixed|percentage)$")
     voucher_fee_value: float = Field(ge=0)
+    deposit_fee_type: str = Field(default="percentage", pattern="^(fixed|percentage)$")
     deposit_fee_percentage: float = Field(ge=0, le=100)
+    deposit_fee_fixed_amount: float = Field(default=0, ge=0)
+    withdrawal_fee_type: str = Field(default="percentage", pattern="^(fixed|percentage)$")
     withdrawal_fee_percentage: float = Field(ge=0, le=100)
+    withdrawal_fee_fixed_amount: float = Field(default=0, ge=0)
     withdrawal_min_amount: int = Field(ge=1)
     withdrawal_max_amount: int = Field(ge=1)
     voucher_prefix: str = Field(min_length=0, max_length=20)
@@ -299,4 +309,66 @@ class PlatformAllTransactionResponse(BaseModel):
     recipient_phone: Optional[str]
     gateway_status: Optional[str]
     failure_reason: Optional[str]
+    created_at: datetime
+
+
+class PlatformUserCreate(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=1, max_length=200)
+    phone_number: Optional[str] = Field(default=None, max_length=30)
+    password: Optional[str] = Field(default=None, min_length=8, max_length=128)
+
+
+class PlatformUserCreateResponse(BaseModel):
+    user: PlatformUserResponse
+    temp_password: Optional[str] = None
+
+
+class PlatformPasswordResetResponse(BaseModel):
+    user_id: UUID
+    temp_password: str
+
+
+class PlatformBlockRequest(BaseModel):
+    permanent: bool = False
+    blocked_until: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def _check(self) -> "PlatformBlockRequest":
+        if not self.permanent and self.blocked_until is None:
+            raise ValueError("Provide blocked_until or set permanent=true")
+        return self
+
+
+class PlatformLoginAttemptResponse(BaseModel):
+    id: UUID
+    email: str
+    user_id: Optional[UUID]
+    user_name: Optional[str]
+    success: bool
+    ip_address: Optional[str]
+    user_agent: Optional[str]
+    failure_reason: Optional[str]
+    created_at: datetime
+
+
+class PlatformSessionResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    user_name: str
+    ip_address: Optional[str]
+    user_agent: Optional[str]
+    created_at: datetime
+    last_seen_at: datetime
+    revoked_at: Optional[datetime]
+
+
+class PlatformNotificationResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    user_name: str
+    category: str
+    title: str
+    body: str
+    is_read: bool
     created_at: datetime

@@ -20,6 +20,8 @@ import {
   Coins,
   Cpu,
   Database,
+  Eye,
+  EyeOff,
   ExternalLink,
   RotateCw,
   Ticket,
@@ -114,7 +116,18 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [chartType, setChartType] = useState<"area" | "bar">("area");
+  const [balanceHidden, setBalanceHidden] = useState(
+    () => localStorage.getItem("mobile-money-balance-hidden") !== "false",
+  );
   const { user } = useAuth();
+
+  const toggleBalanceHidden = () => {
+    setBalanceHidden((prev) => {
+      const next = !prev;
+      localStorage.setItem("mobile-money-balance-hidden", String(next));
+      return next;
+    });
+  };
 
   const getVoucherStatusBadgeClass = (status: string) => {
     switch (status) {
@@ -359,28 +372,41 @@ export default function Dashboard() {
                 </p>
               </div>
             </button>
-            {user?.account_type !== "staff" ? <button
-              onClick={() => navigate("/withdraw")}
-              className="bg-card border border-primary/40 hover:border-primary/60 transition-all rounded p-5 flex flex-col justify-between text-left h-full w-full relative group shadow-[0_0_10px_hsl(var(--primary)/0.05)] cursor-pointer"
+            {user?.account_type !== "staff" ? <div
+              className="bg-card border border-primary/40 hover:border-primary/60 transition-all rounded p-5 flex flex-col justify-between text-left h-full w-full relative group shadow-[0_0_10px_hsl(var(--primary)/0.05)]"
             >
               <div className="flex justify-between items-start w-full">
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-semibold text-muted-foreground">Mobile Money Credits</span>
                   <LiveBadge />
                 </div>
-                <Coins className="w-4 h-4 text-amber-500 transition-transform group-hover:scale-110" />
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleBalanceHidden(); }}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={balanceHidden ? "Show balance" : "Hide balance"}
+                  >
+                    {balanceHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                  <button onClick={() => navigate("/withdraw")} className="cursor-pointer">
+                    <Coins className="w-4 h-4 text-amber-500 transition-transform group-hover:scale-110" />
+                  </button>
+                </div>
               </div>
-              <div className="mt-3">
+              <button onClick={() => navigate("/withdraw")} className="mt-3 text-left cursor-pointer">
                 {isWalletLoading ? (
                   <Skeleton className="h-8 w-28" />
                 ) : (
-                  <h3 className="text-2xl font-black text-foreground tracking-tight">
+                  <h3 className={cn(
+                    "text-2xl font-black text-foreground tracking-tight",
+                    balanceHidden && "blur-sm select-none",
+                  )}>
                     UGX {(wallet?.balance ?? 0).toLocaleString()}
                   </h3>
                 )}
                 <p className="text-[11px] text-muted-foreground mt-1.5 font-medium">Net prepaid balance.</p>
-              </div>
-            </button> : <div className="bg-card border border-primary/40 rounded p-5 flex flex-col justify-between">
+              </button>
+            </div> : <div className="bg-card border border-primary/40 rounded p-5 flex flex-col justify-between">
               <span className="text-xs font-semibold text-muted-foreground">Agent Access</span>
               <h3 className="mt-3 text-xl font-black capitalize">{user?.staff_role || "Agent"}</h3>
               <p className="mt-1.5 text-[11px] text-muted-foreground">Branch operations only. Wallet and settings remain owner controlled.</p>

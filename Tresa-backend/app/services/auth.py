@@ -1,6 +1,7 @@
 import hmac
 import secrets
 from datetime import datetime, timedelta
+from uuid import uuid4
 
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
@@ -8,6 +9,7 @@ from sqlmodel import Session, select
 from app.models.email_verification import EmailVerification
 from app.models.user import User
 from app.models.staff import Staff
+from app.models.user_session import UserSession
 from app.schemas.auth import AuthResponse, UserResponse
 from app.services.email import send_welcome_email
 from app.services.security import create_access_token, hash_code, normalize_email
@@ -118,8 +120,19 @@ def user_response(user: User, session: Session | None = None) -> UserResponse:
         staff_role=staff.role if staff else None,
         staff_permissions=[item.strip() for item in (staff.permissions or "").split(",") if item.strip()] if staff else [],
         share_percentage=staff.share_percentage if staff else 0,
+        force_password_change=user.force_password_change,
     )
 
 
-def auth_response(user: User, session: Session | None = None) -> AuthResponse:
-    return AuthResponse(access_token=create_access_token(user), user=user_response(user, session))
+def auth_response(
+    user: User,
+    session: Session | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> AuthResponse:
+    jti = str(uuid4())
+    token = create_access_token(user, jti)
+    if session is not None:
+        session.add(UserSession(user_id=user.id, jti=jti, ip_address=ip_address, user_agent=user_agent))
+        session.commit()
+    return AuthResponse(access_token=token, user=user_response(user, session))

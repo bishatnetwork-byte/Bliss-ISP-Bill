@@ -33,6 +33,8 @@ from app.models import (
     VoucherActivationAudit,
     MessageDraft,
     MessageLog,
+    LoginAttempt,
+    UserSession,
 )
 
 
@@ -68,10 +70,13 @@ def init_db() -> None:
         VoucherActivationAudit,
         MessageDraft,
         MessageLog,
+        LoginAttempt,
+        UserSession,
     )
     SQLModel.metadata.create_all(engine)
     _ensure_staff_columns()
     _ensure_user_platform_columns()
+    _ensure_user_admin_columns()
     _ensure_router_columns()
     _ensure_notification_preference_columns()
     _ensure_voucher_purchase_columns()
@@ -142,6 +147,21 @@ def _ensure_user_platform_columns() -> None:
             'CREATE UNIQUE INDEX IF NOT EXISTS ix_user_account_subdomain '
             'ON "user" (account_subdomain) WHERE account_subdomain IS NOT NULL'
         ))
+
+
+def _ensure_user_admin_columns() -> None:
+    inspector = sa.inspect(engine)
+    if not inspector.has_table("user"):
+        return
+    columns = {column["name"] for column in inspector.get_columns("user")}
+    column_types = {
+        "force_password_change": "BOOLEAN DEFAULT FALSE NOT NULL",
+        "blocked_until": "TIMESTAMP",
+    }
+    with engine.begin() as conn:
+        for name, sql_type in column_types.items():
+            if name not in columns:
+                conn.execute(sa.text(f'ALTER TABLE "user" ADD COLUMN {name} {sql_type}'))
 
 
 def _ensure_telegram_connection_columns() -> None:

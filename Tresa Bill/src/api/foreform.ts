@@ -78,6 +78,7 @@ export interface UserResponse {
   staff_role: string | null;
   staff_permissions: string[];
   share_percentage: number;
+  force_password_change: boolean;
 }
 
 export interface AuthResponse {
@@ -121,18 +122,58 @@ export interface PlatformUserResponse {
   vouchers: number;
   wallet_balance: number;
   created_at: string;
+  blocked_until: string | null;
+  force_password_change: boolean;
 }
 
 export interface PlatformSettingsResponse {
   voucher_fee_type: "fixed" | "percentage";
   voucher_fee_value: number;
+  deposit_fee_type: "fixed" | "percentage";
   deposit_fee_percentage: number;
+  deposit_fee_fixed_amount: number;
+  withdrawal_fee_type: "fixed" | "percentage";
   withdrawal_fee_percentage: number;
+  withdrawal_fee_fixed_amount: number;
   withdrawal_min_amount: number;
   withdrawal_max_amount: number;
   voucher_prefix: string;
   voucher_prefix_order: "prefix-first" | "prefix-last";
   telegram_access_alerts: boolean;
+}
+
+export interface PlatformLoginAttemptResponse {
+  id: string;
+  email: string;
+  user_id: string | null;
+  user_name: string | null;
+  success: boolean;
+  ip_address: string | null;
+  user_agent: string | null;
+  failure_reason: string | null;
+  created_at: string;
+}
+
+export interface PlatformSessionResponse {
+  id: string;
+  user_id: string;
+  user_name: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+  last_seen_at: string;
+  revoked_at: string | null;
+}
+
+export interface PlatformNotificationResponse {
+  id: string;
+  user_id: string;
+  user_name: string;
+  category: string;
+  title: string;
+  body: string;
+  is_read: boolean;
+  created_at: string;
 }
 
 export interface PlatformWalletResponse {
@@ -1563,6 +1604,32 @@ export const renultApi = {
     deleteDnsRecord: (zoneId: string, recordId: string) =>
       apiRequest<{ message: string }>(`/platform-admin/dns/zones/${zoneId}/records/${recordId}`, { method: "DELETE" }),
     health: () => apiRequest<PlatformHealthResponse>("/platform-admin/health"),
+    createUser: (payload: { email: string; full_name: string; phone_number?: string; password?: string }) =>
+      apiRequest<{ user: PlatformUserResponse; temp_password: string | null }>("/platform-admin/users", { method: "POST", body: JSON.stringify(payload) }),
+    deleteUser: (userId: string) =>
+      apiRequest<{ message: string }>(`/platform-admin/users/${userId}`, { method: "DELETE" }),
+    blockUser: (userId: string, payload: { permanent: boolean; blocked_until?: string | null }) =>
+      apiRequest<PlatformUserResponse>(`/platform-admin/users/${userId}/block`, { method: "POST", body: JSON.stringify(payload) }),
+    unblockUser: (userId: string) =>
+      apiRequest<PlatformUserResponse>(`/platform-admin/users/${userId}/unblock`, { method: "POST" }),
+    resetUserPassword: (userId: string) =>
+      apiRequest<{ user_id: string; temp_password: string }>(`/platform-admin/users/${userId}/reset-password`, { method: "POST" }),
+    loginAttempts: (limit = 200) =>
+      apiRequest<PlatformLoginAttemptResponse[]>("/platform-admin/login-attempts", { query: { limit } }),
+    sessions: (limit = 200) =>
+      apiRequest<PlatformSessionResponse[]>("/platform-admin/sessions", { query: { limit } }),
+    revokeSession: (sessionId: string) =>
+      apiRequest<{ message: string }>(`/platform-admin/sessions/${sessionId}/revoke`, { method: "POST" }),
+    notifications: (limit = 200) =>
+      apiRequest<PlatformNotificationResponse[]>("/platform-admin/notifications", { query: { limit } }),
+    deleteNotification: (notificationId: string) =>
+      apiRequest<{ message: string }>(`/platform-admin/notifications/${notificationId}`, { method: "DELETE" }),
+    clearNotifications: () =>
+      apiRequest<{ message: string }>("/platform-admin/notifications", { method: "DELETE" }),
+    deleteMessageDiagnostic: (messageId: string) =>
+      apiRequest<{ message: string }>(`/platform-admin/message-diagnostics/${messageId}`, { method: "DELETE" }),
+    clearMessageDiagnostics: () =>
+      apiRequest<{ message: string }>("/platform-admin/message-diagnostics", { method: "DELETE" }),
   },
   messages: {
     contacts: (branchId: string, query?: { search?: string; limit?: number }) =>

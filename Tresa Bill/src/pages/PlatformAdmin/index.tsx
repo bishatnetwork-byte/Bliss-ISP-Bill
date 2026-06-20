@@ -1,6 +1,9 @@
 import {
   PlatformAllTransactionResponse,
   PlatformLedgerEntryFullResponse,
+  PlatformLoginAttemptResponse,
+  PlatformNotificationResponse,
+  PlatformSessionResponse,
   PlatformSettingsResponse,
   PlatformUserResponse,
   getAccountBaseDomain,
@@ -21,6 +24,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Banknote,
+  Bell,
   Calculator,
   ChevronLeft,
   ChevronRight,
@@ -30,6 +34,7 @@ import {
   FileClock,
   Globe2,
   HardDrive,
+  KeyRound,
   Loader2,
   Mail,
   MessageSquareWarning,
@@ -43,12 +48,14 @@ import {
   TrendingDown,
   TrendingUp,
   UserCog,
+  UserPlus,
   Users,
   Wifi,
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import ReportsPanel from "../AdminMode/Reports";
 import PlatformAdminLayout, { PlatformAdminSection } from "./PlatformAdminLayout";
 
 const ADMIN_TABS = [
@@ -62,8 +69,11 @@ const ADMIN_TABS = [
   ["storage", "Cloud Files"],
   ["dns", "DNS"],
   ["subadmins", "Subadmins"],
+  ["sessions", "Sessions & Logins"],
+  ["notifications", "Notifications"],
   ["system", "Health"],
   ["audit", "Admin Audit"],
+  ["reports", "Reports"],
 ] as const;
 
 const USER_SECTIONS = [
@@ -119,8 +129,8 @@ export default function PlatformAdminPage() {
   const usersQuery = useQuery({
     queryKey: ["platformAdmin", "users", userSearch],
     queryFn: () => renultApi.platformAdmin.users(userSearch),
-    enabled: (activeTab === "users" || activeTab === "subadmins" || activeTab === "broadcasts")
-      && (permissions.has("users") || permissions.has("subadmins") || permissions.has("broadcasts")),
+    enabled: (activeTab === "users" || activeTab === "subadmins" || activeTab === "broadcasts" || activeTab === "reports")
+      && (permissions.has("users") || permissions.has("subadmins") || permissions.has("broadcasts") || permissions.has("reports")),
   });
   const settingsQuery = useQuery({
     queryKey: ["platformAdmin", "settings"],
@@ -140,7 +150,7 @@ export default function PlatformAdminPage() {
   const allTxnsQuery = useQuery({
     queryKey: ["platformAdmin", "allTransactions"],
     queryFn: () => renultApi.wallets.platformAllTransactions(),
-    enabled: activeTab === "finance" && permissions.has("finance"),
+    enabled: (activeTab === "finance" && permissions.has("finance")) || (activeTab === "reports" && permissions.has("reports")),
   });
   const tunnels = useQuery({
     queryKey: ["platformAdmin", "tunnels"],
@@ -152,7 +162,7 @@ export default function PlatformAdminPage() {
   const voucherAudit = useQuery({
     queryKey: ["platformAdmin", "voucherAudit", voucherSearch],
     queryFn: () => renultApi.platformAdmin.voucherAudit(voucherSearch),
-    enabled: activeTab === "voucher_audit" && permissions.has("voucher_audit"),
+    enabled: (activeTab === "voucher_audit" && permissions.has("voucher_audit")) || (activeTab === "reports" && permissions.has("reports")),
   });
   const [messageSearch, setMessageSearch] = useState("");
   const [messageStatus, setMessageStatus] = useState("all");
@@ -194,7 +204,22 @@ export default function PlatformAdminPage() {
   const adminAudit = useQuery({
     queryKey: ["platformAdmin", "audit"],
     queryFn: renultApi.platformAdmin.audit,
-    enabled: activeTab === "audit" && permissions.has("audit"),
+    enabled: (activeTab === "audit" && permissions.has("audit")) || (activeTab === "reports" && permissions.has("reports")),
+  });
+  const sessionsQuery = useQuery({
+    queryKey: ["platformAdmin", "sessions"],
+    queryFn: () => renultApi.platformAdmin.sessions(),
+    enabled: activeTab === "sessions" && permissions.has("sessions"),
+  });
+  const loginAttemptsQuery = useQuery({
+    queryKey: ["platformAdmin", "loginAttempts"],
+    queryFn: () => renultApi.platformAdmin.loginAttempts(),
+    enabled: activeTab === "sessions" && permissions.has("sessions"),
+  });
+  const notificationsQuery = useQuery({
+    queryKey: ["platformAdmin", "notifications"],
+    queryFn: () => renultApi.platformAdmin.notifications(),
+    enabled: activeTab === "notifications" && permissions.has("notifications"),
   });
 
   const updateUser = useMutation({
@@ -246,6 +271,72 @@ export default function PlatformAdminPage() {
       toast.success("Wallet status updated.");
     },
   });
+  const createUser = useMutation({
+    mutationFn: renultApi.platformAdmin.createUser,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "users"] });
+      toast.success(result.temp_password ? `User created. Temp password: ${result.temp_password}` : "User created.");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not create user."),
+  });
+  const deleteUser = useMutation({
+    mutationFn: renultApi.platformAdmin.deleteUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "users"] });
+      toast.success("User removed.");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not remove user."),
+  });
+  const blockUser = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: { permanent: boolean; blocked_until?: string | null } }) =>
+      renultApi.platformAdmin.blockUser(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "users"] });
+      toast.success("User blocked.");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not block user."),
+  });
+  const unblockUser = useMutation({
+    mutationFn: renultApi.platformAdmin.unblockUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "users"] });
+      toast.success("User unblocked.");
+    },
+  });
+  const resetUserPassword = useMutation({
+    mutationFn: renultApi.platformAdmin.resetUserPassword,
+    onSuccess: (result) => toast.success(`Temp password: ${result.temp_password}`),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not reset password."),
+  });
+  const revokeSession = useMutation({
+    mutationFn: renultApi.platformAdmin.revokeSession,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "sessions"] });
+      toast.success("Session revoked.");
+    },
+  });
+  const deleteNotification = useMutation({
+    mutationFn: renultApi.platformAdmin.deleteNotification,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["platformAdmin", "notifications"] }),
+  });
+  const clearNotifications = useMutation({
+    mutationFn: renultApi.platformAdmin.clearNotifications,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "notifications"] });
+      toast.success(result.message);
+    },
+  });
+  const deleteMessageDiagnostic = useMutation({
+    mutationFn: renultApi.platformAdmin.deleteMessageDiagnostic,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["platformAdmin", "messageDiagnostics"] }),
+  });
+  const clearMessageDiagnostics = useMutation({
+    mutationFn: renultApi.platformAdmin.clearMessageDiagnostics,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "messageDiagnostics"] });
+      toast.success(result.message);
+    },
+  });
 
   return (
     <PlatformAdminLayout activeSection={activeTab} onSectionChange={changeSection}>
@@ -276,6 +367,11 @@ export default function PlatformAdminPage() {
             onUpdate={(id, payload) => updateUser.mutate({ id, payload })}
             onSyncSubdomain={(id) => syncUserSubdomain.mutate(id)}
             onView={(id) => navigate(`/platform-admin/users/${id}`)}
+            onCreate={(payload) => createUser.mutate(payload)}
+            onDelete={(id) => deleteUser.mutate(id)}
+            onBlock={(id, payload) => blockUser.mutate({ id, payload })}
+            onUnblock={(id) => unblockUser.mutate(id)}
+            onResetPassword={(id) => resetUserPassword.mutate(id)}
           />
         )}
         {activeTab === "finance" && (
@@ -303,6 +399,8 @@ export default function PlatformAdminPage() {
             onSearch={setMessageSearch}
             status={messageStatus}
             onStatus={setMessageStatus}
+            onDelete={(id) => deleteMessageDiagnostic.mutate(id)}
+            onClearAll={() => window.confirm("Clear all message log entries?") && clearMessageDiagnostics.mutate()}
           />
         )}
         {activeTab === "tunnels" && (
@@ -317,11 +415,36 @@ export default function PlatformAdminPage() {
         {activeTab === "subadmins" && (
           <SubadminsPanel users={usersQuery.data || []} onSave={(id, role, next) => updateSubadmin.mutate({ id, role, permissions: next })} />
         )}
+        {activeTab === "sessions" && (
+          <SessionsPanel
+            sessions={sessionsQuery.data || []}
+            loginAttempts={loginAttemptsQuery.data || []}
+            loading={sessionsQuery.isLoading || loginAttemptsQuery.isLoading}
+            onRevoke={(id) => revokeSession.mutate(id)}
+          />
+        )}
+        {activeTab === "notifications" && (
+          <NotificationsPanel
+            rows={notificationsQuery.data || []}
+            loading={notificationsQuery.isLoading}
+            onDelete={(id) => deleteNotification.mutate(id)}
+            onClearAll={() => window.confirm("Clear all notifications?") && clearNotifications.mutate()}
+          />
+        )}
         {activeTab === "system" && (
           <HealthPanel data={health.data} loading={health.isLoading} onRefresh={() => health.refetch()} />
         )}
         {activeTab === "audit" && (
           <AdminAuditPanel rows={adminAudit.data || []} loading={adminAudit.isLoading} />
+        )}
+        {activeTab === "reports" && (
+          <ReportsPanel
+            users={usersQuery.data || []}
+            transactions={allTxnsQuery.data || []}
+            audit={adminAudit.data || []}
+            voucherAudit={voucherAudit.data || []}
+            loading={usersQuery.isLoading || allTxnsQuery.isLoading || adminAudit.isLoading || voucherAudit.isLoading}
+          />
         )}
       </div>
     </PlatformAdminLayout>
@@ -357,16 +480,49 @@ function Overview({ data, loading }: { data: Awaited<ReturnType<typeof renultApi
   );
 }
 
-function UsersPanel({ users, loading, search, onSearch, onUpdate, onSyncSubdomain, onView }: {
+function UsersPanel({ users, loading, search, onSearch, onUpdate, onSyncSubdomain, onView, onCreate, onDelete, onBlock, onUnblock, onResetPassword }: {
   users: PlatformUserResponse[]; loading: boolean; search: string; onSearch: (value: string) => void;
   onUpdate: (id: string, payload: Partial<Pick<PlatformUserResponse, "is_active" | "is_verified" | "allowed_sections" | "account_subdomain" | "subdomain_enabled">>) => void;
   onSyncSubdomain: (id: string) => void;
   onView: (id: string) => void;
+  onCreate: (payload: { email: string; full_name: string; phone_number?: string }) => void;
+  onDelete: (id: string) => void;
+  onBlock: (id: string, payload: { permanent: boolean; blocked_until?: string | null }) => void;
+  onUnblock: (id: string) => void;
+  onResetPassword: (id: string) => void;
 }) {
-  return <Panel title="Global Users" icon={Users} action={<Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Search name, email, phone" className="h-9 w-72" />}>
+  const handleCreate = () => {
+    const full_name = window.prompt("Full name for the new user:");
+    if (!full_name) return;
+    const email = window.prompt("Email address:");
+    if (!email) return;
+    const phone_number = window.prompt("Phone number (optional):") || undefined;
+    onCreate({ full_name, email, phone_number });
+  };
+  const handleBlock = (id: string) => {
+    const permanent = window.confirm("Block permanently? Cancel to set a temporary block instead.");
+    if (permanent) {
+      onBlock(id, { permanent: true });
+      return;
+    }
+    const days = window.prompt("Block for how many days?", "7");
+    if (!days || isNaN(Number(days))) return;
+    const blocked_until = new Date(Date.now() + Number(days) * 86400000).toISOString();
+    onBlock(id, { permanent: false, blocked_until });
+  };
+  return <Panel
+    title="Global Users"
+    icon={Users}
+    action={<div className="flex gap-2">
+      <Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Search name, email, phone" className="h-9 w-72" />
+      <Button size="sm" className="h-9 gap-1.5 text-xs" onClick={handleCreate}><UserPlus className="h-3.5 w-3.5" />Add User</Button>
+    </div>}
+  >
     {loading ? <Loading /> : <div className="overflow-x-auto"><table className="w-full text-xs">
       <thead><tr className="border-b text-left">{["User", "Phone", "Assets", "Wallet", "Sections", "Account Subdomain", "Status", "Actions"].map((x) => <th key={x} className="p-3">{x}</th>)}</tr></thead>
-      <tbody>{users.map((item) => <tr key={item.id} className="border-b align-top">
+      <tbody>{users.map((item) => {
+        const blocked = item.blocked_until && new Date(item.blocked_until) > new Date();
+        return <tr key={item.id} className="border-b align-top">
         <td className="p-3"><p className="font-bold">{item.full_name}</p><p className="text-muted-foreground">{item.email}</p><p className="mt-1">{formatDate(item.created_at)}</p></td>
         <td className="p-3">{item.phone_number || "N/A"}</td>
         <td className="p-3">{item.branches} branches<br />{item.routers} routers<br />{item.vouchers} vouchers</td>
@@ -379,13 +535,24 @@ function UsersPanel({ users, loading, search, onSearch, onUpdate, onSyncSubdomai
             onSync={() => onSyncSubdomain(item.id)}
           />
         </td>
-        <td className="p-3"><Status label={item.is_active ? "Active" : "Suspended"} ok={item.is_active} /><div className="mt-2"><Status label={item.is_verified ? "Verified" : "Unverified"} ok={item.is_verified} /></div></td>
+        <td className="p-3">
+          <Status label={item.is_active ? "Active" : "Suspended"} ok={item.is_active} />
+          <div className="mt-2"><Status label={item.is_verified ? "Verified" : "Unverified"} ok={item.is_verified} /></div>
+          {blocked && <div className="mt-2"><Status label={`Blocked until ${formatDate(item.blocked_until)}`} ok={false} /></div>}
+          {item.force_password_change && <div className="mt-2"><Status label="Must reset password" ok={false} /></div>}
+        </td>
         <td className="p-3 space-y-2">
           <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onView(item.id)}>View Profile</Button>
           <Button size="sm" variant={item.is_active ? "destructive" : "outline"} className="h-8 text-xs" onClick={() => onUpdate(item.id, { is_active: !item.is_active })}>{item.is_active ? "Suspend" : "Activate"}</Button>
           {!item.is_verified && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onUpdate(item.id, { is_verified: true })}>Verify</Button>}
+          {blocked
+            ? <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onUnblock(item.id)}>Unblock</Button>
+            : <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => handleBlock(item.id)}>Block</Button>}
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => window.confirm(`Reset password for ${item.email}?`) && onResetPassword(item.id)}>Reset Password</Button>
+          <Button size="sm" variant="destructive" className="h-8 text-xs" onClick={() => window.confirm(`Remove ${item.email}? This only works if they own no branches/routers.`) && onDelete(item.id)}>Remove</Button>
         </td>
-      </tr>)}</tbody>
+      </tr>;
+      })}</tbody>
     </table></div>}
   </Panel>;
 }
@@ -1045,8 +1212,22 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
                     </select>
                   </Field>
                   <Field label="Voucher fee value"><Input type="number" value={form.voucher_fee_value} onChange={e => setForm({ ...form, voucher_fee_value: Number(e.target.value) })} /></Field>
-                  <Field label="Deposit fee (%)"><Input type="number" value={form.deposit_fee_percentage} onChange={e => setForm({ ...form, deposit_fee_percentage: Number(e.target.value) })} /></Field>
-                  <Field label="Withdrawal fee (%)"><Input type="number" value={form.withdrawal_fee_percentage} onChange={e => setForm({ ...form, withdrawal_fee_percentage: Number(e.target.value) })} /></Field>
+                  <Field label="Deposit fee type">
+                    <select className="h-10 w-full rounded border bg-background px-3 text-sm" value={form.deposit_fee_type} onChange={e => setForm({ ...form, deposit_fee_type: e.target.value as "fixed" | "percentage" })}>
+                      <option value="percentage">Percentage</option><option value="fixed">Fixed UGX</option>
+                    </select>
+                  </Field>
+                  {form.deposit_fee_type === "fixed"
+                    ? <Field label="Deposit fee (fixed UGX)"><Input type="number" value={form.deposit_fee_fixed_amount} onChange={e => setForm({ ...form, deposit_fee_fixed_amount: Number(e.target.value) })} /></Field>
+                    : <Field label="Deposit fee (%)"><Input type="number" value={form.deposit_fee_percentage} onChange={e => setForm({ ...form, deposit_fee_percentage: Number(e.target.value) })} /></Field>}
+                  <Field label="Withdrawal fee type">
+                    <select className="h-10 w-full rounded border bg-background px-3 text-sm" value={form.withdrawal_fee_type} onChange={e => setForm({ ...form, withdrawal_fee_type: e.target.value as "fixed" | "percentage" })}>
+                      <option value="percentage">Percentage</option><option value="fixed">Fixed UGX</option>
+                    </select>
+                  </Field>
+                  {form.withdrawal_fee_type === "fixed"
+                    ? <Field label="Withdrawal fee (fixed UGX)"><Input type="number" value={form.withdrawal_fee_fixed_amount} onChange={e => setForm({ ...form, withdrawal_fee_fixed_amount: Number(e.target.value) })} /></Field>
+                    : <Field label="Withdrawal fee (%)"><Input type="number" value={form.withdrawal_fee_percentage} onChange={e => setForm({ ...form, withdrawal_fee_percentage: Number(e.target.value) })} /></Field>}
                   <Field label="Min withdrawal payout (UGX)"><Input type="number" value={form.withdrawal_min_amount} onChange={e => setForm({ ...form, withdrawal_min_amount: Number(e.target.value) })} /></Field>
                   <Field label="Max withdrawal payout (UGX)"><Input type="number" value={form.withdrawal_max_amount} onChange={e => setForm({ ...form, withdrawal_max_amount: Number(e.target.value) })} /></Field>
                   <Field label="Default voucher prefix"><Input value={form.voucher_prefix} onChange={e => setForm({ ...form, voucher_prefix: e.target.value.toUpperCase() })} /></Field>
@@ -1111,6 +1292,8 @@ function MessageDiagnosticsPanel({
   onSearch,
   status,
   onStatus,
+  onDelete,
+  onClearAll,
 }: {
   rows: Awaited<ReturnType<typeof renultApi.platformAdmin.messageDiagnostics>>;
   loading: boolean;
@@ -1118,6 +1301,8 @@ function MessageDiagnosticsPanel({
   onSearch: (value: string) => void;
   status: string;
   onStatus: (value: string) => void;
+  onDelete: (id: string) => void;
+  onClearAll: () => void;
 }) {
   const action = (
     <div className="flex gap-2">
@@ -1138,13 +1323,14 @@ function MessageDiagnosticsPanel({
         <option value="failed">Failed</option>
         <option value="sending">Sending</option>
       </select>
+      <Button size="sm" variant="destructive" className="h-9 text-xs" onClick={onClearAll}>Clear All</Button>
     </div>
   );
   return (
     <Panel title="SMS Delivery Diagnostics" icon={MessageSquareWarning} action={action}>
       {loading ? <Loading /> : (
         <SimpleTable
-          headers={["Time", "Branch / Sender", "Message", "Recipients", "Delivery", "Charge", "Failure / Provider"]}
+          headers={["Time", "Branch / Sender", "Message", "Recipients", "Delivery", "Charge", "Failure / Provider", ""]}
           rows={rows.map((row) => [
             formatDate(row.created_at),
             <div key={`${row.id}-owner`}><b>{row.branch_name}</b><p className="text-muted-foreground">{row.user_name}</p></div>,
@@ -1160,6 +1346,7 @@ function MessageDiagnosticsPanel({
                 </pre>
               )}
             </div>,
+            <Button key={`${row.id}-delete`} size="icon" variant="ghost" className="text-destructive" onClick={() => onDelete(row.id)}><Trash2 className="h-4 w-4" /></Button>,
           ])}
         />
       )}
@@ -1172,7 +1359,7 @@ function TunnelsPanel({ rows, loading, onToggle }: { rows: Awaited<ReturnType<ty
     {loading ? <Loading /> : <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b text-left">{["Router", "Owner", "Status", "Tunnel", "Ports", "Last Seen", "Control"].map((x) => <th key={x} className="p-3">{x}</th>)}</tr></thead><tbody>{rows.map((x) => <tr key={x.id} className="border-b">
       <td className="p-3 font-bold">{x.router_name}<p className="font-normal text-muted-foreground">{x.branch_name}</p></td><td className="p-3">{x.owner_name}</td>
       <td className="p-3"><Status label={x.status} ok={["connected", "online"].includes(x.status)} /><p className="mt-1">Heartbeat: {x.heartbeat_status}</p><p>SNMP: {x.snmp_status}</p></td>
-      <td className="p-3 font-mono">{x.tunnel_ip || "Not provisioned"}<p>{x.ppp_username || ""}</p></td><td className="p-3">API {x.nat_port || "N/A"}<br />Winbox {x.winbox_nat_port || "N/A"}</td><td className="p-3">{formatDate(x.last_seen)}</td>
+      <td className="p-3 font-mono">{x.tunnel_ip || "Not provisioned"}<p>{x.ppp_username || ""}</p></td><td className="p-3">API {x.nat_port || "N/A"}<br />Winbox {x.winbox_nat_port || "N/A"}<br />{x.tunnel_ip && <a href={`http://${x.tunnel_ip}`} target="_blank" rel="noreferrer" className="text-primary underline">WebFig ↗</a>}</td><td className="p-3">{formatDate(x.last_seen)}</td>
       <td className="p-3"><Button size="sm" variant="outline" onClick={() => onToggle(x.id, !x.is_active)}>{x.is_active ? "Disable" : "Enable"}</Button></td>
     </tr>)}</tbody></table></div>}
   </Panel>;
@@ -1227,6 +1414,70 @@ function HealthPanel({ data, loading, onRefresh }: { data: Awaited<ReturnType<ty
 
 function AdminAuditPanel({ rows, loading }: { rows: Awaited<ReturnType<typeof renultApi.platformAdmin.audit>>; loading: boolean }) {
   return <Panel title="Platform Admin Audit" icon={ShieldCheck}>{loading ? <Loading /> : <SimpleTable headers={["Time", "Admin", "Action", "Target", "Details"]} rows={rows.map((x) => [formatDate(x.created_at), x.actor_name || "System", x.action, `${x.target_type}${x.target_id ? ` / ${x.target_id}` : ""}`, JSON.stringify(x.details || {})])} />}</Panel>;
+}
+
+function SessionsPanel({ sessions, loginAttempts, loading, onRevoke }: {
+  sessions: PlatformSessionResponse[];
+  loginAttempts: PlatformLoginAttemptResponse[];
+  loading: boolean;
+  onRevoke: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <Panel title="Active Sessions" icon={KeyRound}>
+        {loading ? <Loading /> : <SimpleTable
+          headers={["User", "IP Address", "Device", "Started", "Last Seen", "Action"]}
+          rows={sessions.map((s) => [
+            s.user_name,
+            s.ip_address || "N/A",
+            <span key={`${s.id}-ua`} className="max-w-xs break-all text-[10px]">{s.user_agent || "N/A"}</span>,
+            formatDate(s.created_at),
+            formatDate(s.last_seen_at),
+            <Button key={`${s.id}-revoke`} size="sm" variant="destructive" className="h-8 text-xs" onClick={() => window.confirm(`Revoke ${s.user_name}'s session? They will be logged out.`) && onRevoke(s.id)}>Revoke</Button>,
+          ])}
+        />}
+      </Panel>
+      <Panel title="Login Attempts" icon={ShieldCheck}>
+        {loading ? <Loading /> : <SimpleTable
+          headers={["Time", "Email", "Result", "IP Address", "Failure Reason"]}
+          rows={loginAttempts.map((a) => [
+            formatDate(a.created_at),
+            a.email,
+            <Status key={`${a.id}-status`} label={a.success ? "Success" : "Failed"} ok={a.success} />,
+            a.ip_address || "N/A",
+            a.failure_reason || "—",
+          ])}
+        />}
+      </Panel>
+    </div>
+  );
+}
+
+function NotificationsPanel({ rows, loading, onDelete, onClearAll }: {
+  rows: PlatformNotificationResponse[];
+  loading: boolean;
+  onDelete: (id: string) => void;
+  onClearAll: () => void;
+}) {
+  return (
+    <Panel
+      title="Platform Notifications"
+      icon={Bell}
+      action={<Button size="sm" variant="destructive" className="h-9 text-xs" onClick={onClearAll}>Clear All</Button>}
+    >
+      {loading ? <Loading /> : <SimpleTable
+        headers={["Time", "User", "Category", "Title", "Body", ""]}
+        rows={rows.map((n) => [
+          formatDate(n.created_at),
+          n.user_name,
+          <Badge key={`${n.id}-cat`} variant="outline" className="text-[10px]">{n.category}</Badge>,
+          n.title,
+          <span key={`${n.id}-body`} className="max-w-sm break-words">{n.body}</span>,
+          <Button key={`${n.id}-delete`} size="icon" variant="ghost" className="text-destructive" onClick={() => onDelete(n.id)}><Trash2 className="h-4 w-4" /></Button>,
+        ])}
+      />}
+    </Panel>
+  );
 }
 
 function Panel({ title, icon: Icon, action, children }: { title: string; icon: typeof Users; action?: React.ReactNode; children: React.ReactNode }) {
