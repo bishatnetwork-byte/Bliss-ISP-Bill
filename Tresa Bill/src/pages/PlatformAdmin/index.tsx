@@ -369,19 +369,6 @@ export default function PlatformAdminPage() {
   return (
     <PlatformAdminLayout activeSection={activeTab} onSectionChange={changeSection}>
       <div className="space-y-5 px-4 py-6 sm:px-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black">Platform Administration</h1>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Global operations, finance, infrastructure, communications, and access control.
-            </p>
-          </div>
-          <Badge className="border-none bg-primary/10 text-primary">
-            {user?.platform_role === "superadmin" ? "Superadmin" : "Subadmin"}
-          </Badge>
-        </div>
 
         {activeTab === "overview" && (
           <Overview data={overview.data} loading={overview.isLoading} />
