@@ -30,6 +30,7 @@ from app.models.voucher_purchase import VoucherPurchase
 from app.schemas.auth import MessageResponse
 from app.schemas.platform_admin import (
     PlatformAuditResponse,
+    PlatformBranchUpdate,
     PlatformBlockRequest,
     PlatformBroadcastRequest,
     PlatformBroadcastResponse,
@@ -502,6 +503,39 @@ def user_detail(
             for voucher in vouchers
         ],
     )
+
+
+@router.put("/users/{user_id}/branches/{branch_id}", response_model=MessageResponse)
+@router.patch("/users/{user_id}/branches/{branch_id}", response_model=MessageResponse)
+def update_user_branch(
+    user_id: UUID,
+    branch_id: UUID,
+    payload: PlatformBranchUpdate,
+    session: SessionDep,
+    admin: User = _admin("users"),
+) -> MessageResponse:
+    branch = session.exec(
+        select(Branch)
+        .where(Branch.id == branch_id)
+        .where(Branch.user_id == user_id)
+    ).first()
+    if not branch:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Branch not found for this user")
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Branch name cannot be blank")
+    previous_name = branch.name
+    branch.name = name
+    branch.avatar_url = get_branch_avatar(name)
+    branch.updated_at = datetime.utcnow()
+    session.add(branch)
+    session.commit()
+    audit(session, admin, "user_branch_updated", "branch", str(branch.id), {
+        "user_id": str(user_id),
+        "previous_name": previous_name,
+        "name": name,
+    })
+    return MessageResponse(message="Branch name updated")
 
 
 @router.post("/users", response_model=PlatformUserCreateResponse, status_code=status.HTTP_201_CREATED)

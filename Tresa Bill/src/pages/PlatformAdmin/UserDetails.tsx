@@ -54,6 +54,7 @@ function UserProfile({ data, userId }: { data: Awaited<ReturnType<typeof renultA
   const user = data.user;
   const [managingRouter, setManagingRouter] = useState<{ id: string; name: string } | null>(null);
   const [editing, setEditing] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<(typeof data.branches)[number] | null>(null);
   return (
     <>
       <Card className="shadow-none border-gray-100 rounded">
@@ -86,6 +87,7 @@ function UserProfile({ data, userId }: { data: Awaited<ReturnType<typeof renultA
       </Card>
 
       <EditUserDialog open={editing} onOpenChange={setEditing} user={user} userId={userId} />
+      <EditBranchDialog key={editingBranch?.id || "closed"} branch={editingBranch} onOpenChange={(open) => !open && setEditingBranch(null)} userId={userId} />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric title="Branches" value={user.branches} icon={Building2} />
@@ -107,7 +109,7 @@ function UserProfile({ data, userId }: { data: Awaited<ReturnType<typeof renultA
         <CardHeader><CardTitle className="text-sm">Branches</CardTitle></CardHeader>
         <CardContent>
           <Table
-            headers={["Branch", "Routers", "Vouchers", "Wallet", "Status", "Created"]}
+            headers={["Branch", "Routers", "Vouchers", "Wallet", "Status", "Created", ""]}
             rows={data.branches.map((branch) => [
               branch.name,
               branch.routers,
@@ -115,6 +117,9 @@ function UserProfile({ data, userId }: { data: Awaited<ReturnType<typeof renultA
               money(branch.wallet_balance),
               branch.wallet_frozen ? "Frozen" : "Active",
               formatDate(branch.created_at),
+              <Button key={`${branch.id}-edit`} size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setEditingBranch(branch)}>
+                <Pencil className="h-3.5 w-3.5" />Edit
+              </Button>,
             ])}
           />
         </CardContent>
@@ -165,6 +170,51 @@ function UserProfile({ data, userId }: { data: Awaited<ReturnType<typeof renultA
         </CardContent>
       </Card>
     </>
+  );
+}
+
+function EditBranchDialog({ branch, onOpenChange, userId }: {
+  branch: Awaited<ReturnType<typeof renultApi.platformAdmin.user>>["branches"][number] | null;
+  onOpenChange: (open: boolean) => void;
+  userId: string;
+}) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(branch?.name || "");
+  const update = useMutation({
+    mutationFn: () => renultApi.platformAdmin.updateUserBranch(userId, branch!.id, { name: name.trim() }, "PATCH"),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["platformAdmin", "user", userId] });
+      toast.success("Branch name updated.");
+      onOpenChange(false);
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update branch name."),
+  });
+  const handleOpenChange = (open: boolean) => {
+    if (open && branch) setName(branch.name);
+    onOpenChange(open);
+  };
+
+  return (
+    <Dialog open={Boolean(branch)} onOpenChange={handleOpenChange}>
+      <DialogContent>
+        <form onSubmit={(event) => { event.preventDefault(); update.mutate(); }} className="space-y-5">
+          <DialogHeader>
+            <DialogTitle>Edit branch name</DialogTitle>
+            <DialogDescription>Rename this user's branch across the platform.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="admin-branch-name">Branch name</Label>
+            <Input id="admin-branch-name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={120} autoFocus />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={update.isPending}>Cancel</Button>
+            <Button type="submit" disabled={update.isPending || !name.trim()}>
+              {update.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save branch
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

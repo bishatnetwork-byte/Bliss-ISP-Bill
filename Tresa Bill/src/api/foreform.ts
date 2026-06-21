@@ -1580,6 +1580,8 @@ export const renultApi = {
       apiRequest<PlatformUserDetailResponse>(`/platform-admin/users/${userId}`),
     updateUser: (userId: string, payload: PlatformUserUpdate, method: "PATCH" | "PUT" = "PATCH") =>
       apiRequest<PlatformUserResponse>(`/platform-admin/users/${userId}`, { method, body: JSON.stringify(payload) }),
+    updateUserBranch: (userId: string, branchId: string, payload: { name: string }, method: "PATCH" | "PUT" = "PATCH") =>
+      apiRequest<{ message: string }>(`/platform-admin/users/${userId}/branches/${branchId}`, { method, body: JSON.stringify(payload) }),
     syncUserSubdomain: (userId: string) =>
       apiRequest<{ message: string }>(`/platform-admin/users/${userId}/subdomain/sync`, { method: "POST" }),
     updateSubadmin: (userId: string, payload: { role: "subadmin" | "none"; permissions: string[] }) =>

@@ -98,6 +98,10 @@ class PlatformUserDetailResponse(BaseModel):
     recent_vouchers: list[PlatformUserVoucherResponse]
 
 
+class PlatformBranchUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
 class PlatformSubadminUpdate(BaseModel):
     role: Optional[str] = Field(default="subadmin", pattern="^(subadmin|none)$")
     permissions: list[str] = Field(default_factory=list)
