@@ -45,6 +45,9 @@ class PlatformUserResponse(BaseModel):
 
 
 class PlatformUserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    phone_number: Optional[str] = Field(default=None, max_length=30)
     is_active: Optional[bool] = None
     is_verified: Optional[bool] = None
     allowed_sections: Optional[list[str]] = None

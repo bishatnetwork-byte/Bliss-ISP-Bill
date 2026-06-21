@@ -1,11 +1,14 @@
-import { PortalAdUpsert, getAccountBaseDomain, renultApi } from "@/api/foreform";
+import { PlatformUserUpdate, PortalAdUpsert, getAccountBaseDomain, renultApi } from "@/api/foreform";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Building2, KeyRound, Loader2, Megaphone, Router, Ticket, Wallet } from "lucide-react";
+import { ArrowLeft, Building2, KeyRound, Loader2, Megaphone, Pencil, Router, Ticket, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -40,16 +43,17 @@ export default function PlatformUserDetailsPage() {
             {detail.error instanceof Error ? detail.error.message : "User profile could not be loaded."}
           </div>
         ) : (
-          <UserProfile data={detail.data} />
+          <UserProfile data={detail.data} userId={userId} />
         )}
       </div>
     </PlatformAdminLayout>
   );
 }
 
-function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platformAdmin.user>> }) {
+function UserProfile({ data, userId }: { data: Awaited<ReturnType<typeof renultApi.platformAdmin.user>>; userId: string }) {
   const user = data.user;
   const [managingRouter, setManagingRouter] = useState<{ id: string; name: string } | null>(null);
+  const [editing, setEditing] = useState(false);
   return (
     <>
       <Card className="shadow-none border-gray-100 rounded">
@@ -67,6 +71,9 @@ function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platf
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => setEditing(true)}>
+              <Pencil className="h-4 w-4" />Edit profile
+            </Button>
             <Status label={user.is_active ? "Active" : "Suspended"} ok={user.is_active} />
             <Status label={user.is_verified ? "Verified" : "Unverified"} ok={user.is_verified} />
             {user.account_subdomain && (
@@ -77,6 +84,8 @@ function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platf
           </div>
         </CardContent>
       </Card>
+
+      <EditUserDialog open={editing} onOpenChange={setEditing} user={user} userId={userId} />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric title="Branches" value={user.branches} icon={Building2} />
@@ -156,6 +165,82 @@ function UserProfile({ data }: { data: Awaited<ReturnType<typeof renultApi.platf
         </CardContent>
       </Card>
     </>
+  );
+}
+
+function EditUserDialog({ open, onOpenChange, user, userId }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  user: Awaited<ReturnType<typeof renultApi.platformAdmin.user>>["user"];
+  userId: string;
+}) {
+  const queryClient = useQueryClient();
+  const [fullName, setFullName] = useState(user.full_name);
+  const [email, setEmail] = useState(user.email);
+  const [phoneNumber, setPhoneNumber] = useState(user.phone_number || "");
+  const update = useMutation({
+    mutationFn: (payload: PlatformUserUpdate) => renultApi.platformAdmin.updateUser(userId, payload, "PATCH"),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["platformAdmin", "user", userId] }),
+        queryClient.invalidateQueries({ queryKey: ["platformAdmin", "users"] }),
+      ]);
+      toast.success("User profile updated.");
+      onOpenChange(false);
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update user profile."),
+  });
+
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
+      setFullName(user.full_name);
+      setEmail(user.email);
+      setPhoneNumber(user.phone_number || "");
+    }
+    onOpenChange(next);
+  };
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const payload: PlatformUserUpdate = {
+      full_name: fullName.trim(),
+      email: email.trim(),
+      phone_number: phoneNumber.trim() || null,
+    };
+    update.mutate(payload);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent>
+        <form onSubmit={submit} className="space-y-5">
+          <DialogHeader>
+            <DialogTitle>Edit user profile</DialogTitle>
+            <DialogDescription>Update the user's account identity and contact details.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="admin-user-name">Full name</Label>
+              <Input id="admin-user-name" value={fullName} onChange={(event) => setFullName(event.target.value)} required maxLength={200} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="admin-user-email">Email address</Label>
+              <Input id="admin-user-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="admin-user-phone">Phone number</Label>
+              <Input id="admin-user-phone" type="tel" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} maxLength={30} placeholder="Optional" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={update.isPending}>Cancel</Button>
+            <Button type="submit" disabled={update.isPending || !fullName.trim() || !email.trim()}>
+              {update.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save changes
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

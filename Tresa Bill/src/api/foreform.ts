@@ -126,6 +126,11 @@ export interface PlatformUserResponse {
   force_password_change: boolean;
 }
 
+export type PlatformUserUpdate = Partial<Pick<PlatformUserResponse,
+  "email" | "full_name" | "phone_number" | "is_active" | "is_verified" |
+  "allowed_sections" | "account_subdomain" | "subdomain_enabled"
+>>;
+
 export interface PlatformSettingsResponse {
   voucher_fee_type: "fixed" | "percentage";
   voucher_fee_value: number;
@@ -1573,8 +1578,8 @@ export const renultApi = {
     users: (search = "") => apiRequest<PlatformUserResponse[]>("/platform-admin/users", { query: { search: search || undefined, limit: 500 } }),
     user: (userId: string) =>
       apiRequest<PlatformUserDetailResponse>(`/platform-admin/users/${userId}`),
-    updateUser: (userId: string, payload: Partial<Pick<PlatformUserResponse, "is_active" | "is_verified" | "allowed_sections" | "account_subdomain" | "subdomain_enabled">>) =>
-      apiRequest<PlatformUserResponse>(`/platform-admin/users/${userId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    updateUser: (userId: string, payload: PlatformUserUpdate, method: "PATCH" | "PUT" = "PATCH") =>
+      apiRequest<PlatformUserResponse>(`/platform-admin/users/${userId}`, { method, body: JSON.stringify(payload) }),
     syncUserSubdomain: (userId: string) =>
       apiRequest<{ message: string }>(`/platform-admin/users/${userId}/subdomain/sync`, { method: "POST" }),
     updateSubadmin: (userId: string, payload: { role: "subadmin" | "none"; permissions: string[] }) =>

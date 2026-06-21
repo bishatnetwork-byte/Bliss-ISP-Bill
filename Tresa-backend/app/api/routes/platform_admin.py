@@ -309,6 +309,7 @@ def users(
     ]
 
 
+@router.put("/users/{user_id}", response_model=PlatformUserResponse)
 @router.patch("/users/{user_id}", response_model=PlatformUserResponse)
 def update_user(
     user_id: UUID,
@@ -321,6 +322,21 @@ def update_user(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
     if target.id == admin.id and payload.is_active is False:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot suspend your own account")
+    if payload.email is not None:
+        email = normalize_email(str(payload.email))
+        existing = session.exec(
+            select(User).where(func.lower(User.email) == email).where(User.id != target.id)
+        ).first()
+        if existing:
+            raise HTTPException(status.HTTP_409_CONFLICT, "A user with that email already exists")
+        target.email = email
+    if payload.full_name is not None:
+        full_name = payload.full_name.strip()
+        if not full_name:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Full name cannot be blank")
+        target.full_name = full_name
+    if "phone_number" in payload.model_fields_set:
+        target.phone_number = (payload.phone_number or "").strip() or None
     if payload.is_active is not None:
         target.is_active = payload.is_active
     if payload.is_verified is not None:
@@ -361,7 +377,7 @@ def update_user(
     session.add(target)
     session.commit()
     session.refresh(target)
-    audit(session, admin, "user_updated", "user", str(target.id), payload.model_dump(exclude_none=True))
+    audit(session, admin, "user_updated", "user", str(target.id), payload.model_dump(exclude_unset=True))
     return _user_response(session, target)
 
 
