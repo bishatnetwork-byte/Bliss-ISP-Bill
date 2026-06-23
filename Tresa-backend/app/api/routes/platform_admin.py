@@ -1495,4 +1495,14 @@ def health(
         payment_gateway=statuses[5],
         router_errors_24h=len(error_rows),
         last_router_error=error_rows[0].message if error_rows else None,
+        router_error_logs=[
+            {
+                "id": row.id,
+                "router_id": row.router_id,
+                "operation": row.operation,
+                "message": row.message,
+                "created_at": row.created_at,
+            }
+            for row in error_rows[:10]
+        ],
     )

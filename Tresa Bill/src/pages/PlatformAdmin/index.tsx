@@ -1419,9 +1419,42 @@ function SubadminsPanel({ users, onSave, loading }: { users: PlatformUserRespons
 function HealthPanel({ data, loading, onRefresh }: { data: Awaited<ReturnType<typeof renultApi.platformAdmin.health>> | undefined; loading: boolean; onRefresh: () => void }) {
   if (loading || !data) return <Loading type="health" />;
   const services = [["Database", data.database], ["Cloudflare R2", data.r2], [`${providerLabel(data.dns_provider)} DNS`, data.dns], ["Email", data.email], ["SMS", data.sms], ["Payments", data.payment_gateway]];
+  const routerErrorLogs = data.router_error_logs || [];
   return <Panel title="System Health" icon={Activity} action={<Button size="sm" variant="outline" onClick={onRefresh}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>}>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{services.map(([name, value]) => <Card key={name} className="shadow-none"><CardContent className="p-4"><p className="text-xs font-bold text-muted-foreground">{name}</p><p className="mt-2 font-bold">{value}</p></CardContent></Card>)}</div>
-    <div className="mt-4 rounded border p-4 text-sm"><p>Concentrator: <b>{data.concentrator_enabled ? "Enabled" : "Disabled"}</b></p><p>SNMP monitoring: <b>{data.snmp_monitor_enabled ? "Enabled" : "Disabled"}</b></p><p>Router errors in 24h: <b>{data.router_errors_24h}</b></p>{data.last_router_error && <p className="mt-2 text-destructive">{data.last_router_error}</p>}</div>
+    <div className="mt-4 rounded border p-4 text-sm">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div><p className="text-xs font-bold text-muted-foreground">Concentrator</p><p className="mt-1 font-bold">{data.concentrator_enabled ? "Enabled" : "Disabled"}</p></div>
+        <div><p className="text-xs font-bold text-muted-foreground">SNMP monitoring</p><p className="mt-1 font-bold">{data.snmp_monitor_enabled ? "Enabled" : "Disabled"}</p></div>
+        <div><p className="text-xs font-bold text-muted-foreground">Router errors in 24h</p><p className={cn("mt-1 font-bold", data.router_errors_24h > 0 && "text-destructive")}>{data.router_errors_24h}</p></div>
+      </div>
+      {routerErrorLogs.length > 0 && (
+        <div className="mt-4 overflow-hidden rounded border border-destructive/20">
+          <div className="flex items-center gap-2 border-b border-destructive/20 bg-destructive/5 px-3 py-2 text-xs font-bold text-destructive">
+            <MessageSquareWarning className="h-4 w-4" />
+            Recent Router Error Logs
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[190px]">Time</TableHead>
+                <TableHead className="w-[180px]">Operation</TableHead>
+                <TableHead>Error</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {routerErrorLogs.map((error) => (
+                <TableRow key={error.id}>
+                  <TableCell className="text-xs text-muted-foreground">{formatDate(error.created_at)}</TableCell>
+                  <TableCell className="text-xs font-medium">{error.operation}</TableCell>
+                  <TableCell className="break-words text-xs text-destructive">{error.message}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
   </Panel>;
 }
 

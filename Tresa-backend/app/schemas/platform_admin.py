@@ -272,6 +272,14 @@ class PlatformDnsRecordCreate(BaseModel):
     proxied: Optional[bool] = None
 
 
+class PlatformRouterErrorResponse(BaseModel):
+    id: UUID
+    router_id: Optional[UUID]
+    operation: str
+    message: str
+    created_at: datetime
+
+
 class PlatformHealthResponse(BaseModel):
     status: str
     database: str
@@ -285,6 +293,7 @@ class PlatformHealthResponse(BaseModel):
     payment_gateway: str
     router_errors_24h: int
     last_router_error: Optional[str] = None
+    router_error_logs: list[PlatformRouterErrorResponse] = Field(default_factory=list)
 
 
 class PlatformLedgerEntryFullResponse(BaseModel):

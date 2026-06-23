@@ -333,6 +333,13 @@ export interface PlatformHealthResponse {
   payment_gateway: string;
   router_errors_24h: number;
   last_router_error: string | null;
+  router_error_logs?: Array<{
+    id: string;
+    router_id: string | null;
+    operation: string;
+    message: string;
+    created_at: string;
+  }>;
 }
 
 export interface BranchResponse {
