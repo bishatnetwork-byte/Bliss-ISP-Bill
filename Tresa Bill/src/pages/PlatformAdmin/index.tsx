@@ -87,8 +87,8 @@ function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleString() : "N/A";
 }
 
-function money(value: number) {
-  return `UGX ${value.toLocaleString()}`;
+function money(value?: number | null) {
+  return `UGX ${Number(value || 0).toLocaleString()}`;
 }
 
 export default function PlatformAdminPage() {
@@ -473,6 +473,10 @@ function Overview({ data, loading }: { data: Awaited<ReturnType<typeof renultApi
   if (loading || !data) return <Loading type="overview" />;
   const unactivatedVouchers = Math.max(0, data.vouchers - data.activated_vouchers - data.expired_vouchers);
   const offlineRouters = Math.max(0, data.routers - data.tunnels_online);
+  const mySharePercentage = data.my_platform_fee_share_percentage || 0;
+  const myShareAmount = data.my_platform_fee_share_amount || 0;
+  const assignedSharePercentage = data.assigned_platform_fee_share_percentage || 0;
+  const unassignedSharePercentage = data.unassigned_platform_fee_share_percentage ?? Math.max(0, 100 - assignedSharePercentage);
   const statusSegments = [
     { label: "Activated", value: data.activated_vouchers, className: "bg-[#2b292d]" },
     { label: "Expired", value: data.expired_vouchers, className: "bg-[#6f6b6b]" },
@@ -521,8 +525,8 @@ function Overview({ data, loading }: { data: Awaited<ReturnType<typeof renultApi
           </div>
           <div className="border-b border-foreground/20 py-4">
             <p className="text-[10px] font-black uppercase text-muted-foreground">My Fee Share</p>
-            <p className="mt-2 text-xl font-black">{money(data.my_platform_fee_share_amount)}</p>
-            <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{data.my_platform_fee_share_percentage}% of platform fees</p>
+            <p className="mt-2 text-xl font-black">{money(myShareAmount)}</p>
+            <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{mySharePercentage}% of platform fees</p>
           </div>
           <div className="border-b border-foreground/20 py-4">
             <p className="text-[10px] font-black uppercase text-muted-foreground">Admin Channels</p>
@@ -530,8 +534,8 @@ function Overview({ data, loading }: { data: Awaited<ReturnType<typeof renultApi
           </div>
           <div className="border-b border-foreground/20 py-4">
             <p className="text-[10px] font-black uppercase text-muted-foreground">Assigned Share</p>
-            <p className="mt-2 text-xl font-black">{data.assigned_platform_fee_share_percentage}%</p>
-            <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{data.unassigned_platform_fee_share_percentage}% unassigned</p>
+            <p className="mt-2 text-xl font-black">{assignedSharePercentage}%</p>
+            <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{unassignedSharePercentage}% unassigned</p>
           </div>
           <div className="pt-4">
             <p className="text-[10px] font-black uppercase text-muted-foreground">Core Services</p>
@@ -1529,7 +1533,7 @@ function SubadminsPanel({ users, onSave, loading }: { users: PlatformUserRespons
           const values = drafts[item.id] || item.platform_permissions;
           return <Card key={item.id} className="shadow-none rounded border-gray-100"><CardContent className="p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">{item.full_name}</p><p className="text-xs text-muted-foreground">{item.email}</p></div><Badge variant="outline">{item.platform_role || "User"}</Badge></div>
             <div className="mt-3"><CheckboxGrid values={values} options={ADMIN_PERMISSIONS} onChange={(next) => setDrafts((old) => ({ ...old, [item.id]: next }))} /></div>
-            <div className="mt-3 flex gap-2"><Button size="sm" onClick={() => onSave(item.id, "subadmin", values, item.platform_fee_share_percentage)}>Save Subadmin</Button>{item.platform_role === "subadmin" && <Button size="sm" variant="destructive" onClick={() => onSave(item.id, "none", [], 0)}>Remove</Button>}</div>
+            <div className="mt-3 flex gap-2"><Button size="sm" onClick={() => onSave(item.id, "subadmin", values, item.platform_fee_share_percentage || 0)}>Save Subadmin</Button>{item.platform_role === "subadmin" && <Button size="sm" variant="destructive" onClick={() => onSave(item.id, "none", [], 0)}>Remove</Button>}</div>
           </CardContent></Card>;
         })}</div>}
       </Panel>
@@ -1542,7 +1546,7 @@ function AdminSharesPanel({ users, onSave, loading }: { users: PlatformUserRespo
   const [draftShares, setDraftShares] = useState<Record<string, number>>({});
   const admins = users.filter((item) => item.platform_role === "subadmin" || item.platform_role === "superadmin");
   const assigned = admins.reduce((sum, item) => sum + Number(draftShares[item.id] ?? item.platform_fee_share_percentage ?? 0), 0);
-  const totalShareAmount = admins.reduce((sum, item) => sum + item.platform_fee_share_amount, 0);
+  const totalShareAmount = admins.reduce((sum, item) => sum + Number(item.platform_fee_share_amount || 0), 0);
   const shareOptions = [0, 5, 10, 15, 20, 25, 50];
 
   return (
@@ -1561,7 +1565,6 @@ function AdminSharesPanel({ users, onSave, loading }: { users: PlatformUserRespo
             <div className="space-y-3">
               {admins.map((admin) => {
                 const draftShare = Number(draftShares[admin.id] ?? admin.platform_fee_share_percentage ?? 0);
-                const isSuperadmin = admin.platform_role === "superadmin";
                 return (
                   <div key={admin.id} className="rounded border border-border/30 p-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1582,7 +1585,6 @@ function AdminSharesPanel({ users, onSave, loading }: { users: PlatformUserRespo
                               size="sm"
                               variant={draftShare === option ? "default" : "outline"}
                               className="h-8 text-xs"
-                              disabled={isSuperadmin}
                               onClick={() => setDraftShares((old) => ({ ...old, [admin.id]: option }))}
                             >
                               {option}%
@@ -1596,20 +1598,18 @@ function AdminSharesPanel({ users, onSave, loading }: { users: PlatformUserRespo
                             max={100}
                             step="0.01"
                             value={draftShare}
-                            disabled={isSuperadmin}
                             onChange={(event) => setDraftShares((old) => ({ ...old, [admin.id]: Number(event.target.value) }))}
                             className="h-9"
                           />
                           <Button
                             size="sm"
                             className="h-9"
-                            disabled={isSuperadmin}
                             onClick={() => onSave(admin.id, "subadmin", admin.platform_permissions, draftShare)}
                           >
                             Save Share
                           </Button>
                         </div>
-                        {isSuperadmin && <p className="text-[11px] text-muted-foreground">Superadmin shares are shown here for visibility. Assign operational shares to subadmins.</p>}
+                        {admin.platform_role === "superadmin" && <p className="text-[11px] text-muted-foreground">Superadmin role and permissions stay protected; only the fee share changes here.</p>}
                       </div>
                     </div>
                   </div>

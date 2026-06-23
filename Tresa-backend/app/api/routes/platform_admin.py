@@ -265,7 +265,7 @@ def overview(
 @router.get("/users", response_model=list[PlatformUserResponse])
 def users(
     session: SessionDep,
-    admin: User = Depends(platform_admin_any("users", "subadmins", "broadcasts")),
+    admin: User = Depends(platform_admin_any("users", "subadmins", "admin_shares", "broadcasts")),
     search: str | None = Query(default=None, max_length=120),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[PlatformUserResponse]:
@@ -845,16 +845,15 @@ def update_subadmin(
     user_id: UUID,
     payload: PlatformSubadminUpdate,
     session: SessionDep,
-    admin: User = _admin("subadmins"),
+    admin: User = Depends(platform_admin_any("subadmins", "admin_shares")),
 ) -> PlatformUserResponse:
     target = session.get(User, user_id)
     if not target:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    if target.platform_role == "superadmin" and target.id != admin.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "A superadmin cannot be changed here")
     invalid = set(payload.permissions) - ADMIN_PERMISSIONS
     if invalid:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unsupported permissions: {', '.join(sorted(invalid))}")
+    previous_share = float(target.platform_fee_share_percentage or 0)
     assigned_elsewhere = _platform_share_total(session, target.id)
     next_share = (
         0
@@ -867,14 +866,34 @@ def update_subadmin(
             status.HTTP_400_BAD_REQUEST,
             f"Admin shares cannot exceed 100%. Available share for this admin is {available:.2f}%",
         )
-    target.platform_role = None if payload.role == "none" else "subadmin"
-    target.platform_permissions = None if payload.role == "none" else ",".join(sorted(set(payload.permissions)))
+    if target.platform_role != "superadmin":
+        target.platform_role = None if payload.role == "none" else "subadmin"
+        target.platform_permissions = None if payload.role == "none" else ",".join(sorted(set(payload.permissions)))
     target.platform_fee_share_percentage = next_share
     target.updated_at = datetime.utcnow()
     session.add(target)
+    if previous_share != next_share:
+        session.add(Notification(
+            user_id=target.id,
+            category="platform_admin",
+            title="Platform fee share updated",
+            body=f"Your platform fee share changed from {previous_share:.2f}% to {next_share:.2f}% by {admin.full_name}.",
+        ))
+        if admin.id != target.id:
+            session.add(Notification(
+                user_id=admin.id,
+                category="platform_admin",
+                title="Admin share updated",
+                body=f"You changed {target.full_name}'s platform fee share from {previous_share:.2f}% to {next_share:.2f}%.",
+            ))
     session.commit()
     session.refresh(target)
-    audit(session, admin, "subadmin_updated", "user", str(target.id), payload.model_dump())
+    audit(session, admin, "admin_share_updated" if previous_share != next_share else "subadmin_updated", "user", str(target.id), {
+        **payload.model_dump(),
+        "previous_platform_fee_share_percentage": previous_share,
+        "new_platform_fee_share_percentage": next_share,
+        "target_role": target.platform_role,
+    })
     return _user_response(session, target)
 
 
