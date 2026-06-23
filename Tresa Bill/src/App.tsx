@@ -54,6 +54,7 @@ import Campign from "./pages/Settings/Campign";
 import SettingsPage from "./pages/Settings/Settings";
 import WalletManagementPage from "./pages/Settings/WalletManagement";
 import RouterLogsPage from "./pages/Settings/RouterLogs";
+import SubscriptionsPage from "./pages/Settings/Subscriptions";
 import TelegramConnectPage from "./pages/Settings/TelegramConnect";
 import AdsMobPage from "./pages/Settings/AdsMob";
 import AdsAnalyticsPage from "./pages/Settings/AdsAnalytics";
@@ -178,6 +179,7 @@ const AppRoutes = () => {
         <Route path="/settings/password" element={protectedElement(<OwnerRoute permission="settings"><PasswordPage /></OwnerRoute>)} />
 
         <Route path="/settings/billing" element={protectedElement(<OwnerRoute permission="settings"><BillingPage /></OwnerRoute>)} />
+        <Route path="/settings/subscriptions" element={protectedElement(<SubscriptionsPage />)} />
         <Route path="/settings/wallet" element={protectedElement(<OwnerRoute permission="settings"><WalletManagementPage /></OwnerRoute>)} />
         <Route path="/settings/router-logs" element={protectedElement(<OwnerRoute permission="settings"><RouterLogsPage /></OwnerRoute>)} />
         <Route path="/settings/notifications" element={protectedElement(<OwnerRoute permission="settings"><SettingsPage /></OwnerRoute>)} />

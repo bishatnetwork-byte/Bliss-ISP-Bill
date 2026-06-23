@@ -3,7 +3,7 @@ from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import ads, auth, health, monitoring, notification, branch, messaging, package, payment_gateway, platform_admin, portal, router, staff, telegram, ticket, upload, wallet
+from app.api.routes import ads, auth, health, monitoring, notification, branch, messaging, package, payment_gateway, platform_admin, portal, router, staff, subscription, telegram, ticket, upload, wallet
 from app.db.init import init_db
 from app.services.routers.concentrator import concentrator_worker
 from app.services.snmp_monitor import snmp_monitor_worker
@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(portal.router)
     app.include_router(router.router)
     app.include_router(staff.router)
+    app.include_router(subscription.router)
     app.include_router(telegram.router)
     app.include_router(ticket.router)
     app.include_router(wallet.router)

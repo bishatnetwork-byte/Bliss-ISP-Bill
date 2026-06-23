@@ -7,6 +7,7 @@ import {
   CreditCard,
   Key,
   Megaphone,
+  CalendarClock,
   ScrollText,
   Send,
   User
@@ -53,6 +54,12 @@ const navItems: SettingsNavItem[] = [
     label: "Recent Transactions",
     icon: <CreditCard className="w-4 h-4" />,
     path: "/settings/billing",
+  },
+  {
+    id: "subscriptions",
+    label: "Subscriptions",
+    icon: <CalendarClock className="w-4 h-4" />,
+    path: "/settings/subscriptions",
   },
   {
     id: "telegram",

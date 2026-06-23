@@ -24,6 +24,7 @@ from app.models.platform_admin import PlatformAuditLog, PlatformSetting, Voucher
 from app.models.message import MessageDraft, MessageLog
 from app.models.login_attempt import LoginAttempt
 from app.models.user_session import UserSession
+from app.models.subscription import UserSubscription
 
 __all__ = [
     "EmailVerification",
@@ -58,4 +59,5 @@ __all__ = [
     "MessageLog",
     "LoginAttempt",
     "UserSession",
+    "UserSubscription",
 ]

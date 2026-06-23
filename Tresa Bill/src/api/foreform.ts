@@ -97,6 +97,45 @@ export interface LoginActivityResponse {
   created_at: string;
 }
 
+export interface SubscriptionResponse {
+  id: string;
+  user_id: string;
+  name: string;
+  provider: string | null;
+  category: string;
+  amount: number;
+  currency: string;
+  due_date: string;
+  alert_days_before: number;
+  notify_in_app: boolean;
+  notify_email: boolean;
+  notify_sms: boolean;
+  sms_phone: string | null;
+  notes: string | null;
+  is_active: boolean;
+  days_until_due: number;
+  reminder_due: boolean;
+  last_notified_on: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SubscriptionPayload = {
+  name: string;
+  provider?: string | null;
+  category: string;
+  amount: number;
+  currency: string;
+  due_date: string;
+  alert_days_before: number;
+  notify_in_app: boolean;
+  notify_email: boolean;
+  notify_sms: boolean;
+  sms_phone?: string | null;
+  notes?: string | null;
+  is_active: boolean;
+};
+
 export interface PlatformOverviewResponse {
   users: number;
   active_users: number;
@@ -1456,6 +1495,18 @@ export const renultApi = {
       form.append("folder", folder);
       return apiRequest<UploadResponse>("/uploads", { method: "POST", body: form });
     },
+  },
+  subscriptions: {
+    list: (query?: { limit?: number; active_only?: boolean; send_due_alerts?: boolean }) =>
+      apiRequest<SubscriptionResponse[]>("/subscriptions", { query }),
+    create: (payload: SubscriptionPayload) =>
+      apiRequest<SubscriptionResponse>("/subscriptions", { method: "POST", body: JSON.stringify(payload) }),
+    update: (id: string, payload: Partial<SubscriptionPayload>) =>
+      apiRequest<SubscriptionResponse>(`/subscriptions/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+    notify: (id: string) =>
+      apiRequest<{ message: string }>(`/subscriptions/${id}/notify`, { method: "POST" }),
+    delete: (id: string) =>
+      apiRequest<{ message: string }>(`/subscriptions/${id}`, { method: "DELETE" }),
   },
   tickets: {
     categories: () => apiRequest<TicketCategoryResponse[]>("/tickets/categories"),

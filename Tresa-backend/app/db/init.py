@@ -35,6 +35,7 @@ from app.models import (
     MessageLog,
     LoginAttempt,
     UserSession,
+    UserSubscription,
 )
 
 
@@ -72,6 +73,7 @@ def init_db() -> None:
         MessageLog,
         LoginAttempt,
         UserSession,
+        UserSubscription,
     )
     SQLModel.metadata.create_all(engine)
     _ensure_staff_columns()
