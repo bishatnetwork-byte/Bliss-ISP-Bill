@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "@/components/theme-provider";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { GoogleOAuthProvider } from '@react-oauth/google';
@@ -196,15 +197,17 @@ function App() {
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ""}>
       <QueryClientProvider client={queryClient}>
-        <Router future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
-          <AuthProvider>
-            <AccountLoadingProgress />
-            <VoucherSyncAgent />
-            <AppRoutes />
-          </AuthProvider>
-        </Router>
-        <Toaster />
-        <SonnerToaster richColors position="top-center" className="rounded-none shadow-none" />
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem storageKey="renult-theme">
+          <Router future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+            <AuthProvider>
+              <AccountLoadingProgress />
+              <VoucherSyncAgent />
+              <AppRoutes />
+            </AuthProvider>
+          </Router>
+          <Toaster />
+          <SonnerToaster richColors position="top-center" className="rounded-none shadow-none" />
+        </ThemeProvider>
       </QueryClientProvider>
     </GoogleOAuthProvider>
   );

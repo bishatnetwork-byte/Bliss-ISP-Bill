@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/lib/auth";
 import { renultApi, RouterMonitorSummary } from "@/api/foreform";
 import { Loader2, Menu, PanelLeft, RadioTower, RefreshCw, User } from "lucide-react";
@@ -319,7 +320,9 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
           </div>
 
           {/* Right section: actions */}
-          <div className="flex items-center gap-4 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
+
             <Popover>
               <PopoverTrigger asChild>
                 <Button

@@ -123,7 +123,7 @@ export default function SettingsLayout({
       <AppHeader />
 
       {/* ── Mobile / Tablet: horizontal scrollable tab strip (hidden on lg+) ── */}
-      <div className="lg:hidden sticky top-[57px] z-20 bg-white border-b border-border/50 shadow-sm">
+      <div className="lg:hidden sticky top-[57px] z-20 bg-card border-b border-border/50 shadow-sm">
         <div
           className="flex overflow-x-auto gap-1 px-2 py-1.5"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
@@ -168,9 +168,9 @@ export default function SettingsLayout({
 
       <div className="flex min-h-[calc(100vh-57px)]">
         {/* ── Desktop settings sidebar (lg+) ── */}
-        <aside className="hidden lg:flex flex-col w-[250px] shrink-0 border-r border-border/50 bg-white">
+        <aside className="hidden lg:flex flex-col w-[250px] shrink-0 border-r border-border/50 bg-card">
           <div className="px-4 pt-6 pb-2">
-            <span className="text-lg font-semibold text-black">Settings</span>
+            <span className="text-lg font-semibold text-foreground">Settings</span>
           </div>
 
           <nav className="flex-1 px-2 pb-4 pt-1">

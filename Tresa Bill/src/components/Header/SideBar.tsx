@@ -611,11 +611,11 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
               <span className={iconClassName}>
                 {item.icon}
                 {isBulkSmsWarning && (
-                  <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-600 ring-2 ring-white" />
+                  <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-600 ring-2 ring-sidebar" />
                 )}
                 {item.label === "Mikrotiks" && monitoring && monitoring.total > 0 && (
               <span
-                className={`absolute right-0 top-0 inline-flex min-w-4 items-center justify-center rounded-full border border-white px-1 text-[9px] font-bold leading-4 ${routerBadgeColor}`}
+                className={`absolute right-0 top-0 inline-flex min-w-4 items-center justify-center rounded-full border border-sidebar px-1 text-[9px] font-bold leading-4 ${routerBadgeColor}`}
                 title={`${effectiveRouterCounts.online} online, ${effectiveRouterCounts.offline} offline`}
               >
                 {monitoring.total}
@@ -709,7 +709,7 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
       {/* Sidebar panel */}
       <aside
         className={`
-          fixed top-0 left-0 z-50 h-full bg-white
+          fixed top-0 left-0 z-50 h-full bg-sidebar text-sidebar-foreground
           border-r border-border/80 shadow-2xl md:shadow-none md:z-20
           flex flex-col custom-scrollbar
           transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
