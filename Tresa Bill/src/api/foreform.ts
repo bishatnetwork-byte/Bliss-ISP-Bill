@@ -87,6 +87,16 @@ export interface AuthResponse {
   user: UserResponse;
 }
 
+export interface LoginActivityResponse {
+  id: string;
+  email: string;
+  success: boolean;
+  ip_address: string | null;
+  user_agent: string | null;
+  failure_reason: string | null;
+  created_at: string;
+}
+
 export interface PlatformOverviewResponse {
   users: number;
   active_users: number;
@@ -1365,6 +1375,8 @@ export const renultApi = {
     setPassword: (payload: { current_password?: string | null; new_password: string }) =>
       apiRequest<{ message: string }>("/auth/set-password", { method: "POST", body: JSON.stringify(payload) }),
     me: () => apiRequest<UserResponse>("/auth/me"),
+    loginActivity: (limit = 10) =>
+      apiRequest<LoginActivityResponse[]>("/auth/login-activity", { query: { limit } }),
     exchangeSubdomainHandoff: (payload: { code: string; subdomain: string }) =>
       apiRequest<AuthResponse>("/auth/subdomain-handoff/exchange", {
         method: "POST",

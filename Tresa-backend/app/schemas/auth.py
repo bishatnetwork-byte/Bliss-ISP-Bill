@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -93,3 +94,13 @@ class AuthResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class LoginActivityResponse(BaseModel):
+    id: UUID
+    email: str
+    success: bool
+    ip_address: Optional[str]
+    user_agent: Optional[str]
+    failure_reason: Optional[str]
+    created_at: datetime

@@ -1,11 +1,11 @@
-import { NotificationPreferenceResponse, NotificationResponse, renultApi } from "@/api/foreform";
+import { LoginActivityResponse, NotificationPreferenceResponse, NotificationResponse, renultApi } from "@/api/foreform";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { CheckCheck, Loader2, Mail, MessageSquareText } from "lucide-react";
+import { CheckCheck, Loader2, Mail, MessageSquareText, ShieldCheck, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -21,6 +21,16 @@ function timeLabel(value: string) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
+function deviceLabel(userAgent: string | null) {
+  if (!userAgent) return "Unknown device";
+  if (/Android/i.test(userAgent)) return "Android";
+  if (/iPhone|iPad/i.test(userAgent)) return "iPhone / iPad";
+  if (/Windows/i.test(userAgent)) return "Windows";
+  if (/Macintosh|Mac OS/i.test(userAgent)) return "Mac";
+  if (/Linux/i.test(userAgent)) return "Linux";
+  return userAgent.slice(0, 42);
+}
+
 export default function SettingsPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<NotificationResponse[]>([]);
@@ -28,6 +38,8 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingAlerts, setIsSavingAlerts] = useState(false);
   const [alertPreferences, setAlertPreferences] = useState<NotificationPreferenceResponse | null>(null);
+  const [loginActivity, setLoginActivity] = useState<LoginActivityResponse[]>([]);
+  const [isLoadingActivity, setIsLoadingActivity] = useState(true);
 
   const loadNotifications = async () => {
     setIsLoading(true);
@@ -50,9 +62,21 @@ export default function SettingsPage() {
     }
   };
 
+  const loadLoginActivity = async () => {
+    setIsLoadingActivity(true);
+    try {
+      setLoginActivity(await renultApi.auth.loginActivity(10));
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to load login activity"));
+    } finally {
+      setIsLoadingActivity(false);
+    }
+  };
+
   useEffect(() => {
     loadNotifications();
     loadAlertPreferences();
+    loadLoginActivity();
   }, []);
 
   const markAllRead = async () => {
@@ -174,6 +198,47 @@ export default function SettingsPage() {
             <div className="flex h-28 items-center justify-center text-sm text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Loading alert settings...
+            </div>
+          )}
+        </div>
+
+        <div className="mb-8 border border-border/10 rounded-none bg-card/50 overflow-hidden">
+          <div className="px-5 py-4 border-b border-border/30 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Login activity</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Latest 10 sign-in attempts for your account.</p>
+            </div>
+            <Badge variant="outline" className="rounded">{loginActivity.length}/10</Badge>
+          </div>
+          {isLoadingActivity ? (
+            <div className="h-28 flex items-center justify-center text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              Loading...
+            </div>
+          ) : loginActivity.length === 0 ? (
+            <div className="h-28 flex items-center justify-center text-sm text-muted-foreground">No login activity yet.</div>
+          ) : (
+            <div className="divide-y divide-border/30">
+              {loginActivity.map((item) => (
+                <div key={item.id} className="flex items-start justify-between gap-4 px-5 py-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${item.success ? "bg-emerald-500/10 text-emerald-600" : "bg-destructive/10 text-destructive"}`}>
+                      {item.success ? <ShieldCheck className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-foreground">
+                        {item.success ? "Successful login" : item.failure_reason || "Failed login"}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {item.ip_address || "No IP"} · {deviceLabel(item.user_agent)}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                    {timeLabel(item.created_at)}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>

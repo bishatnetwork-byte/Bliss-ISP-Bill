@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlmodel import select
 
 from app.api.deps import CurrentUser
@@ -13,6 +13,7 @@ from app.schemas.auth import (
     AuthResponse,
     ForgotPasswordRequest,
     GoogleAuthRequest,
+    LoginActivityResponse,
     GoogleLoginUrlResponse,
     LoginRequest,
     MessageResponse,
@@ -48,6 +49,30 @@ from app.services.security import (
 )
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+def _request_ip_and_agent(request: Request) -> tuple[str | None, str | None]:
+    return request.client.host if request.client else None, request.headers.get("user-agent")
+
+
+def _record_login_attempt(
+    session: SessionDep,
+    email: str,
+    success: bool,
+    user_id: UUID | None,
+    ip_address: str | None,
+    user_agent: str | None,
+    reason: str | None = None,
+) -> None:
+    session.add(LoginAttempt(
+        email=email,
+        user_id=user_id,
+        success=success,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        failure_reason=reason,
+    ))
+    session.commit()
 
 
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
@@ -109,29 +134,17 @@ def resend_code(payload: ResendCodeRequest, session: SessionDep) -> MessageRespo
 @router.post("/login", response_model=AuthResponse)
 def login(payload: LoginRequest, request: Request, session: SessionDep) -> AuthResponse:
     email = normalize_email(str(payload.email))
-    ip_address = request.client.host if request.client else None
-    user_agent = request.headers.get("user-agent")
-
-    def _log_attempt(success: bool, user_id: UUID | None, reason: str | None = None) -> None:
-        session.add(LoginAttempt(
-            email=email,
-            user_id=user_id,
-            success=success,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            failure_reason=reason,
-        ))
-        session.commit()
+    ip_address, user_agent = _request_ip_and_agent(request)
 
     user = session.exec(select(User).where(User.email == email)).first()
     if not user or not verify_password(payload.password, user.password_hash):
-        _log_attempt(False, user.id if user else None, "Invalid email or password")
+        _record_login_attempt(session, email, False, user.id if user else None, ip_address, user_agent, "Invalid email or password")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     if not user.is_active:
-        _log_attempt(False, user.id, "Account suspended")
+        _record_login_attempt(session, email, False, user.id, ip_address, user_agent, "Account suspended")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is suspended")
     if user.blocked_until and user.blocked_until > datetime.utcnow():
-        _log_attempt(False, user.id, "Account blocked")
+        _record_login_attempt(session, email, False, user.id, ip_address, user_agent, "Account blocked")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Account is blocked until {user.blocked_until.isoformat()}",
@@ -139,12 +152,38 @@ def login(payload: LoginRequest, request: Request, session: SessionDep) -> AuthR
     if not user.is_verified:
         code = create_verification_code(session, email)
         send_verification_email(email, user.full_name, code)
-        _log_attempt(False, user.id, "Email not verified")
+        _record_login_attempt(session, email, False, user.id, ip_address, user_agent, "Email not verified")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email not verified. A new code has been sent.")
 
-    _log_attempt(True, user.id)
+    _record_login_attempt(session, email, True, user.id, ip_address, user_agent)
     notify_login(session, user.id)
     return auth_response(user, session, ip_address=ip_address, user_agent=user_agent)
+
+
+@router.get("/login-activity", response_model=list[LoginActivityResponse])
+def login_activity(
+    user: CurrentUser,
+    session: SessionDep,
+    limit: int = Query(default=10, ge=1, le=10),
+) -> list[LoginActivityResponse]:
+    rows = session.exec(
+        select(LoginAttempt)
+        .where(LoginAttempt.user_id == user.id)
+        .order_by(LoginAttempt.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [
+        LoginActivityResponse(
+            id=row.id,
+            email=row.email,
+            success=row.success,
+            ip_address=row.ip_address,
+            user_agent=row.user_agent,
+            failure_reason=row.failure_reason,
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]
 
 
 @router.get("/google/login-url", response_model=GoogleLoginUrlResponse)
@@ -157,6 +196,8 @@ def authenticate_google_profile(
     profile: dict,
     full_name: str | None = None,
     phone_number: str | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
 ) -> AuthResponse:
     email = normalize_email(profile["email"])
     user = session.exec(select(User).where(User.email == email)).first()
@@ -186,6 +227,7 @@ def authenticate_google_profile(
         session.commit()
     else:
         if not user.is_active:
+            _record_login_attempt(session, email, False, user.id, ip_address, user_agent, "Account suspended")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is suspended")
         user.google_sub = user.google_sub or profile.get("sub")
         user.full_name = full_name or user.full_name or profile.get("name") or email.split("@")[0]
@@ -204,18 +246,20 @@ def authenticate_google_profile(
     else:
         notify_google_linked(session, user.id)
         notify_login(session, user.id)
-    return auth_response(user, session)
+    _record_login_attempt(session, email, True, user.id, ip_address, user_agent)
+    return auth_response(user, session, ip_address=ip_address, user_agent=user_agent)
 
 
 @router.get("/google/callback", response_model=AuthResponse)
 def google_callback(code: str, request: Request, session: SessionDep) -> AuthResponse:
     google_id_token = exchange_google_code_for_id_token(code, authorization_response=str(request.url))
     profile = verify_google_id_token(google_id_token)
-    return authenticate_google_profile(session, profile)
+    ip_address, user_agent = _request_ip_and_agent(request)
+    return authenticate_google_profile(session, profile, ip_address=ip_address, user_agent=user_agent)
 
 
 @router.post("/google", response_model=AuthResponse)
-def google_auth(payload: GoogleAuthRequest, session: SessionDep) -> AuthResponse:
+def google_auth(payload: GoogleAuthRequest, request: Request, session: SessionDep) -> AuthResponse:
     if not payload.id_token and not payload.code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Send a real Google id_token or authorization code")
 
@@ -224,7 +268,8 @@ def google_auth(payload: GoogleAuthRequest, session: SessionDep) -> AuthResponse
         google_id_token = exchange_google_code_for_id_token(payload.code, payload.redirect_uri)
 
     profile = verify_google_id_token(google_id_token or "")
-    return authenticate_google_profile(session, profile, payload.full_name, payload.phone_number)
+    ip_address, user_agent = _request_ip_and_agent(request)
+    return authenticate_google_profile(session, profile, payload.full_name, payload.phone_number, ip_address, user_agent)
 
 
 @router.post("/set-password", response_model=MessageResponse)
@@ -283,6 +328,7 @@ def create_subdomain_handoff(user: CurrentUser) -> SubdomainHandoffResponse:
 @router.post("/subdomain-handoff/exchange", response_model=AuthResponse)
 def exchange_subdomain_handoff(
     payload: SubdomainHandoffRequest,
+    request: Request,
     session: SessionDep,
 ) -> AuthResponse:
     claims = decode_subdomain_handoff_token(payload.code)
@@ -299,4 +345,7 @@ def exchange_subdomain_handoff(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is suspended")
     if not user.subdomain_enabled or user.account_subdomain != claims["subdomain"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Subdomain access is no longer enabled")
-    return auth_response(user, session)
+    ip_address, user_agent = _request_ip_and_agent(request)
+    _record_login_attempt(session, user.email, True, user.id, ip_address, user_agent)
+    notify_login(session, user.id)
+    return auth_response(user, session, ip_address=ip_address, user_agent=user_agent)
