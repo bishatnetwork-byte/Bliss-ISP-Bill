@@ -24,7 +24,6 @@ import {
   Activity,
   ArrowDownLeft,
   ArrowUpRight,
-  Banknote,
   Bell,
   Calculator,
   ChevronLeft,
@@ -62,6 +61,7 @@ const ADMIN_TABS = [
   ["overview", "Overview"],
   ["users", "Users"],
   ["finance", "Fees"],
+  ["admin_shares", "Admin Shares"],
   ["broadcasts", "Broadcasts"],
   ["voucher_audit", "Voucher Audit"],
   ["message_diagnostics", "Message Diagnostics"],
@@ -130,8 +130,8 @@ export default function PlatformAdminPage() {
   const usersQuery = useQuery({
     queryKey: ["platformAdmin", "users", userSearch],
     queryFn: () => renultApi.platformAdmin.users(userSearch),
-    enabled: (activeTab === "users" || activeTab === "subadmins" || activeTab === "broadcasts" || activeTab === "reports")
-      && (permissions.has("users") || permissions.has("subadmins") || permissions.has("broadcasts") || permissions.has("reports")),
+    enabled: (activeTab === "users" || activeTab === "subadmins" || activeTab === "admin_shares" || activeTab === "broadcasts" || activeTab === "reports")
+      && (permissions.has("users") || permissions.has("subadmins") || permissions.has("admin_shares") || permissions.has("broadcasts") || permissions.has("reports")),
     staleTime: 30 * 1000,
   });
   const settingsQuery = useQuery({
@@ -255,8 +255,8 @@ export default function PlatformAdminPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not provision account DNS."),
   });
   const updateSubadmin = useMutation({
-    mutationFn: ({ id, role, permissions: next }: { id: string; role: "subadmin" | "none"; permissions: string[] }) =>
-      renultApi.platformAdmin.updateSubadmin(id, { role, permissions: next }),
+    mutationFn: ({ id, role, permissions: next, platform_fee_share_percentage = 0 }: { id: string; role: "subadmin" | "none"; permissions: string[]; platform_fee_share_percentage?: number }) =>
+      renultApi.platformAdmin.updateSubadmin(id, { role, permissions: next, platform_fee_share_percentage }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platformAdmin", "users"] });
       queryClient.invalidateQueries({ queryKey: ["platformAdmin", "overview"] });
@@ -428,7 +428,10 @@ export default function PlatformAdminPage() {
           <DnsPanel zones={dnsZones.data || []} records={dnsRecords.data || []} error={dnsZones.error || dnsRecords.error} zoneId={zoneId} onZone={setZoneId} onDelete={(record) => deleteDns.mutate({ zone: zoneId, record })} loading={dnsZones.isLoading || (!!zoneId && dnsRecords.isLoading)} />
         )}
         {activeTab === "subadmins" && (
-          <SubadminsPanel users={usersQuery.data || []} onSave={(id, role, next) => updateSubadmin.mutate({ id, role, permissions: next })} loading={usersQuery.isLoading} />
+          <SubadminsPanel users={usersQuery.data || []} onSave={(id, role, next, share) => updateSubadmin.mutate({ id, role, permissions: next, platform_fee_share_percentage: share })} loading={usersQuery.isLoading} />
+        )}
+        {activeTab === "admin_shares" && (
+          <AdminSharesPanel users={usersQuery.data || []} onSave={(id, role, next, share) => updateSubadmin.mutate({ id, role, permissions: next, platform_fee_share_percentage: share })} loading={usersQuery.isLoading} />
         )}
         {activeTab === "sessions" && (
           <SessionsPanel
@@ -468,29 +471,143 @@ export default function PlatformAdminPage() {
 
 function Overview({ data, loading }: { data: Awaited<ReturnType<typeof renultApi.platformAdmin.overview>> | undefined; loading: boolean }) {
   if (loading || !data) return <Loading type="overview" />;
-  const cards = [
-    ["Users", `${data.active_users}/${data.users} active`, Users],
-    ["Branches", data.branches, Network],
-    ["Routers", `${data.tunnels_online}/${data.routers} online`, Wifi],
-    ["Vouchers", data.vouchers, FileClock],
-    ["Activated", data.activated_vouchers, Activity],
-    ["Expired", data.expired_vouchers, Trash2],
-    ["Wallet Balance", money(data.wallet_balance), Banknote],
-    ["Platform Fees", money(data.platform_fees), Database],
-    ["Telegram Admins", data.telegram_admins, Send],
-  ] as const;
+  const unactivatedVouchers = Math.max(0, data.vouchers - data.activated_vouchers - data.expired_vouchers);
+  const offlineRouters = Math.max(0, data.routers - data.tunnels_online);
+  const statusSegments = [
+    { label: "Activated", value: data.activated_vouchers, className: "bg-[#2b292d]" },
+    { label: "Expired", value: data.expired_vouchers, className: "bg-[#6f6b6b]" },
+    { label: "Unactivated", value: unactivatedVouchers, className: "bg-[#e8df55]" },
+  ];
+  const activityBars = [
+    { label: "Users", value: data.users },
+    { label: "Active", value: data.active_users },
+    { label: "Branches", value: data.branches },
+    { label: "Routers", value: data.routers },
+    { label: "Online", value: data.tunnels_online },
+    { label: "Vouchers", value: data.vouchers },
+    { label: "Activated", value: data.activated_vouchers },
+    { label: "Expired", value: data.expired_vouchers },
+  ];
   return (
-    <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-3">
-      {cards.map(([label, value, Icon]) => (
-        <Card key={label} className="shadow-none rounded border border-gray-100 cursor-alias"><CardContent className="flex items-center justify-between p-5">
-          <div><p className="text-xs font-bold text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></div>
-          <Icon className="h-8 w-8 text-primary/40" />
-        </CardContent></Card>
+    <div className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <OverviewMetric label="Total Users" value={data.users.toLocaleString()} detail={`${data.active_users.toLocaleString()} active`} icon={Users} />
+          <OverviewMetric label="Branches" value={data.branches.toLocaleString()} detail={`${data.routers.toLocaleString()} routers managed`} icon={Network} />
+          <OverviewMetric label="Online Routers" value={data.tunnels_online.toLocaleString()} detail={`${offlineRouters.toLocaleString()} offline`} icon={Wifi} />
+          <div className="sm:col-span-3 rounded border border-border/30 bg-card p-5">
+            <div className="flex items-center justify-between border-b border-foreground/80 pb-3">
+              <h2 className="text-sm font-black">Voucher Status</h2>
+              <span className="text-[10px] font-bold uppercase text-muted-foreground">{data.vouchers.toLocaleString()} total units</span>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-4">
+              <OverviewStatusValue label="Activated" value={data.activated_vouchers} accent="border-l-[#2b292d]" />
+              <OverviewStatusValue label="Expired" value={data.expired_vouchers} accent="border-l-[#6f6b6b]" />
+              <OverviewStatusValue label="Unactivated" value={unactivatedVouchers} accent="border-l-[#e8df55]" />
+              <OverviewStatusValue label="Active Users" value={data.active_users} accent="border-l-primary" />
+            </div>
+            <SegmentBar segments={statusSegments} total={Math.max(data.vouchers, 1)} />
+          </div>
+        </div>
+
+        <div className="rounded border border-border/30 bg-card p-5">
+          <div className="border-b border-foreground/20 pb-4">
+            <p className="text-[10px] font-black uppercase text-muted-foreground">Wallet Balance</p>
+            <p className="mt-2 text-xl font-black">{money(data.wallet_balance)}</p>
+          </div>
+          <div className="border-b border-foreground/20 py-4">
+            <p className="text-[10px] font-black uppercase text-muted-foreground">Platform Fees</p>
+            <p className="mt-2 text-xl font-black">{money(data.platform_fees)}</p>
+          </div>
+          <div className="border-b border-foreground/20 py-4">
+            <p className="text-[10px] font-black uppercase text-muted-foreground">My Fee Share</p>
+            <p className="mt-2 text-xl font-black">{money(data.my_platform_fee_share_amount)}</p>
+            <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{data.my_platform_fee_share_percentage}% of platform fees</p>
+          </div>
+          <div className="border-b border-foreground/20 py-4">
+            <p className="text-[10px] font-black uppercase text-muted-foreground">Admin Channels</p>
+            <p className="mt-2 text-xl font-black">{data.telegram_admins.toLocaleString()}</p>
+          </div>
+          <div className="border-b border-foreground/20 py-4">
+            <p className="text-[10px] font-black uppercase text-muted-foreground">Assigned Share</p>
+            <p className="mt-2 text-xl font-black">{data.assigned_platform_fee_share_percentage}%</p>
+            <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{data.unassigned_platform_fee_share_percentage}% unassigned</p>
+          </div>
+          <div className="pt-4">
+            <p className="text-[10px] font-black uppercase text-muted-foreground">Core Services</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Status label="Cloudflare R2" ok={data.r2_configured} />
+              <Status label={`${providerLabel(data.dns_provider)} DNS`} ok={data.dns_configured} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded border border-border/30 bg-card p-5">
+        <div className="flex flex-col gap-2 border-b border-foreground/80 pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-sm font-black">Platform Activity</h2>
+          <div className="flex items-center gap-3 text-[10px] font-bold text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 bg-[#2b292d]" /> Count</span>
+            <span>Live snapshot</span>
+          </div>
+        </div>
+        <OverviewBarChart bars={activityBars} />
+      </div>
+    </div>
+  );
+}
+
+function OverviewMetric({ label, value, detail, icon: Icon }: { label: string; value: string; detail: string; icon: typeof Users }) {
+  return (
+    <div className="rounded border border-border/30 bg-card p-5">
+      <Icon className="h-5 w-5 text-foreground" />
+      <p className="mt-6 text-[10px] font-black uppercase text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-black tracking-tight">{value}</p>
+      <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{detail}</p>
+    </div>
+  );
+}
+
+function OverviewStatusValue({ label, value, accent }: { label: string; value: number; accent: string }) {
+  return (
+    <div className={cn("border-l-2 pl-3", accent)}>
+      <p className="text-base font-black">{value.toLocaleString()}</p>
+      <p className="text-[10px] font-bold uppercase text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function SegmentBar({ segments, total }: { segments: { label: string; value: number; className: string }[]; total: number }) {
+  return (
+    <div className="mt-5">
+      <div className="flex h-5 overflow-hidden rounded-sm bg-muted">
+        {segments.map((segment) => (
+          <div
+            key={segment.label}
+            className={segment.className}
+            style={{ width: `${Math.max(4, (segment.value / total) * 100)}%` }}
+            title={`${segment.label}: ${segment.value.toLocaleString()}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OverviewBarChart({ bars }: { bars: { label: string; value: number }[] }) {
+  const max = Math.max(...bars.map((bar) => bar.value), 1);
+  return (
+    <div className="mt-6 flex h-64 items-end gap-3 border-b border-border/60 px-1">
+      {bars.map((bar) => (
+        <div key={bar.label} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+          <div
+            className="w-full max-w-12 rounded-t-sm bg-[#2b292d] transition-colors hover:bg-primary"
+            style={{ height: `${Math.max(8, (bar.value / max) * 210)}px` }}
+            title={`${bar.label}: ${bar.value.toLocaleString()}`}
+          />
+          <span className="text-[10px] font-bold text-muted-foreground">{bar.label}</span>
+        </div>
       ))}
-      <Card className="shadow-none rounded sm:col-span-2 xl:col-span-3"><CardContent className="flex flex-wrap gap-2 p-4 text-xs">
-        <Status label="Cloudflare R2" ok={data.r2_configured} />
-        <Status label={`${providerLabel(data.dns_provider)} DNS`} ok={data.dns_configured} />
-      </CardContent></Card>
     </div>
   );
 }
@@ -1402,18 +1519,108 @@ function DnsPanel({ zones, records, error, zoneId, onZone, onDelete, loading }: 
   </Panel>;
 }
 
-function SubadminsPanel({ users, onSave, loading }: { users: PlatformUserResponse[]; onSave: (id: string, role: "subadmin" | "none", permissions: string[]) => void; loading?: boolean }) {
+function SubadminsPanel({ users, onSave, loading }: { users: PlatformUserResponse[]; onSave: (id: string, role: "subadmin" | "none", permissions: string[], share: number) => void; loading?: boolean }) {
   const [drafts, setDrafts] = useState<Record<string, string[]>>({});
   const candidates = users.filter((x) => x.platform_role !== "superadmin");
-  return <Panel title="Subadmin Privileges" icon={UserCog}>
-    {loading ? <Loading type="list" rows={4} /> : <div className="space-y-3">{candidates.map((item) => {
-      const values = drafts[item.id] || item.platform_permissions;
-      return <Card key={item.id} className="shadow-none rounded border-gray-100"><CardContent className="p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">{item.full_name}</p><p className="text-xs text-muted-foreground">{item.email}</p></div><Badge variant="outline">{item.platform_role || "User"}</Badge></div>
-        <div className="mt-3"><CheckboxGrid values={values} options={ADMIN_PERMISSIONS} onChange={(next) => setDrafts((old) => ({ ...old, [item.id]: next }))} /></div>
-        <div className="mt-3 flex gap-2"><Button size="sm" onClick={() => onSave(item.id, "subadmin", values)}>Save Subadmin</Button>{item.platform_role === "subadmin" && <Button size="sm" variant="destructive" onClick={() => onSave(item.id, "none", [])}>Remove</Button>}</div>
-      </CardContent></Card>;
-    })}</div>}
-  </Panel>;
+  return (
+    <div className="space-y-5">
+      <Panel title="Subadmin Privileges" icon={UserCog}>
+        {loading ? <Loading type="list" rows={4} /> : <div className="space-y-3">{candidates.map((item) => {
+          const values = drafts[item.id] || item.platform_permissions;
+          return <Card key={item.id} className="shadow-none rounded border-gray-100"><CardContent className="p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">{item.full_name}</p><p className="text-xs text-muted-foreground">{item.email}</p></div><Badge variant="outline">{item.platform_role || "User"}</Badge></div>
+            <div className="mt-3"><CheckboxGrid values={values} options={ADMIN_PERMISSIONS} onChange={(next) => setDrafts((old) => ({ ...old, [item.id]: next }))} /></div>
+            <div className="mt-3 flex gap-2"><Button size="sm" onClick={() => onSave(item.id, "subadmin", values, item.platform_fee_share_percentage)}>Save Subadmin</Button>{item.platform_role === "subadmin" && <Button size="sm" variant="destructive" onClick={() => onSave(item.id, "none", [], 0)}>Remove</Button>}</div>
+          </CardContent></Card>;
+        })}</div>}
+      </Panel>
+      <AdminSharesPanel users={users} onSave={onSave} loading={loading} />
+    </div>
+  );
+}
+
+function AdminSharesPanel({ users, onSave, loading }: { users: PlatformUserResponse[]; onSave: (id: string, role: "subadmin" | "none", permissions: string[], share: number) => void; loading?: boolean }) {
+  const [draftShares, setDraftShares] = useState<Record<string, number>>({});
+  const admins = users.filter((item) => item.platform_role === "subadmin" || item.platform_role === "superadmin");
+  const assigned = admins.reduce((sum, item) => sum + Number(draftShares[item.id] ?? item.platform_fee_share_percentage ?? 0), 0);
+  const totalShareAmount = admins.reduce((sum, item) => sum + item.platform_fee_share_amount, 0);
+  const shareOptions = [0, 5, 10, 15, 20, 25, 50];
+
+  return (
+    <Panel title="Platform Fee Shares" icon={CircleDollarSign}>
+      {loading ? <Loading type="list" rows={4} /> : (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded border border-border/30 p-4"><p className="text-[10px] font-black uppercase text-muted-foreground">Assigned Share</p><p className="mt-1 text-2xl font-black">{assigned.toFixed(2)}%</p></div>
+            <div className="rounded border border-border/30 p-4"><p className="text-[10px] font-black uppercase text-muted-foreground">Remaining Share</p><p className="mt-1 text-2xl font-black">{Math.max(0, 100 - assigned).toFixed(2)}%</p></div>
+            <div className="rounded border border-border/30 p-4"><p className="text-[10px] font-black uppercase text-muted-foreground">Allocated Amount</p><p className="mt-1 text-2xl font-black">{money(totalShareAmount)}</p></div>
+          </div>
+
+          {admins.length === 0 ? (
+            <div className="rounded border border-dashed p-8 text-center text-sm text-muted-foreground">Create a subadmin first, then assign a platform fee share.</div>
+          ) : (
+            <div className="space-y-3">
+              {admins.map((admin) => {
+                const draftShare = Number(draftShares[admin.id] ?? admin.platform_fee_share_percentage ?? 0);
+                const isSuperadmin = admin.platform_role === "superadmin";
+                return (
+                  <div key={admin.id} className="rounded border border-border/30 p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-bold">{admin.full_name}</p>
+                          <Badge variant="outline">{admin.platform_role}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{admin.email}</p>
+                        <p className="mt-2 text-sm font-black">{money(admin.platform_fee_share_amount)} <span className="text-[11px] font-semibold text-muted-foreground">current share amount</span></p>
+                      </div>
+                      <div className="w-full max-w-xl space-y-3">
+                        <div className="flex flex-wrap gap-2">
+                          {shareOptions.map((option) => (
+                            <Button
+                              key={option}
+                              type="button"
+                              size="sm"
+                              variant={draftShare === option ? "default" : "outline"}
+                              className="h-8 text-xs"
+                              disabled={isSuperadmin}
+                              onClick={() => setDraftShares((old) => ({ ...old, [admin.id]: option }))}
+                            >
+                              {option}%
+                            </Button>
+                          ))}
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step="0.01"
+                            value={draftShare}
+                            disabled={isSuperadmin}
+                            onChange={(event) => setDraftShares((old) => ({ ...old, [admin.id]: Number(event.target.value) }))}
+                            className="h-9"
+                          />
+                          <Button
+                            size="sm"
+                            className="h-9"
+                            disabled={isSuperadmin}
+                            onClick={() => onSave(admin.id, "subadmin", admin.platform_permissions, draftShare)}
+                          >
+                            Save Share
+                          </Button>
+                        </div>
+                        {isSuperadmin && <p className="text-[11px] text-muted-foreground">Superadmin shares are shown here for visibility. Assign operational shares to subadmins.</p>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
 }
 
 function HealthPanel({ data, loading, onRefresh }: { data: Awaited<ReturnType<typeof renultApi.platformAdmin.health>> | undefined; loading: boolean; onRefresh: () => void }) {

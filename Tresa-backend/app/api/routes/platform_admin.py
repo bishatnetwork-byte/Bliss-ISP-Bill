@@ -105,6 +105,19 @@ RESERVED_SUBDOMAINS = {
 }
 
 
+def _platform_fee_total(session: Session) -> int:
+    return int(session.exec(select(func.coalesce(func.sum(PlatformLedgerEntry.amount), 0))).one())
+
+
+def _platform_share_total(session: Session, exclude_user_id: UUID | None = None) -> float:
+    query = select(func.coalesce(func.sum(User.platform_fee_share_percentage), 0)).where(
+        User.platform_role.in_(["superadmin", "subadmin"])
+    )
+    if exclude_user_id is not None:
+        query = query.where(User.id != exclude_user_id)
+    return float(session.exec(query).one() or 0)
+
+
 def _admin(permission: str):
     return Depends(platform_admin(permission))
 
@@ -152,7 +165,9 @@ def _remove_account_subdomain(subdomain: str) -> None:
         delete_record(zone_id, str(existing["id"]))
 
 
-def _user_response(session: Session, user: User) -> PlatformUserResponse:
+def _user_response(session: Session, user: User, platform_fees: int | None = None) -> PlatformUserResponse:
+    platform_fees = _platform_fee_total(session) if platform_fees is None else platform_fees
+    share_percentage = float(user.platform_fee_share_percentage or 0)
     branch_ids = list(session.exec(select(Branch.id).where(Branch.user_id == user.id)).all())
     router_count = 0
     voucher_count = 0
@@ -184,6 +199,8 @@ def _user_response(session: Session, user: User) -> PlatformUserResponse:
         allowed_sections=[item for item in (user.allowed_sections or "").split(",") if item],
         platform_role=user.platform_role,
         platform_permissions=sorted(permissions_for(user)),
+        platform_fee_share_percentage=share_percentage,
+        platform_fee_share_amount=round(platform_fees * share_percentage / 100),
         account_subdomain=user.account_subdomain,
         subdomain_enabled=user.subdomain_enabled,
         branches=len(branch_ids),
@@ -201,7 +218,6 @@ def overview(
     session: SessionDep,
     admin: User = _admin("overview"),
 ) -> PlatformOverviewResponse:
-    del admin
     users = int(session.exec(select(func.count(User.id))).one())
     active_users = int(session.exec(select(func.count(User.id)).where(User.is_active.is_(True))).one())
     branches = int(session.exec(select(func.count(Branch.id))).one())
@@ -216,6 +232,9 @@ def overview(
     expired_vouchers = int(session.exec(
         select(func.count(VoucherPurchase.id)).where(VoucherPurchase.status == "EXPIRED")
     ).one())
+    platform_fees = _platform_fee_total(session)
+    assigned_share = _platform_share_total(session)
+    my_share_percentage = float(admin.platform_fee_share_percentage or 0)
     return PlatformOverviewResponse(
         users=users,
         active_users=active_users,
@@ -227,7 +246,11 @@ def overview(
         activated_vouchers=activated_vouchers,
         expired_vouchers=expired_vouchers,
         wallet_balance=int(session.exec(select(func.coalesce(func.sum(BranchWallet.balance), 0))).one()),
-        platform_fees=int(session.exec(select(func.coalesce(func.sum(PlatformLedgerEntry.amount), 0))).one()),
+        platform_fees=platform_fees,
+        my_platform_fee_share_percentage=my_share_percentage,
+        my_platform_fee_share_amount=round(platform_fees * my_share_percentage / 100),
+        assigned_platform_fee_share_percentage=assigned_share,
+        unassigned_platform_fee_share_percentage=max(0, 100 - assigned_share),
         r2_configured=bool(settings.r2_account_id and settings.r2_bucket_name),
         dns_configured=dns_is_configured(),
         dns_provider=dns_provider_name(),
@@ -285,6 +308,7 @@ def users(
             col(User.phone_number).ilike(pattern),
         ))
     rows = session.exec(query.order_by(User.created_at.desc()).limit(limit)).all()
+    platform_fees = _platform_fee_total(session)
     return [
         PlatformUserResponse(
             id=user.id,
@@ -296,6 +320,8 @@ def users(
             allowed_sections=[item for item in (user.allowed_sections or "").split(",") if item],
             platform_role=user.platform_role,
             platform_permissions=sorted(permissions_for(user)),
+            platform_fee_share_percentage=float(user.platform_fee_share_percentage or 0),
+            platform_fee_share_amount=round(platform_fees * float(user.platform_fee_share_percentage or 0) / 100),
             account_subdomain=user.account_subdomain,
             subdomain_enabled=user.subdomain_enabled,
             branches=int(branches),
@@ -829,8 +855,21 @@ def update_subadmin(
     invalid = set(payload.permissions) - ADMIN_PERMISSIONS
     if invalid:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unsupported permissions: {', '.join(sorted(invalid))}")
+    assigned_elsewhere = _platform_share_total(session, target.id)
+    next_share = (
+        0
+        if payload.role == "none"
+        else float(payload.platform_fee_share_percentage if payload.platform_fee_share_percentage is not None else target.platform_fee_share_percentage or 0)
+    )
+    if assigned_elsewhere + next_share > 100:
+        available = max(0, 100 - assigned_elsewhere)
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Admin shares cannot exceed 100%. Available share for this admin is {available:.2f}%",
+        )
     target.platform_role = None if payload.role == "none" else "subadmin"
     target.platform_permissions = None if payload.role == "none" else ",".join(sorted(set(payload.permissions)))
+    target.platform_fee_share_percentage = next_share
     target.updated_at = datetime.utcnow()
     session.add(target)
     session.commit()

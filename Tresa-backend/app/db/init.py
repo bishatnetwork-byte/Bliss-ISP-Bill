@@ -137,6 +137,7 @@ def _ensure_user_platform_columns() -> None:
         "allowed_sections": "TEXT",
         "platform_role": "VARCHAR",
         "platform_permissions": "TEXT",
+        "platform_fee_share_percentage": "FLOAT DEFAULT 0 NOT NULL",
         "account_subdomain": "VARCHAR",
         "subdomain_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
     }

@@ -99,6 +99,10 @@ export interface PlatformOverviewResponse {
   expired_vouchers: number;
   wallet_balance: number;
   platform_fees: number;
+  my_platform_fee_share_percentage: number;
+  my_platform_fee_share_amount: number;
+  assigned_platform_fee_share_percentage: number;
+  unassigned_platform_fee_share_percentage: number;
   r2_configured: boolean;
   dns_configured: boolean;
   dns_provider: "cloudflare" | "ionos" | "unconfigured";
@@ -115,6 +119,8 @@ export interface PlatformUserResponse {
   allowed_sections: string[];
   platform_role: "superadmin" | "subadmin" | null;
   platform_permissions: string[];
+  platform_fee_share_percentage: number;
+  platform_fee_share_amount: number;
   account_subdomain: string | null;
   subdomain_enabled: boolean;
   branches: number;
@@ -1591,7 +1597,7 @@ export const renultApi = {
       apiRequest<{ message: string }>(`/platform-admin/users/${userId}/branches/${branchId}`, { method, body: JSON.stringify(payload) }),
     syncUserSubdomain: (userId: string) =>
       apiRequest<{ message: string }>(`/platform-admin/users/${userId}/subdomain/sync`, { method: "POST" }),
-    updateSubadmin: (userId: string, payload: { role: "subadmin" | "none"; permissions: string[] }) =>
+    updateSubadmin: (userId: string, payload: { role: "subadmin" | "none"; permissions: string[]; platform_fee_share_percentage?: number }) =>
       apiRequest<PlatformUserResponse>(`/platform-admin/subadmins/${userId}`, { method: "PUT", body: JSON.stringify(payload) }),
     settings: () => apiRequest<PlatformSettingsResponse>("/platform-admin/settings"),
     updateSettings: (payload: PlatformSettingsResponse) =>

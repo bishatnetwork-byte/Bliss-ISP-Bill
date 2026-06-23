@@ -22,6 +22,7 @@ class User(SQLModel, table=True):
     allowed_sections: Optional[str] = Field(default=None)
     platform_role: Optional[str] = Field(default=None, index=True)
     platform_permissions: Optional[str] = Field(default=None)
+    platform_fee_share_percentage: float = Field(default=0)
     account_subdomain: Optional[str] = Field(default=None, index=True, unique=True)
     subdomain_enabled: bool = Field(default=False, index=True)
     avatar_url: Optional[str] = Field(default=None)

@@ -17,6 +17,10 @@ class PlatformOverviewResponse(BaseModel):
     expired_vouchers: int
     wallet_balance: int
     platform_fees: int
+    my_platform_fee_share_percentage: float = 0
+    my_platform_fee_share_amount: int = 0
+    assigned_platform_fee_share_percentage: float = 0
+    unassigned_platform_fee_share_percentage: float = 100
     r2_configured: bool
     dns_configured: bool
     dns_provider: str
@@ -33,6 +37,8 @@ class PlatformUserResponse(BaseModel):
     allowed_sections: list[str]
     platform_role: Optional[str]
     platform_permissions: list[str]
+    platform_fee_share_percentage: float = 0
+    platform_fee_share_amount: int = 0
     account_subdomain: Optional[str]
     subdomain_enabled: bool
     branches: int
@@ -105,6 +111,7 @@ class PlatformBranchUpdate(BaseModel):
 class PlatformSubadminUpdate(BaseModel):
     role: Optional[str] = Field(default="subadmin", pattern="^(subadmin|none)$")
     permissions: list[str] = Field(default_factory=list)
+    platform_fee_share_percentage: Optional[float] = Field(default=None, ge=0, le=100)
 
 
 class PlatformSettingsResponse(BaseModel):

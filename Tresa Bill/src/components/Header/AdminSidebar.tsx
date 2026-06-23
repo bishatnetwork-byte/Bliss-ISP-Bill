@@ -4,6 +4,7 @@ import {
   Activity,
   Banknote,
   Bell,
+  ChartPie,
   Cloud,
   FileClock,
   FileSpreadsheet,
@@ -25,6 +26,7 @@ export const PLATFORM_ADMIN_SECTIONS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "users", label: "Users Control", icon: Users },
   { id: "finance", label: "Fees & Wallets", icon: Banknote },
+  { id: "admin_shares", label: "Admin Shares", icon: ChartPie },
   { id: "broadcasts", label: "Broadcasts", icon: Mail },
   { id: "voucher_audit", label: "Voucher Audit", icon: FileClock },
   { id: "message_diagnostics", label: "Message Control", icon: MessageSquareWarning },
@@ -44,7 +46,7 @@ export type PlatformAdminSection = typeof PLATFORM_ADMIN_SECTIONS[number]["id"];
 const SECTIONS_GROUPS = [
   {
     title: "Core Operations",
-    items: ["overview", "users", "finance", "subadmins", "broadcasts"],
+    items: ["overview", "users", "finance", "admin_shares", "subadmins", "broadcasts"],
   },
   {
     title: "Infrastructure",

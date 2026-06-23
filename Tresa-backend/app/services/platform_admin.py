@@ -29,6 +29,7 @@ ADMIN_PERMISSIONS = {
     "users",
     "permissions",
     "finance",
+    "admin_shares",
     "broadcasts",
     "voucher_audit",
     "message_diagnostics",
