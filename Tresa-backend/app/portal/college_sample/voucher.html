@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en" data-variation="minimalistic" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta http-equiv="expires" content="-1" />
+    <title>Connect Voucher | Renult Campus WiFi</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+  <body>
+    $(if chap-id)
+    <form name="sendin" action="$(link-login-only)" method="post" hidden>
+      <input type="hidden" name="username" />
+      <input type="hidden" name="password" />
+      <input type="hidden" name="dst" value="$(link-orig)" />
+      <input type="hidden" name="popup" value="true" />
+    </form>
+    <script src="./js/md5.js"></script>
+    <script>
+      function doLogin() {
+        document.sendin.username.value = document.login.username.value;
+        document.sendin.password.value = hexMD5("$(chap-id)" + document.login.password.value + "$(chap-challenge)");
+        document.sendin.submit();
+        return false;
+      }
+    </script>
+    $(endif)
+
+    <button class="theme-toggle-button" id="themeToggleButton" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+      <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Zm0 4a1 1 0 0 1-1-1v-1a1 1 0 1 1 2 0v1a1 1 0 0 1-1 1Zm0-18a1 1 0 0 1-1-1V2a1 1 0 1 1 2 0v1a1 1 0 0 1-1 1Zm10 8a1 1 0 0 1-1 1h-1a1 1 0 1 1 0-2h1a1 1 0 0 1 1 1ZM4 12a1 1 0 0 1-1 1H2a1 1 0 1 1 0-2h1a1 1 0 0 1 1 1Zm14.95 7.536a1 1 0 0 1-1.414 0l-.707-.707a1 1 0 0 1 1.414-1.414l.707.707a1 1 0 0 1 0 1.414ZM7.172 7.172a1 1 0 0 1-1.414 0l-.707-.707A1 1 0 1 1 6.465 5.05l.707.707a1 1 0 0 1 0 1.414Zm12.364-2.121a1 1 0 0 1 0 1.414l-.707.707a1 1 0 0 1-1.414-1.414l.707-.707a1 1 0 0 1 1.414 0ZM7.172 18.243l-.707.707a1 1 0 0 1-1.414-1.414l.707-.707a1 1 0 1 1 1.414 1.414Z" />
+      </svg>
+      <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M21 14.6A8.5 8.5 0 0 1 9.4 3a.8.8 0 0 0-.86-1.24A10.5 10.5 0 1 0 22.24 15.46a.8.8 0 0 0-1.24-.86Z" />
+      </svg>
+    </button>
+
+    <div class="container">
+      <div class="payment-form card">
+        <header class="header">
+          <svg fill="var(--accent-color)" height="42" width="42" viewBox="0 0 494.45 494.45" aria-hidden="true">
+            <path d="M395.225 277.325c-6.8 0-13.5-2.6-18.7-7.8-71.4-71.3-187.4-71.3-258.8 0-10.3 10.3-27.1 10.3-37.4 0s-10.3-27.1 0-37.4c92-92 241.6-92 333.6 0 10.3 10.3 10.3 27.1 0 37.4-5.2 5.2-12 7.8-18.7 7.8z" />
+            <path d="M323.625 348.825c-6.8 0-13.5-2.6-18.7-7.8-15.4-15.4-36-23.9-57.8-23.9s-42.4 8.5-57.8 23.9c-10.3 10.3-27.1 10.3-37.4 0-10.3-10.3-10.3-27.1 0-37.4 25.4-25.4 59.2-39.4 95.2-39.4s69.8 14 95.2 39.5c10.3 10.3 10.3 27.1 0 37.4-5.1 5.1-11.9 7.7-18.7 7.7z" />
+            <circle cx="247.125" cy="398.925" r="35.3" />
+            <path d="M467.925 204.625c-6.8 0-13.5-2.6-18.7-7.8-111.5-111.4-292.7-111.4-404.1 0-10.3 10.3-27.1 10.3-37.4 0s-10.3-27.1 0-37.4c64-64 149-99.2 239.5-99.2s175.5 35.2 239.5 99.2c10.3 10.3 10.3 27.1 0 37.4-5.3 5.2-12.1 7.8-18.8 7.8z" />
+          </svg>
+          <h1>CONNECT VOUCHER</h1>
+          <p class="subtitle">Enter your voucher code or find vouchers bought with your phone number.</p>
+        </header>
+
+        <main id="main-content">
+          <section class="quick-login-section" aria-label="Connect with voucher">
+            $(if error)
+            <div class="hotspot-message-container" role="alert">
+              <p class="error-info">$(error)</p>
+            </div>
+            $(endif)
+
+            <form
+              name="login"
+              id="loginForm"
+              class="quick-login-form"
+              action="$(link-login-only)"
+              method="post"
+              $(if chap-id) onsubmit="return doLogin()" $(endif)
+            >
+              <input type="hidden" name="dst" value="$(link-orig)" />
+              <input type="hidden" name="popup" value="true" />
+
+              <div class="login-form-row">
+                <div class="form-input-container">
+                  <label for="voucherCode" class="sr-only">Voucher Code</label>
+                  <input
+                    type="text"
+                    id="voucherCode"
+                    name="username"
+                    value="$(username)"
+                    placeholder="Enter your voucher code"
+                    autocomplete="username"
+                    required
+                  />
+                </div>
+
+                <div class="login-button-container">
+                  <button type="submit" class="login-button button-primary">
+                    <span class="login-button-text">Connect</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-group password-group" hidden>
+                <label for="loginPassword">Password</label>
+                <input id="loginPassword" name="password" type="password" autocomplete="current-password" />
+              </div>
+            </form>
+          </section>
+
+          <section class="search-voucher-section voucher-page-actions" aria-label="Saved voucher">
+            <button class="find-voucher-trigger" type="button" id="useSavedVoucherTrigger">Use saved voucher</button>
+            <a class="secondary-action" href="./login.html">Buy new voucher</a>
+          </section>
+          <p id="savedVoucherMessage" class="payment-message" role="status"></p>
+
+          <section class="voucher-finder-section" aria-label="Find voucher by phone number">
+            <form id="findVoucherForm" class="voucher-finder-form">
+              <label for="findVoucherPhone">Find voucher by Mobile Money number</label>
+              <div class="login-form-row">
+                <input id="findVoucherPhone" name="phone_number" type="tel" inputmode="tel" placeholder="07XXXXXXXX" required />
+                <button class="login-button button-primary" type="submit">Find</button>
+              </div>
+            </form>
+            <div id="voucherSearchResults" class="voucher-search-results" role="status"></div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      window.RENULT_PORTAL_CONFIG = {
+        apiBaseUrl: "https://api.renult.xyz",
+        routerName: "renult-campus",
+        showPasswordField: false
+      };
+    </script>
+    <script src="./js/core.js"></script>
+  </body>
+</html>

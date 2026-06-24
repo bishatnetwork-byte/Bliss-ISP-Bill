@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    $(if refresh-timeout)
+    <meta http-equiv="refresh" content="$(refresh-timeout-secs)" />
+    $(endif)
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta http-equiv="expires" content="-1" />
+    <title>Renult Campus WiFi - Connected</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="brand-mark">R</div>
+        <p class="eyebrow">Connected</p>
+        <h1>You are online</h1>
+        <p class="hero-copy">Voucher <strong>$(username)</strong> is active. Save it if you need to reconnect later.</p>
+      </section>
+      <section class="panel">
+        <div class="section-heading">
+          <h2>Session details</h2>
+          <p>Usage updates automatically when RouterOS refreshes this page.</p>
+        </div>
+        <div class="network-card">
+          <span>IP: $(ip)</span>
+          <span>Up: $(bytes-in-nice)</span>
+          <span>Down: $(bytes-out-nice)</span>
+          <span>Uptime: $(uptime)</span>
+          $(if session-time-left)<span>Left: $(session-time-left)</span>$(endif)
+        </div>
+        <form action="$(link-logout)" name="logout" class="section-heading">
+          $(if login-by-mac != 'yes')
+          <button type="submit">Log out</button>
+          $(endif)
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

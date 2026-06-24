@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta http-equiv="expires" content="-1" />
+    <title>Renult Campus WiFi - Logged out</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="brand-mark">R</div>
+        <p class="eyebrow">Logged out</p>
+        <h1>Session ended</h1>
+        <p class="hero-copy">Thanks for using Renult Campus WiFi.</p>
+      </section>
+      <section class="panel">
+        <div class="network-card">
+          <span>User: $(username)</span>
+          <span>IP: $(ip)</span>
+          <span>MAC: $(mac)</span>
+          <span>Time: $(uptime)</span>
+          <span>Data: $(bytes-in-nice) / $(bytes-out-nice)</span>
+        </div>
+        <form action="$(link-login)" name="login" class="section-heading">
+          <button type="submit">Log in again</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>
