@@ -1,6 +1,7 @@
 import {
   PlatformRouterCommandRequest,
   PlatformRouterResponse,
+  RouterPingResponse,
   renultApi,
 } from "@/api/foreform";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +63,20 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+function pingToCommandResult(routerId: string, routerName: string, ping: RouterPingResponse) {
+  return {
+    router_id: routerId,
+    router_name: routerName,
+    success: ping.reachable,
+    message: ping.reachable
+      ? `Ping reply from ${ping.host}${ping.latency_ms ? ` in ${ping.latency_ms}ms` : ""}`
+      : `Ping failed for ${ping.host}`,
+    error: ping.error,
+  };
+}
+
+const EMPTY_ROUTERS: PlatformRouterResponse[] = [];
+
 export default function MikrotikManagerPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -81,7 +96,7 @@ export default function MikrotikManagerPage() {
     staleTime: 30 * 1000,
   });
 
-  const routers = routersQuery.data || [];
+  const routers = routersQuery.data ?? EMPTY_ROUTERS;
   const selectedRouters = useMemo(
     () => routers.filter((router) => selectedIds.includes(router.id)),
     [routers, selectedIds],
@@ -125,7 +140,26 @@ export default function MikrotikManagerPage() {
   });
 
   const pushCommand = useMutation({
-    mutationFn: (payload: PlatformRouterCommandRequest) => renultApi.platformAdmin.pushRouterCommand(payload),
+    mutationFn: async (payload: PlatformRouterCommandRequest) => {
+      if (payload.command !== "ping") {
+        return renultApi.platformAdmin.pushRouterCommand(payload);
+      }
+      const results = await Promise.all(
+        payload.router_ids.map(async (routerId) => {
+          const router = routers.find((item) => item.id === routerId);
+          const ping = await renultApi.platformAdmin.pingRouter(routerId, payload.target || "8.8.8.8");
+          return pingToCommandResult(routerId, router?.name || ping.router_name || "MikroTik", ping);
+        }),
+      );
+      const succeeded = results.filter((item) => item.success).length;
+      return {
+        command: "ping",
+        total: results.length,
+        succeeded,
+        failed: results.length - succeeded,
+        results,
+      };
+    },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["platformAdmin", "routers"] });
       toast.success(`${result.succeeded}/${result.total} MikroTiks accepted ${result.command}.`);
