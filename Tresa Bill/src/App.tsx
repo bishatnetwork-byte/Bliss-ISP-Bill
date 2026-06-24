@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import type React from 'react';
 import { useEffect } from 'react';
-import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+import { Route, BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
 import { Toaster as SonnerToaster } from "sonner";
 import { AuthProvider, OwnerRoute, PermissionRoute, PlatformAdminRoute, ProtectedRoute, useAuth } from './lib/auth';
 import PageNotFound from './lib/PageNotFound';
@@ -100,10 +100,13 @@ function AccountLoadingProgress() {
 
 function VoucherSyncAgent() {
   const queryClient = useQueryClient();
+  const location = useLocation();
 
   useEffect(() => {
     let running = false;
+    const platformAdminRoute = location.pathname.startsWith("/platform-admin");
     const reconcile = async () => {
+      if (platformAdminRoute) return;
       const branchId = localStorage.getItem("selected-workspace");
       if (!branchId || running) return;
       running = true;
@@ -129,7 +132,7 @@ function VoucherSyncAgent() {
       window.clearInterval(interval);
       window.removeEventListener("renult-branch-change", reconcile);
     };
-  }, [queryClient]);
+  }, [location.pathname, queryClient]);
 
   return null;
 }

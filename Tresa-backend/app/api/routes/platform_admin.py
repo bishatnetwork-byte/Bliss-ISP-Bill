@@ -1,4 +1,5 @@
 import json
+import logging
 import secrets
 from datetime import datetime, timedelta
 from html import escape
@@ -112,6 +113,7 @@ from app.services.storage import STORAGE_ERRORS, delete_object, list_objects
 from app.services.wallet import freeze_wallet
 
 router = APIRouter(prefix="/platform-admin", tags=["Platform Admin"])
+logger = logging.getLogger(__name__)
 
 RESERVED_SUBDOMAINS = {
     "admin", "api", "app", "auth", "billing", "dashboard", "help", "login",
@@ -1224,9 +1226,18 @@ def admin_update_router(
     session.add(db_router)
     session.commit()
     session.refresh(db_router)
-    audit(session, admin, "router_updated", "router", str(db_router.id), changes)
-    _router_audit(session, db_router, "platform_router_updated", {"admin_id": str(admin.id), **changes})
-    _notify_router_owner(session, db_router, f"{db_router.name} updated", "A platform admin updated this MikroTik's platform settings.")
+    try:
+        audit(session, admin, "router_updated", "router", str(db_router.id), changes)
+        _router_audit(session, db_router, "platform_router_updated", {"admin_id": str(admin.id), **changes})
+        _notify_router_owner(
+            session,
+            db_router,
+            f"{db_router.name} updated",
+            "A platform admin updated this MikroTik's platform settings.",
+        )
+    except Exception:
+        session.rollback()
+        logger.exception("Router update side effects failed for %s", db_router.id)
     return _platform_router_response(session, db_router)
 
 
