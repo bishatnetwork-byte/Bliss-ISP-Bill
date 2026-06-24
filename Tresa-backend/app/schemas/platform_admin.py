@@ -184,6 +184,78 @@ class PlatformTunnelResponse(BaseModel):
     last_seen: Optional[datetime]
 
 
+class PlatformRouterResponse(BaseModel):
+    id: UUID
+    branch_id: UUID
+    branch_name: str
+    owner_id: UUID
+    owner_name: str
+    name: str
+    host: str
+    port: int
+    username: str
+    location: Optional[str]
+    description: Optional[str]
+    is_active: bool
+    status: str
+    heartbeat_status: str
+    snmp_status: str
+    tunnel_ip: Optional[str]
+    ppp_username: Optional[str]
+    nat_port: Optional[int]
+    winbox_nat_port: Optional[int]
+    hotspot_provisioned: bool
+    last_seen: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlatformRouterUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    location: Optional[str] = Field(default=None, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=1000)
+    is_active: Optional[bool] = None
+
+
+class PlatformRouterCommandRequest(BaseModel):
+    router_ids: list[UUID] = Field(min_length=1)
+    command: str = Field(pattern="^(ping|reboot|script|scheduler)$")
+    target: Optional[str] = Field(default="8.8.8.8", max_length=255)
+    script_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    script_source: Optional[str] = Field(default=None, min_length=1, max_length=20000)
+    run_now: bool = True
+    scheduler_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    scheduler_interval: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    scheduler_start_time: str = Field(default="startup", max_length=40)
+    scheduler_on_event: Optional[str] = Field(default=None, min_length=1, max_length=20000)
+
+    @model_validator(mode="after")
+    def _check_command_payload(self) -> "PlatformRouterCommandRequest":
+        if self.command == "script" and not self.script_source:
+            raise ValueError("script_source is required for script pushes")
+        if self.command == "scheduler" and (
+            not self.scheduler_name or not self.scheduler_interval or not self.scheduler_on_event
+        ):
+            raise ValueError("scheduler_name, scheduler_interval, and scheduler_on_event are required")
+        return self
+
+
+class PlatformRouterCommandResult(BaseModel):
+    router_id: UUID
+    router_name: str
+    success: bool
+    message: str
+    error: Optional[str] = None
+
+
+class PlatformRouterCommandResponse(BaseModel):
+    command: str
+    total: int
+    succeeded: int
+    failed: int
+    results: list[PlatformRouterCommandResult]
+
+
 class PlatformVoucherAuditResponse(BaseModel):
     id: UUID
     voucher_code: str

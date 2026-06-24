@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { BellRing, CalendarClock, Loader2, Mail, MessageSquare, Pencil, Plus, Trash2 } from "lucide-react";
@@ -25,6 +26,18 @@ const blankForm: SubscriptionPayload = {
   notes: "",
   is_active: true,
 };
+
+const CATEGORY_OPTIONS = [
+  "ISP Bill",
+  "Hosting",
+  "Domain",
+  "Software",
+  "Router Lease",
+  "Electricity",
+  "Rent",
+  "Payroll",
+  "Other",
+];
 
 function dueLabel(days: number) {
   if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue`;
@@ -63,6 +76,7 @@ export default function SubscriptionsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const categorySelectValue = CATEGORY_OPTIONS.includes(form.category) ? form.category : "__custom__";
 
   const sortedItems = useMemo(
     () => [...items].sort((a, b) => a.days_until_due - b.days_until_due),
@@ -154,14 +168,23 @@ export default function SubscriptionsPage() {
             <h1 className="text-lg font-semibold text-foreground">Subscriptions</h1>
             <p className="mt-1 text-sm text-muted-foreground">Track ISP bills, hosting, software, and other recurring payments.</p>
           </div>
-          <Badge variant="secondary" className="w-fit rounded">{items.length} saved</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="w-fit rounded">{items.length} saved</Badge>
+            <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs" onClick={resetForm}>
+              <Plus className="h-3.5 w-3.5" />
+              New bill
+            </Button>
+          </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
-          <form onSubmit={handleSubmit} className="h-fit rounded border border-border/20 bg-card p-5">
+        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+          <form onSubmit={handleSubmit} className="h-fit rounded border border-border/20 bg-card p-5 lg:sticky lg:top-20 lg:order-2">
             <div className="mb-4 flex items-center gap-2">
               <Plus className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">{editingId ? "Edit subscription" : "Add subscription"}</h2>
+              <div>
+                <h2 className="text-sm font-semibold">{editingId ? "Edit subscription" : "Add subscription"}</h2>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">Right panel for quick bill setup.</p>
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -177,7 +200,27 @@ export default function SubscriptionsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="sub-category">Category</Label>
-                  <Input id="sub-category" value={form.category} onChange={(event) => updateForm("category", event.target.value)} />
+                  <Select
+                    value={categorySelectValue}
+                    onValueChange={(value) => updateForm("category", value === "__custom__" ? "" : value)}
+                  >
+                    <SelectTrigger id="sub-category">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORY_OPTIONS.map((category) => (
+                        <SelectItem key={category} value={category}>{category}</SelectItem>
+                      ))}
+                      <SelectItem value="__custom__">Custom category</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {categorySelectValue === "__custom__" && (
+                    <Input
+                      value={form.category}
+                      onChange={(event) => updateForm("category", event.target.value)}
+                      placeholder="Type category"
+                    />
+                  )}
                 </div>
               </div>
 
@@ -243,7 +286,7 @@ export default function SubscriptionsPage() {
             </div>
           </form>
 
-          <div className="rounded border border-border/20 bg-card">
+          <div className="rounded border border-border/20 bg-card lg:order-1">
             <div className="flex items-center justify-between border-b border-border/20 px-5 py-4">
               <h2 className="text-sm font-semibold">Upcoming bills</h2>
               <CalendarClock className="h-4 w-4 text-muted-foreground" />

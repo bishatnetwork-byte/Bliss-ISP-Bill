@@ -353,6 +353,46 @@ def reboot_router(router: Router) -> dict[str, Any]:
         return {"success": False, "error": str(exc)}
 
 
+def run_router_script(router: Router, name: str, source: str, run_now: bool = True) -> dict[str, Any]:
+    try:
+        with router_connection(router) as api:
+            scripts = api.get_resource("/system/script")
+            for existing in scripts.get(name=name):
+                scripts.remove(id=existing["id"])
+            scripts.add(name=name, policy="read,write,test,policy", source=source)
+            if run_now:
+                created = scripts.get(name=name)
+                if created:
+                    scripts.call("run", {"number": created[0]["id"]})
+        return {"success": True, "message": f"Script {name} pushed.", "error": None}
+    except Exception as exc:
+        return {"success": False, "message": f"Script {name} failed.", "error": str(exc)}
+
+
+def create_router_scheduler(
+    router: Router,
+    name: str,
+    on_event: str,
+    interval: str,
+    start_time: str = "startup",
+) -> dict[str, Any]:
+    try:
+        with router_connection(router) as api:
+            schedulers = api.get_resource("/system/scheduler")
+            for existing in schedulers.get(name=name):
+                schedulers.remove(id=existing["id"])
+            schedulers.add(**{
+                "name": name,
+                "start-time": start_time,
+                "interval": interval,
+                "on-event": on_event,
+                "policy": "read,write,test,policy",
+            })
+        return {"success": True, "message": f"Scheduler {name} created.", "error": None}
+    except Exception as exc:
+        return {"success": False, "message": f"Scheduler {name} failed.", "error": str(exc)}
+
+
 def test_connection(
     host: str,
     port: int,

@@ -15,6 +15,7 @@ import {
   MessageSquareWarning,
   Network,
   PanelLeft,
+  ServerCog,
   ShieldCheck,
   UserCog,
   Users,
@@ -31,6 +32,7 @@ export const PLATFORM_ADMIN_SECTIONS = [
   { id: "voucher_audit", label: "Voucher Audit", icon: FileClock },
   { id: "message_diagnostics", label: "Message Control", icon: MessageSquareWarning },
   { id: "tunnels", label: "Tunnels Control", icon: Network },
+  { id: "mikrotik_manager", label: "MikroTik Manager", icon: ServerCog, path: "/platform-admin/mikrotik-manager" },
   { id: "storage", label: "Cloud Files", icon: Cloud },
   { id: "dns", label: "DNS Records", icon: Globe2 },
   { id: "subadmins", label: "Subadmins", icon: UserCog },
@@ -50,7 +52,7 @@ const SECTIONS_GROUPS = [
   },
   {
     title: "Infrastructure",
-    items: ["voucher_audit", "message_diagnostics", "tunnels", "storage", "dns"],
+    items: ["voucher_audit", "message_diagnostics", "tunnels", "mikrotik_manager", "storage", "dns"],
   },
   {
     title: "System & Security",
@@ -92,7 +94,8 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
   };
 
   const selectSection = (sectionId: string) => {
-    navigate(`/platform-admin?section=${sectionId}`);
+    const section = PLATFORM_ADMIN_SECTIONS.find((item) => item.id === sectionId);
+    navigate(section && "path" in section ? section.path : `/platform-admin?section=${sectionId}`);
     onClose();
   };
 
@@ -108,7 +111,7 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
 
       <aside
         className={cn(
-          "fixed top-0 left-0 z-50 h-full overflow-y-auto custom-scrollbar bg-white border-r border-border/80 shadow-2xl md:shadow-none md:z-20",
+          "fixed top-0 left-0 z-50 h-full overflow-y-auto custom-scrollbar bg-sidebar text-sidebar-foreground border-r border-sidebar-border shadow-2xl md:shadow-none md:z-20",
           "flex flex-col transition-all duration-300 md:translate-x-0",
           isCollapsed ? "w-[72px]" : "w-[280px]",
           isOpen ? "translate-x-0" : "-translate-x-full",
@@ -133,11 +136,11 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
               return (
                 <div key={group.title} className="space-y-0.5">
                   {groupIndex > 0 && (
-                    <div className="mx-[-8px] border-t border-border/80 my-3" />
+                    <div className="mx-[-8px] border-t border-sidebar-border/80 my-3" />
                   )}
                   {groupVisibleItems.map((item) => {
                     const Icon = item.icon;
-                    const active = item.id === activeSection;
+                    const active = "path" in item ? location.pathname === item.path : item.id === activeSection;
                     return (
                       <button
                         key={item.id}
@@ -146,8 +149,8 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
                           "flex w-full min-w-0 items-center gap-2.5 rounded px-3 py-2 text-left text-sm font-medium transition-colors",
                           isCollapsed && "justify-center px-0",
                           active
-                            ? "bg-primary text-white"
-                            : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                         )}
                         title={isCollapsed ? item.label : undefined}
                       >
@@ -162,16 +165,16 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
           </div>
         </nav>
 
-        <div className="hidden md:flex border-t border-border/30 p-3 justify-center">
+        <div className="hidden md:flex border-t border-sidebar-border/80 p-3 justify-center">
           <button
             onClick={toggleCollapse}
             className={cn(
-              "flex items-center rounded text-sm font-medium text-foreground/80 hover:bg-muted/60 transition-all duration-150",
+              "flex items-center rounded text-sm font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-150",
               isCollapsed ? "justify-center w-10 h-10 mx-auto" : "w-full gap-3 px-3 py-2",
             )}
             aria-label="Toggle sidebar collapse"
           >
-            <PanelLeft className="w-5 h-5 text-foreground/70 shrink-0" />
+            <PanelLeft className="w-5 h-5 shrink-0" />
             {!isCollapsed && <span className="truncate">Collapse Menu</span>}
           </button>
         </div>

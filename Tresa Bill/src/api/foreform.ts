@@ -268,6 +268,61 @@ export interface PlatformTunnelResponse {
   last_seen: string | null;
 }
 
+export interface PlatformRouterResponse {
+  id: string;
+  branch_id: string;
+  branch_name: string;
+  owner_id: string;
+  owner_name: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  location: string | null;
+  description: string | null;
+  is_active: boolean;
+  status: string;
+  heartbeat_status: string;
+  snmp_status: string;
+  tunnel_ip: string | null;
+  ppp_username: string | null;
+  nat_port: number | null;
+  winbox_nat_port: number | null;
+  hotspot_provisioned: boolean;
+  last_seen: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PlatformRouterUpdate = Partial<Pick<PlatformRouterResponse, "name" | "location" | "description" | "is_active">>;
+
+export interface PlatformRouterCommandRequest {
+  router_ids: string[];
+  command: "ping" | "reboot" | "script" | "scheduler";
+  target?: string | null;
+  script_name?: string | null;
+  script_source?: string | null;
+  run_now?: boolean;
+  scheduler_name?: string | null;
+  scheduler_interval?: string | null;
+  scheduler_start_time?: string;
+  scheduler_on_event?: string | null;
+}
+
+export interface PlatformRouterCommandResponse {
+  command: string;
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: Array<{
+    router_id: string;
+    router_name: string;
+    success: boolean;
+    message: string;
+    error: string | null;
+  }>;
+}
+
 export interface PlatformVoucherAuditResponse {
   id: string;
   voucher_code: string;
@@ -1671,6 +1726,18 @@ export const renultApi = {
     tunnels: () => apiRequest<PlatformTunnelResponse[]>("/platform-admin/tunnels"),
     setTunnelActive: (routerId: string, active: boolean) =>
       apiRequest<{ message: string }>(`/platform-admin/tunnels/${routerId}/active`, { method: "POST", query: { active } }),
+    routers: (search = "") =>
+      apiRequest<PlatformRouterResponse[]>("/platform-admin/routers", { query: { search: search || undefined, limit: 500 } }),
+    router: (routerId: string) =>
+      apiRequest<PlatformRouterResponse>(`/platform-admin/routers/${routerId}`),
+    updateRouter: (routerId: string, payload: PlatformRouterUpdate) =>
+      apiRequest<PlatformRouterResponse>(`/platform-admin/routers/${routerId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    deleteRouter: (routerId: string) =>
+      apiRequest<{ message: string }>(`/platform-admin/routers/${routerId}`, { method: "DELETE" }),
+    routerLogs: (routerId: string, limit = 200) =>
+      apiRequest<RouterLogsResponse>(`/platform-admin/routers/${routerId}/logs`, { query: { limit } }),
+    pushRouterCommand: (payload: PlatformRouterCommandRequest) =>
+      apiRequest<PlatformRouterCommandResponse>("/platform-admin/router-commands", { method: "POST", body: JSON.stringify(payload) }),
     voucherAudit: (search = "") =>
       apiRequest<PlatformVoucherAuditResponse[]>("/platform-admin/voucher-audit", { query: { search: search || undefined, limit: 500 } }),
     messageDiagnostics: (query?: { search?: string; status_filter?: string; limit?: number }) =>

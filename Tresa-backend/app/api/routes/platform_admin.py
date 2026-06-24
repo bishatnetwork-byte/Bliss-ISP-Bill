@@ -1,3 +1,4 @@
+import json
 import secrets
 from datetime import datetime, timedelta
 from html import escape
@@ -22,7 +23,7 @@ from app.models.platform_ledger import PlatformLedgerEntry
 from app.models.message import MessageLog
 from app.models.portal_ad import PortalAd
 from app.models.router import Router
-from app.models.router_event import RouterErrorLog
+from app.models.router_event import RouterAuditLog, RouterErrorLog
 from app.models.telegram_connection import TelegramConnection
 from app.models.user import User
 from app.models.user_session import UserSession
@@ -43,6 +44,11 @@ from app.schemas.platform_admin import (
     PlatformNotificationResponse,
     PlatformOverviewResponse,
     PlatformPasswordResetResponse,
+    PlatformRouterCommandRequest,
+    PlatformRouterCommandResponse,
+    PlatformRouterCommandResult,
+    PlatformRouterResponse,
+    PlatformRouterUpdate,
     PlatformSessionResponse,
     PlatformSettingsResponse,
     PlatformSettingsUpdate,
@@ -92,7 +98,15 @@ from app.services.platform_admin import (
     settings_snapshot,
 )
 from app.services.portal import normalize_router_name, push_captive_files_to_mikrotik
+from app.services.routers.concentrator import delete_router_from_chr
 from app.services.routers.credentials import encrypt_secret
+from app.services.routers.routeros import (
+    create_router_scheduler,
+    get_router_logs,
+    ping_from_router,
+    reboot_router,
+    run_router_script,
+)
 from app.services.security import hash_password, normalize_email
 from app.services.storage import STORAGE_ERRORS, delete_object, list_objects
 from app.services.wallet import freeze_wallet
@@ -120,6 +134,15 @@ def _platform_share_total(session: Session, exclude_user_id: UUID | None = None)
 
 def _admin(permission: str):
     return Depends(platform_admin(permission))
+
+
+def _superadmin():
+    def dependency(admin: User = Depends(platform_admin())) -> User:
+        if admin.platform_role != "superadmin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superadmin access required")
+        return admin
+
+    return Depends(dependency)
 
 
 def _account_dns_context() -> tuple[str, str, list[dict]]:
@@ -1075,6 +1098,247 @@ def _admin_get_router(session: SessionDep, router_id: UUID) -> Router:
     if not db_router:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Router not found")
     return db_router
+
+
+def _router_owner_context(session: SessionDep, db_router: Router) -> tuple[Branch, User]:
+    branch = session.get(Branch, db_router.branch_id)
+    if not branch:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Router branch not found")
+    owner = session.get(User, branch.user_id)
+    if not owner:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Router owner not found")
+    return branch, owner
+
+
+def _platform_router_response(session: SessionDep, db_router: Router) -> PlatformRouterResponse:
+    branch, owner = _router_owner_context(session, db_router)
+    return PlatformRouterResponse(
+        id=db_router.id,
+        branch_id=db_router.branch_id,
+        branch_name=branch.name,
+        owner_id=owner.id,
+        owner_name=owner.full_name,
+        name=db_router.name,
+        host=db_router.host,
+        port=db_router.port,
+        username=db_router.username,
+        location=db_router.location,
+        description=db_router.description,
+        is_active=db_router.is_active,
+        status=db_router.status,
+        heartbeat_status=db_router.heartbeat_status,
+        snmp_status=db_router.snmp_status,
+        tunnel_ip=db_router.tunnel_ip,
+        ppp_username=db_router.ppp_username,
+        nat_port=db_router.nat_port,
+        winbox_nat_port=db_router.winbox_nat_port,
+        hotspot_provisioned=db_router.hotspot_provisioned,
+        last_seen=db_router.last_seen,
+        created_at=db_router.created_at,
+        updated_at=db_router.updated_at,
+    )
+
+
+def _notify_router_owner(session: SessionDep, db_router: Router, title: str, body: str) -> None:
+    _, owner = _router_owner_context(session, db_router)
+    notify(session, owner.id, "router", title, body)
+
+
+def _router_audit(session: SessionDep, db_router: Router, event: str, details: dict) -> None:
+    session.add(RouterAuditLog(
+        router_id=db_router.id,
+        event=event,
+        details=json.dumps(details, default=str),
+    ))
+    session.commit()
+
+
+@router.get("/routers", response_model=list[PlatformRouterResponse])
+def admin_list_routers(
+    session: SessionDep,
+    admin: User = _superadmin(),
+    search: str | None = Query(default=None, max_length=120),
+    limit: int = Query(default=500, ge=1, le=1000),
+) -> list[PlatformRouterResponse]:
+    del admin
+    query = (
+        select(Router)
+        .join(Branch, Router.branch_id == Branch.id)
+        .join(User, Branch.user_id == User.id)
+        .order_by(Router.updated_at.desc())
+        .limit(limit)
+    )
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+        query = query.where(sa.or_(
+            col(Router.name).ilike(pattern),
+            col(Router.host).ilike(pattern),
+            col(Branch.name).ilike(pattern),
+            col(User.full_name).ilike(pattern),
+            col(User.email).ilike(pattern),
+        ))
+    routers = session.exec(query).all()
+    return [_platform_router_response(session, item) for item in routers]
+
+
+@router.get("/routers/{router_id}", response_model=PlatformRouterResponse)
+def admin_get_router(
+    router_id: UUID,
+    session: SessionDep,
+    admin: User = _superadmin(),
+) -> PlatformRouterResponse:
+    del admin
+    return _platform_router_response(session, _admin_get_router(session, router_id))
+
+
+@router.patch("/routers/{router_id}", response_model=PlatformRouterResponse)
+def admin_update_router(
+    router_id: UUID,
+    payload: PlatformRouterUpdate,
+    session: SessionDep,
+    admin: User = _superadmin(),
+) -> PlatformRouterResponse:
+    db_router = _admin_get_router(session, router_id)
+    changes = payload.model_dump(exclude_unset=True)
+    if "name" in changes and changes["name"] is not None:
+        new_name = changes["name"].strip()
+        if new_name != db_router.name:
+            existing = session.exec(
+                select(Router)
+                .where(Router.branch_id == db_router.branch_id)
+                .where(Router.name == new_name)
+            ).first()
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Router with this name already exists in this branch",
+                )
+            db_router.name = new_name
+    if "location" in changes:
+        db_router.location = changes["location"].strip() if changes["location"] else None
+    if "description" in changes:
+        db_router.description = changes["description"].strip() if changes["description"] else None
+    if "is_active" in changes and changes["is_active"] is not None:
+        db_router.is_active = changes["is_active"]
+    db_router.updated_at = datetime.utcnow()
+    session.add(db_router)
+    session.commit()
+    session.refresh(db_router)
+    audit(session, admin, "router_updated", "router", str(db_router.id), changes)
+    _router_audit(session, db_router, "platform_router_updated", {"admin_id": str(admin.id), **changes})
+    _notify_router_owner(session, db_router, f"{db_router.name} updated", "A platform admin updated this MikroTik's platform settings.")
+    return _platform_router_response(session, db_router)
+
+
+@router.delete("/routers/{router_id}", response_model=MessageResponse)
+def admin_delete_router(
+    router_id: UUID,
+    session: SessionDep,
+    admin: User = _superadmin(),
+) -> MessageResponse:
+    db_router = _admin_get_router(session, router_id)
+    router_name = db_router.name
+    branch, owner = _router_owner_context(session, db_router)
+    if db_router.ppp_username or db_router.nat_rule_id or db_router.snmp_nat_rule_id:
+        try:
+            delete_router_from_chr(session, db_router)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not remove router from CHR: {exc}",
+            ) from exc
+    session.delete(db_router)
+    session.commit()
+    audit(session, admin, "router_deleted", "router", str(router_id), {"name": router_name, "branch": branch.name, "owner": owner.full_name})
+    notify(session, owner.id, "router", f"{router_name} removed", "A platform admin removed this MikroTik from the platform.")
+    return MessageResponse(message=f"{router_name} deleted.")
+
+
+@router.get("/routers/{router_id}/logs")
+def admin_router_logs(
+    router_id: UUID,
+    session: SessionDep,
+    admin: User = _superadmin(),
+    limit: int = Query(default=200, ge=1, le=1000),
+) -> dict:
+    del admin
+    db_router = _admin_get_router(session, router_id)
+    return {
+        "router_id": str(db_router.id),
+        "router_name": db_router.name,
+        **get_router_logs(db_router, limit),
+    }
+
+
+@router.post("/router-commands", response_model=PlatformRouterCommandResponse)
+def admin_push_router_command(
+    payload: PlatformRouterCommandRequest,
+    session: SessionDep,
+    admin: User = _superadmin(),
+) -> PlatformRouterCommandResponse:
+    results: list[PlatformRouterCommandResult] = []
+    for router_id in payload.router_ids:
+        db_router = _admin_get_router(session, router_id)
+        if payload.command == "ping":
+            command_result = ping_from_router(db_router, payload.target or "8.8.8.8")
+            success = bool(command_result["reachable"])
+            message = (
+                f"Ping reply from {command_result['host']}"
+                if success else f"Ping failed for {command_result['host']}"
+            )
+            error = command_result["error"]
+        elif payload.command == "reboot":
+            command_result = reboot_router(db_router)
+            success = bool(command_result["success"])
+            message = "Reboot command accepted." if success else "Reboot command failed."
+            error = command_result["error"]
+        elif payload.command == "script":
+            command_result = run_router_script(
+                db_router,
+                payload.script_name or f"TresaAdminScript-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+                payload.script_source or "",
+                payload.run_now,
+            )
+            success = bool(command_result["success"])
+            message = command_result["message"]
+            error = command_result["error"]
+        else:
+            command_result = create_router_scheduler(
+                db_router,
+                payload.scheduler_name or "TresaAdminScheduler",
+                payload.scheduler_on_event or "",
+                payload.scheduler_interval or "1h",
+                payload.scheduler_start_time,
+            )
+            success = bool(command_result["success"])
+            message = command_result["message"]
+            error = command_result["error"]
+
+        details = {"admin_id": str(admin.id), "command": payload.command, "success": success, "error": error}
+        audit(session, admin, f"router_{payload.command}_pushed", "router", str(db_router.id), details)
+        _router_audit(session, db_router, f"platform_{payload.command}_pushed", details)
+        _notify_router_owner(
+            session,
+            db_router,
+            f"MikroTik {payload.command} pushed",
+            f"A platform admin pushed {payload.command} to {db_router.name}. Result: {message}",
+        )
+        results.append(PlatformRouterCommandResult(
+            router_id=db_router.id,
+            router_name=db_router.name,
+            success=success,
+            message=message,
+            error=error,
+        ))
+
+    succeeded = sum(1 for item in results if item.success)
+    return PlatformRouterCommandResponse(
+        command=payload.command,
+        total=len(results),
+        succeeded=succeeded,
+        failed=len(results) - succeeded,
+        results=results,
+    )
 
 
 @router.get("/routers/{router_id}/ads", response_model=list[PortalAdResponse])

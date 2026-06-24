@@ -48,7 +48,8 @@ export default function PlatformAdminLayout({
       onSectionChange(section);
       return;
     }
-    navigate(`/platform-admin?section=${section}`);
+    const sectionConfig = PLATFORM_ADMIN_SECTIONS.find((item) => item.id === section);
+    navigate(sectionConfig && "path" in sectionConfig ? sectionConfig.path : `/platform-admin?section=${section}`);
   };
 
   return (
