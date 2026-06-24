@@ -1736,6 +1736,11 @@ export const renultApi = {
       apiRequest<{ message: string }>(`/platform-admin/routers/${routerId}`, { method: "DELETE" }),
     routerLogs: (routerId: string, limit = 200) =>
       apiRequest<RouterLogsResponse>(`/platform-admin/routers/${routerId}/logs`, { query: { limit } }),
+    pingRouter: (routerId: string, target = "8.8.8.8") =>
+      apiRequest<RouterPingResponse>(`/platform-admin/routers/${routerId}/ping`, {
+        method: "POST",
+        body: JSON.stringify({ target }),
+      }),
     pushRouterCommand: (payload: PlatformRouterCommandRequest) =>
       apiRequest<PlatformRouterCommandResponse>("/platform-admin/router-commands", { method: "POST", body: JSON.stringify(payload) }),
     voucherAudit: (search = "") =>

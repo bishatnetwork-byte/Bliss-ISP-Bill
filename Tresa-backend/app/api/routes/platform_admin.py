@@ -70,7 +70,7 @@ from app.schemas.platform_admin import (
 )
 from app.schemas.ads import PortalAdCreate, PortalAdResponse, PortalAdUpdate
 from app.schemas.portal import CaptivePortalPushRequest, PushCaptiveResponse
-from app.schemas.router import RouterCredentialsUpdate
+from app.schemas.router import RouterCredentialsUpdate, RouterPingRequest, RouterPingResponse
 from app.services.ads import (
     create_router_ad,
     get_ad_metrics,
@@ -1268,6 +1268,35 @@ def admin_router_logs(
         "router_name": db_router.name,
         **get_router_logs(db_router, limit),
     }
+
+
+@router.post("/routers/{router_id}/ping", response_model=RouterPingResponse)
+def admin_router_ping(
+    router_id: UUID,
+    payload: RouterPingRequest,
+    session: SessionDep,
+    admin: User = _superadmin(),
+) -> RouterPingResponse:
+    db_router = _admin_get_router(session, router_id)
+    target = payload.target.strip() if payload.target else "8.8.8.8"
+    result = ping_from_router(db_router, target)
+    details = {
+        "admin_id": str(admin.id),
+        "target": target,
+        "reachable": result["reachable"],
+        "latency_ms": result["latency_ms"],
+        "error": result["error"],
+    }
+    audit(session, admin, "router_ping_pushed", "router", str(db_router.id), details)
+    _router_audit(session, db_router, "platform_ping_pushed", details)
+    if not result["reachable"]:
+        _notify_router_owner(
+            session,
+            db_router,
+            f"Admin ping failed on {db_router.name}",
+            f"A platform admin ping from {db_router.name} to {target} failed. {result['error'] or ''}".strip(),
+        )
+    return RouterPingResponse(**result)
 
 
 @router.post("/router-commands", response_model=PlatformRouterCommandResponse)
