@@ -10,20 +10,21 @@ The UI architecture mirrors that sample:
 - The top-right theme button switches between dark and light mode and remembers the choice on the device.
 
 Files:
-- `login.html`: voucher login, free trial link, demo Mobile Money package flow.
+- `login.html`: voucher login, free trial link, real Mobile Money package flow.
 - `voucher.html`: dedicated existing-voucher connect page with real phone-number lookup.
 - `status.html`: connected/session summary.
 - `logout.html`: session-ended summary.
 - `error.html`: RouterOS error display.
 - `rlogin.html`, `redirect.html`, `api.json`: mobile OS captive-network support.
-- `css/styles.css`, `js/core.js`, `js/renult-pay.js`, `js/md5.js`: local assets for offline hotspot use.
+- `portal.css`, `core.js`, `renult-pay.js`, `md5.js`: flat deploy assets used by MikroTik push/deploy.
+- `css/` and `js/`: source-style copies kept for local editing/reference.
 
-To use real Renult API data, edit `window.RENULT_PORTAL_CONFIG` in `login.html`:
+When pushed through the dashboard, the backend renders these placeholders automatically:
 
 ```js
 window.RENULT_PORTAL_CONFIG = {
-  apiBaseUrl: "https://api.renult.xyz",
-  routerName: "your-router-public-name",
+  apiBaseUrl: "__PORTAL_API_BASE__",
+  routerName: "__ROUTER_PUBLIC_ID__",
   showPasswordField: false,
   supportPhone: "0700 000 000"
 };
@@ -34,4 +35,4 @@ The package script calls:
 - `POST /portal/{routerName}/payments`
 - `GET /portal/{routerName}/vouchers/find?phone_number={phone}` from `voucher.html`
 
-Local preview now uses the same Renult API calls as production. Set `routerName` to a real router public name before testing package loads, payments, or voucher lookup.
+Local preview now uses the same Renult API calls as production. Replace the placeholders with a real API base URL and router public name only when previewing the static files directly outside the dashboard push flow.

@@ -271,6 +271,7 @@ export default function CaptivePreview() {
           pill: "bg-purple-950/40 text-purple-300 border border-purple-800/30"
         };
       case "blue_modern":
+      case "college_sample":
         return {
           wrapper: "bg-gradient-to-br from-blue-700 via-indigo-800 to-slate-900 text-white min-h-screen flex flex-col justify-between",
           card: "bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-xl rounded-xl",

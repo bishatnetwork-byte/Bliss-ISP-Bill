@@ -1,4 +1,4 @@
-import { CaptivePortalDeployResponse, CaptivePortalResponse, renultApi } from "@/api/foreform";
+import { CaptivePortalDeployResponse, CaptivePortalResponse, PushCaptiveResponse, renultApi } from "@/api/foreform";
 import AppHeader from "@/components/Header/AppHeader";
 import SEO from "@/components/SEO";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useCaptivePortal, useDeployCaptivePortalR2, useUpsertCaptivePortal } from "@/hooks/useCaptivePortal";
+import { useCaptivePortal, useDeployCaptivePortalR2, usePushCaptivePortal, useUpsertCaptivePortal } from "@/hooks/useCaptivePortal";
 import { useRouters } from "@/hooks/useRouters";
 import { Fireworks } from "fireworks-js";
 import {
@@ -72,9 +72,10 @@ export default function CaptiveIndex() {
     const { data: captivePortalData, isLoading: isLoadingPortal } = useCaptivePortal(selectedRouterId);
     const upsertMutation = useUpsertCaptivePortal(selectedRouterId);
     const deployMutation = useDeployCaptivePortalR2(selectedRouterId);
+    const pushMutation = usePushCaptivePortal(selectedRouterId);
 
     const [draft, setDraft] = useState<Partial<CaptivePortalResponse> | null>(null);
-    const [pushResult, setPushResult] = useState<CaptivePortalDeployResponse | null>(null);
+    const [pushResult, setPushResult] = useState<CaptivePortalDeployResponse | PushCaptiveResponse | null>(null);
     const [deployState, setDeployState] = useState<"idle" | "saving" | "pushing" | "success" | "error">("idle");
     const [deployError, setDeployError] = useState<string>("");
     const [resultDialogOpen, setResultDialogOpen] = useState(false);
@@ -226,6 +227,52 @@ export default function CaptiveIndex() {
             toast.error(errorMessage(err, "Failed to deploy captive portal"));
         }
     };
+
+    const handleSaveAndDirectPush = async () => {
+        if (!draft || !selectedRouterId) return;
+        setDeployState("saving");
+        setDeployError("");
+        setPushResult(null);
+
+        try {
+            await upsertMutation.mutateAsync({
+                title: draft.title || "Renault WIFI",
+                description: draft.description || "High-speed internet access portal",
+                phone_one: draft.phone_one || "",
+                phone_two: draft.phone_two || "",
+                logo_url: draft.logo_url || "",
+                primary_color: draft.primary_color || "",
+                portal_template: draft.portal_template || "renault"
+            });
+
+            setDeployState("pushing");
+            const result = await pushMutation.mutateAsync();
+
+            if (result.success) {
+                setPushResult(result);
+                setDeployState("success");
+                setResultDialogOpen(true);
+                toast.success("Captive portal pushed to MikroTik successfully!");
+            } else {
+                setDeployState("error");
+                setPushResult(result);
+                setDeployError(result.error || "Push returned unsuccessful status");
+                setResultDialogOpen(true);
+                toast.error(result.error || "Failed to push to MikroTik");
+            }
+        } catch (err: unknown) {
+            setDeployState("error");
+            setDeployError(errorMessage(err, "Direct push failed"));
+            setResultDialogOpen(true);
+            toast.error(errorMessage(err, "Failed to push captive portal"));
+        }
+    };
+
+    const deployedFiles = pushResult
+        ? "fetched_files" in pushResult
+            ? pushResult.fetched_files
+            : pushResult.pushed_files
+        : [];
 
     const launchLivePreview = () => {
         if (!draft) return;
@@ -475,6 +522,7 @@ export default function CaptiveIndex() {
                                                         <SelectItem value="offline">Offline Voucher Portal (No Mobile Money)</SelectItem>
                                                         <SelectItem value="renault">Renault Custom Portal (UGX Mobile Money & Voucher)</SelectItem>
                                                         <SelectItem value="grid_portal">Grid Portal (2-Column Package Grid)</SelectItem>
+                                                        <SelectItem value="college_sample">College Glass Portal (Real Payments & Voucher Lookup)</SelectItem>
                                                         <SelectItem value="auroaa">Auroraa RouterOS Portal (Full Hotspot Bundle)</SelectItem>
                                                         <SelectItem value="light">Classic Clean (Light)</SelectItem>
                                                         <SelectItem value="dark">Stealth Slate (Dark)</SelectItem>
@@ -562,13 +610,27 @@ export default function CaptiveIndex() {
                                                 )}
                                             </Button>
 
+                                            <Button
+                                                onClick={handleSaveAndDirectPush}
+                                                variant="outline"
+                                                className="w-full gap-2 font-bold py-5 text-xs"
+                                                disabled={deployState === "saving" || deployState === "pushing"}
+                                            >
+                                                {deployState === "pushing" ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <Upload className="w-4 h-4" />
+                                                )}
+                                                Push Directly to MikroTik via FTP
+                                            </Button>
+
                                             {/* Deploy status indicator */}
                                             {(deployState === "saving" || deployState === "pushing") && (
                                                 <div className="flex items-center gap-2 justify-center text-xs text-muted-foreground pt-1">
                                                     <Upload className="w-3.5 h-3.5 animate-bounce text-primary" />
                                                     {deployState === "saving"
                                                         ? "Persisting portal settings to backend database..."
-                                                        : "Hosting portal on cloud and pulling files onto your router..."
+                                                        : "Pushing portal files and updating the hotspot profile..."
                                                     }
                                                 </div>
                                             )}
@@ -587,7 +649,7 @@ export default function CaptiveIndex() {
                                                     <CheckCircle2 className="w-5 h-5" /> Deployment Successful
                                                 </DialogTitle>
                                                 <DialogDescription>
-                                                    Router: <strong>{pushResult.router_name}</strong> {pushResult.fetched_files.length} file{pushResult.fetched_files.length !== 1 ? "s" : ""} deployed
+                                                    Router: <strong>{pushResult.router_name}</strong> {deployedFiles.length} file{deployedFiles.length !== 1 ? "s" : ""} deployed
                                                 </DialogDescription>
                                             </DialogHeader>
                                             <div className="space-y-3">
@@ -599,9 +661,9 @@ export default function CaptiveIndex() {
                                                         )}
                                                     </p>
                                                 )}
-                                                {pushResult.fetched_files.length > 0 && (
+                                                {deployedFiles.length > 0 && (
                                                     <div className="space-y-1 max-h-48 overflow-y-auto">
-                                                        {pushResult.fetched_files.map((file, i) => (
+                                                        {deployedFiles.map((file, i) => (
                                                             <div key={i} className="flex items-center gap-1.5 text-xs text-emerald-700 font-mono bg-emerald-500/10 px-2.5 py-1 rounded">
                                                                 <FileText className="w-3 h-3 shrink-0" /> {file}
                                                             </div>

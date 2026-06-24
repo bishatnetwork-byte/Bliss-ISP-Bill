@@ -16,6 +16,16 @@ import {
 
 const TEMPLATES = [
     {
+        id: "college_sample",
+        title: "College Glass Portal",
+        description: "Blue glass WiFi portal with real Mobile Money, payment checks, and voucher lookup.",
+        icon: <Sparkles className="w-8 h-8 text-sky-500" />,
+        badge: "Real Payments",
+        badgeColor: "bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300",
+        gradient: "from-sky-500/10 via-blue-500/5 to-transparent",
+        borderHover: "hover:border-sky-500 hover:shadow-sky-500/10"
+    },
+    {
         id: "offline",
         title: "Offline Voucher Portal",
         description: "Voucher-only captive portal with package pricing and automatic reconnect.",

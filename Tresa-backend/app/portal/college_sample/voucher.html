@@ -6,7 +6,7 @@
     <meta http-equiv="pragma" content="no-cache" />
     <meta http-equiv="expires" content="-1" />
     <title>Connect Voucher | Renult Campus WiFi</title>
-    <link rel="stylesheet" href="./css/styles.css" />
+    <link rel="stylesheet" href="./portal.css" />
   </head>
   <body>
     $(if chap-id)
@@ -16,7 +16,7 @@
       <input type="hidden" name="dst" value="$(link-orig)" />
       <input type="hidden" name="popup" value="true" />
     </form>
-    <script src="./js/md5.js"></script>
+    <script src="./md5.js"></script>
     <script>
       function doLogin() {
         document.sendin.username.value = document.login.username.value;
@@ -118,11 +118,11 @@
 
     <script>
       window.RENULT_PORTAL_CONFIG = {
-        apiBaseUrl: "https://api.renult.xyz",
-        routerName: "renult-campus",
+        apiBaseUrl: "__PORTAL_API_BASE__",
+        routerName: "__ROUTER_PUBLIC_ID__",
         showPasswordField: false
       };
     </script>
-    <script src="./js/core.js"></script>
+    <script src="./core.js"></script>
   </body>
 </html>
