@@ -569,7 +569,14 @@ export default function BulkSMSPage() {
                   />
                 </div>
 
-                <Button variant="outline" className="w-full gap-2" onClick={() => setWalletTopupOpen(true)}>
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => {
+                    setSettingsOpen(false);
+                    setWalletTopupOpen(true);
+                  }}
+                >
                   <DollarSignIcon className="h-4 w-4" />
                   Top up SMS wallet
                 </Button>
