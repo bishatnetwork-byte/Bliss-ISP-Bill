@@ -22,6 +22,7 @@ import {
   Globe,
   History,
   Home,
+  Inspect,
   LucidePercentSquare,
   Megaphone,
   MessageCircleMoreIcon,
@@ -77,24 +78,26 @@ const primaryNavItems: NavItem[] = [
     path: "/packages",
   },
   {
-    label: "Vouchers & Users",
+    label: "Vouchers",
     icon: <VoucherIcon className="w-5 h-5" />,
     path: "/vouchers",
-    submenu: [
-      { label: "Create Vouchers", path: "/vouchers/create", icon: <Ticket className="w-4 h-4" /> },
-      { label: "Vouchers", path: "/vouchers", icon: <Ticket className="w-4 h-4" /> },
-    ],
   },
+  {
+    label: "IP Bindings",
+    icon: <Inspect className="w-5 h-5" />,
+    path: "/ip-bindings",
+  },
+
+];
+
+const supportNavItems: NavItem[] = [
   {
     label: "Revenue Sales",
     icon: <MoneyIcon className="w-5 h-5" />,
     path: "/sales",
   },
-];
-
-const supportNavItems: NavItem[] = [
   {
-label: "Bulk Sms",
+    label: "Bulk Sms",
     icon: <MessageCircleMoreIcon className="w-5 h-5" />,
     path: "/bulk-sms",
   },
@@ -117,7 +120,7 @@ label: "Bulk Sms",
 
 const secondaryNavItems: NavItem[] = [
   {
-    label: "Mikrotiks",
+    label: "Mikrotik Router",
     icon: <MikrotikIcon className="w-5 h-5" />, //Mikrotiks Router
     path: "/router",
   },
@@ -137,15 +140,15 @@ const secondaryNavItems: NavItem[] = [
     path: "/network",
   },
   {
-    label: "Branches & Staff",
+    label: "Branches & Agents",
     icon: <Megaphone className="w-5 h-5" />,
     path: "/branches",
   },
-  {
-    label: "Messages",
-    icon: <MessagesSquare className="w-5 h-5" />,
-    path: "/messages",
-  },
+  // {
+  //   label: "Messages",
+  //   icon: <MessagesSquare className="w-5 h-5" />,
+  //   path: "/messages",
+  // },
   {
     label: "My Settings",
     icon: <SettingsIcon className="w-5 h-5" />,
@@ -163,6 +166,7 @@ const PERMISSION_BY_PATH: Record<string, string> = {
   "/vouchers/create": "vouchers",
   "/vouchers/active-users": "vouchers",
   "/active-users": "vouchers",
+  "/ip-bindings": "routers",
   "/voucher-support": "support",
   "/messages": "messages",
   "/network": "network",
@@ -608,12 +612,12 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
         `}
       >
         {isCollapsed ? (
-              <span className={iconClassName}>
-                {item.icon}
-                {isBulkSmsWarning && (
-                  <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-600 ring-2 ring-sidebar" />
-                )}
-                {item.label === "Mikrotiks" && monitoring && monitoring.total > 0 && (
+          <span className={iconClassName}>
+            {item.icon}
+            {isBulkSmsWarning && (
+              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-600 ring-2 ring-sidebar" />
+            )}
+            {item.label === "Mikrotiks" && monitoring && monitoring.total > 0 && (
               <span
                 className={`absolute right-0 top-0 inline-flex min-w-4 items-center justify-center rounded-full border border-sidebar px-1 text-[9px] font-bold leading-4 ${routerBadgeColor}`}
                 title={`${effectiveRouterCounts.online} online, ${effectiveRouterCounts.offline} offline`}

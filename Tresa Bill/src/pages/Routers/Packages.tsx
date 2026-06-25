@@ -33,7 +33,7 @@ import {
   useUpdateRouterTrial,
 } from "@/hooks/useRouters";
 import { cn } from "@/lib/utils";
-import { AlertCircle, Loader2, PackagePlus, Pencil, Plus, RefreshCw, Timer, Trash2, Wifi } from "lucide-react";
+import { AlertCircle, Loader2, PackagePlus, Pencil, Plus, RefreshCw, Search, Timer, Trash2, Wifi } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -69,6 +69,7 @@ export default function RouterPackages() {
   const { data: routers = [], isLoading: routersLoading } = useRouters(branchId);
   const [selectedRouterId, setSelectedRouterId] = useState("");
   const [form, setForm] = useState<RouterPackagePayload>(initialForm);
+  const [searchTerm, setSearchTerm] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isTrialOpen, setIsTrialOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -114,6 +115,18 @@ export default function RouterPackages() {
   const updateTrial = useUpdateRouterTrial(branchId);
   const packages = packagesQuery.data?.data.voucher || [];
   const publicPackagesPath = routerName ? `packages?router_id=${routerName.toUpperCase()}` : "packages?router_id=ROUTER";
+
+  const filteredPackages = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return packages;
+    return packages.filter(
+      (p) =>
+        p.limit?.toLowerCase().includes(q) ||
+        p.profile?.toLowerCase().includes(q) ||
+        p.data?.toLowerCase().includes(q) ||
+        p.speed_type?.toLowerCase().includes(q)
+    );
+  }, [packages, searchTerm]);
 
   const totalValue = useMemo(() => {
     return packages.reduce((sum, item) => sum + Number(item.total || 0), 0);
@@ -267,18 +280,20 @@ export default function RouterPackages() {
       <SEO title="Router Packages" />
       <AppHeader onCreateForm={() => { }} />
 
-      <main className="max-w-screen mx-auto px-4 sm:px-6 py-6 space-y-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex justify-between w-full items-center gap-3">
-            <div>
-              <h1 className="text-lg font-bold">Router Packages</h1>
+      <main className="max-w-screen mx-auto px-3 sm:px-6 py-6 space-y-5">
+        {/* ── Page header ── */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold leading-tight">Router Packages</h1>
               <p className="text-xs text-muted-foreground">Configure hotspot packages and view saved router profile metrics.</p>
             </div>
 
-            <div className="flex gap-1">
+            {/* Action toolbar – wraps on very small screens */}
+            <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
               <Select value={selectedRouterId} onValueChange={setSelectedRouterId} disabled={routersLoading}>
-                <SelectTrigger className="h-10 text-xs">
-                  <SelectValue placeholder={routersLoading ? "Loading routers..." : "Select router"} />
+                <SelectTrigger className="h-9 text-xs w-[130px] sm:w-[160px]">
+                  <SelectValue placeholder={routersLoading ? "Loading…" : "Select router"} />
                 </SelectTrigger>
                 <SelectContent>
                   {routers.map((router) => (
@@ -290,11 +305,15 @@ export default function RouterPackages() {
               <Button
                 onClick={handleSync}
                 size="sm"
+                variant="outline"
                 disabled={syncPackages.isPending}
-                className="gap-1.5 text-xs font-semibold h-10 px-3"
+                className="gap-1.5 text-xs font-semibold h-9 px-3"
+                title="Sync from MikroTik"
               >
-                {syncPackages.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                Refresh All
+                {syncPackages.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <RefreshCw className="h-3.5 w-3.5" />}
+                <span className="hidden sm:inline">Sync</span>
               </Button>
 
               <Button
@@ -302,25 +321,30 @@ export default function RouterPackages() {
                 variant="outline"
                 size="sm"
                 disabled={!selectedRouterId}
-                className="gap-1.5 text-xs font-semibold h-10 px-3"
+                className="gap-1.5 text-xs font-semibold h-9 px-3"
               >
-                <Timer className="h-4 w-4" />
-                Trial
+                <Timer className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Trial</span>
                 {selectedRouter?.trial_enabled ? (
-                  <Badge variant="secondary" className="ml-1 rounded text-[10px]">On</Badge>
+                  <Badge variant="secondary" className="ml-0.5 rounded text-[10px] px-1">On</Badge>
                 ) : null}
               </Button>
 
-              <Button onClick={() => setIsCreateOpen(true)} disabled={!selectedRouterId} className="gap-2 h-10 text-xs font-semibold">
-                <Plus className="h-4 w-4" />
-                Add Package
+              <Button
+                onClick={() => setIsCreateOpen(true)}
+                disabled={!selectedRouterId}
+                className="gap-1.5 h-9 text-xs font-semibold"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Add Package</span>
+                <span className="sm:hidden">Add</span>
               </Button>
             </div>
           </div>
         </div>
 
         <div className="space-y-5">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {/* <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <Card className="rounded border-border/40 shadow-none p-4 bg-card">
               <div className="text-xs font-semibold text-muted-foreground">Packages</div>
               <div className="mt-1 text-2xl font-bold">{packages.length}</div>
@@ -333,6 +357,18 @@ export default function RouterPackages() {
               <div className="text-xs font-semibold text-muted-foreground">Portal Endpoint</div>
               <div className="mt-2 truncate font-mono text-xs text-primary">{publicPackagesPath}</div>
             </Card>
+          </div> */}
+          {/* ── Search bar ── */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              id="package-search"
+              type="text"
+              placeholder="Search by package, profile or speed…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 h-9 text-xs"
+            />
           </div>
 
           {packagesQuery.error ? (
@@ -343,58 +379,99 @@ export default function RouterPackages() {
             </Alert>
           ) : null}
 
-          <Card className="rounded border-border/40 shadow-none overflow-hidden bg-card">
-            <Table>
+          <Card className="rounded border-border/40 shadow-none bg-card overflow-x-auto">
+            <Table className="min-w-[640px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-xs">Package</TableHead>
                   <TableHead className="text-xs">Profile</TableHead>
                   <TableHead className="text-xs">Devices</TableHead>
-                  <TableHead className="text-xs">Rate</TableHead>
+                  <TableHead className="text-xs">Speed Limit</TableHead>
                   <TableHead className="text-xs">Price</TableHead>
-                  <TableHead className="w-[100px] text-right text-xs">Actions</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="w-[90px] text-right text-xs">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {packagesQuery.isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
-                      Loading packages...
+                      Loading packages…
                     </TableCell>
                   </TableRow>
                 ) : packages.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                       <Wifi className="mx-auto mb-2 h-5 w-5 opacity-60" />
                       No packages saved for this router yet.
                     </TableCell>
                   </TableRow>
+                ) : filteredPackages.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                      <Search className="mx-auto mb-2 h-5 w-5 opacity-60" />
+                      No packages match &ldquo;{searchTerm}&rdquo;.
+                    </TableCell>
+                  </TableRow>
                 ) : (
-                  packages.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <div className="text-xs font-bold">{item.limit}</div>
-                        <div className="text-[11px] text-muted-foreground">{item.data}</div>
-                      </TableCell>
-                      <TableCell className="text-xs font-mono">{item.profile}</TableCell>
-                      <TableCell className="text-xs">{item.devices}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="rounded text-[10px]">{item.rate_limit || item.speed_type}</Badge>
-                      </TableCell>
-                      <TableCell className="text-xs font-bold">UGX {Number(item.total || 0).toLocaleString()}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(item)} title="Edit package">
-                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(item.id)} disabled={deletePackage.isPending} title="Delete package">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  filteredPackages.map((item) => {
+                    // Derive a simple active flag – adjust the field name once your API exposes it
+                    const isActive: boolean = (item as unknown as Record<string, unknown>).is_active !== false;
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          <div className="text-xs font-bold">{item.limit}</div>
+                          <div className="text-[11px] text-muted-foreground">{item.data}</div>
+                        </TableCell>
+                        <TableCell className="text-xs font-mono">{item.profile}</TableCell>
+                        <TableCell className="text-xs">{item.devices}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="rounded text-[10px]">
+                            {item.rate_limit || item.speed_type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs font-bold">
+                          UGX {Number(item.total || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={isActive}
+                              // onCheckedChange={(checked) => handleToggleStatus(item.id, checked)}
+                              className="scale-90"
+                            />
+                            <span className={`text-[11px] font-medium ${isActive ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                              {isActive ? "Active" : "Inactive"}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleOpenEdit(item)}
+                              title="Edit package"
+                            >
+                              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleDelete(item.id)}
+                              disabled={deletePackage.isPending}
+                              title="Delete package"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -491,7 +568,7 @@ export default function RouterPackages() {
                 <Input value={form.speed_type} onChange={(event) => updateForm("speed_type", event.target.value)} placeholder="SuperFast" className="h-9 text-xs bg-card/40 border-border/60" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-muted-foreground">Rate Limit</Label>
+                <Label className="text-xs font-bold text-muted-foreground">Speed Limit</Label>
                 <Input value={form.rate_limit || ""} onChange={(event) => updateForm("rate_limit", event.target.value)} placeholder="100M/100M" className="h-9 text-xs bg-card/40 border-border/60" />
               </div>
             </div>
@@ -580,7 +657,7 @@ export default function RouterPackages() {
                 <Input value={editForm.speed_type} onChange={(e) => updateEditForm("speed_type", e.target.value)} placeholder="SuperFast" className="h-9 text-xs bg-card/40 border-border/60" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-muted-foreground">Rate Limit</Label>
+                <Label className="text-xs font-bold text-muted-foreground">Speed Limit</Label>
                 <Input value={editForm.rate_limit || ""} onChange={(e) => updateEditForm("rate_limit", e.target.value)} placeholder="100M/100M" className="h-9 text-xs bg-card/40 border-border/60" />
               </div>
             </div>

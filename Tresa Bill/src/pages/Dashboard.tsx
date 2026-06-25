@@ -423,7 +423,7 @@ export default function Dashboard() {
               <div className="flex items-start justify-between">
                 <div>
                   <span className="text-xs font-semibold text-muted-foreground">
-                    {user?.account_type === "staff" ? "My Agent Share" : "My Sales Voucher Share"}
+                    {user?.account_type === "staff" ? "My Agent Share" : "My Sales Voucher"}
                   </span>
                   <p className="mt-1 text-[10px] font-semibold text-primary">
                     {revenueShare?.current_user_percentage ?? 100}% of recorded sales
@@ -463,7 +463,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-foreground leading-none">{isOnline ? activeClients : "–"}</h4>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-none overflow-auto">DHCP Leases</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-none overflow-auto">Leases</p>
                     </div>
                   </div>
 
@@ -878,7 +878,7 @@ function SystemInsightsPopover({ children, routerId }: { children: React.ReactNo
       <PopoverContent className="w-[calc(100vw-32px)] sm:w-[360px] p-5 bg-card rounded shadow-xl border border-border/50" align="end" sideOffset={12}>
         <div className="space-y-4">
           <div>
-            <h4 className="font-bold text-sm text-foreground">Infrastructure Insights</h4>
+            <h4 className="font-bold text-sm text-foreground">Router Insights</h4>
             <p className="text-[11px] text-muted-foreground mt-0.5">Live status and network health check log</p>
           </div>
 

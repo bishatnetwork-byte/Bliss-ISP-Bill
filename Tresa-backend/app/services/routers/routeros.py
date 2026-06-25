@@ -266,6 +266,92 @@ def get_hotspot_vouchers(router: Router) -> dict[str, Any]:
         }
 
 
+def _normalize_ip_binding(item: dict[str, Any]) -> dict[str, Any]:
+    disabled_value = item.get("disabled", "false")
+    return {
+        "id": str(item.get("id") or item.get(".id") or ""),
+        "mac_address": str(item.get("mac-address") or ""),
+        "address": str(item.get("address") or ""),
+        "type": str(item.get("type") or "regular"),
+        "comment": item.get("comment"),
+        "server": item.get("server"),
+        "disabled": str(disabled_value).lower() in {"true", "yes", "1"},
+        "raw": item,
+    }
+
+
+def get_hotspot_ip_bindings(router: Router) -> dict[str, Any]:
+    try:
+        with router_connection(router) as api:
+            bindings = [_normalize_ip_binding(item) for item in _resource_list(api, "/ip/hotspot/ip-binding")]
+            return {
+                "connected": True,
+                "count": len(bindings),
+                "bindings": bindings,
+                "error": None,
+            }
+    except Exception as exc:
+        return {
+            "connected": False,
+            "count": 0,
+            "bindings": [],
+            "error": str(exc),
+        }
+
+
+def create_hotspot_ip_binding(router: Router, payload: dict[str, Any]) -> dict[str, Any]:
+    params = {
+        "mac-address": payload["mac_address"],
+        "address": payload["address"],
+        "type": payload["type"],
+        "disabled": "yes" if payload.get("disabled") else "no",
+    }
+    if payload.get("comment"):
+        params["comment"] = payload["comment"]
+    if payload.get("server"):
+        params["server"] = payload["server"]
+
+    with router_connection(router) as api:
+        resource = api.get_resource("/ip/hotspot/ip-binding")
+        resource.add(**params)
+        matches = resource.get(**{"mac-address": payload["mac_address"], "address": payload["address"]})
+        if matches:
+            return _normalize_ip_binding(dict(matches[0]))
+        return _normalize_ip_binding(params)
+
+
+def update_hotspot_ip_binding(router: Router, binding_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    params = {
+        "id": binding_id,
+        "mac-address": payload["mac_address"],
+        "address": payload["address"],
+        "type": payload["type"],
+        "disabled": "yes" if payload.get("disabled") else "no",
+    }
+    if payload.get("comment") is not None:
+        params["comment"] = payload.get("comment") or ""
+    if payload.get("server") is not None:
+        params["server"] = payload.get("server") or "all"
+
+    with router_connection(router) as api:
+        resource = api.get_resource("/ip/hotspot/ip-binding")
+        resource.set(**params)
+        matches = resource.get(id=binding_id)
+        if matches:
+            return _normalize_ip_binding(dict(matches[0]))
+        refreshed = resource.get()
+        for item in refreshed:
+            data = dict(item)
+            if data.get("id") == binding_id or data.get(".id") == binding_id:
+                return _normalize_ip_binding(data)
+        return _normalize_ip_binding({**params, "id": binding_id})
+
+
+def delete_hotspot_ip_binding(router: Router, binding_id: str) -> None:
+    with router_connection(router) as api:
+        api.get_resource("/ip/hotspot/ip-binding").remove(id=binding_id)
+
+
 def get_router_logs(router: Router, limit: int = 200) -> dict[str, Any]:
     try:
         with router_connection(router) as api:

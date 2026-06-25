@@ -123,6 +123,35 @@ class RouterVouchersResponse(BaseModel):
     error: Optional[str] = None
 
 
+class RouterIpBindingPayload(BaseModel):
+    mac_address: str = Field(min_length=12, max_length=30)
+    address: str = Field(min_length=7, max_length=45)
+    type: str = Field(pattern="^(bypassed|blocked|regular)$")
+    comment: Optional[str] = Field(default=None, max_length=255)
+    server: Optional[str] = Field(default=None, max_length=120)
+    disabled: bool = False
+
+
+class RouterIpBindingResponse(BaseModel):
+    id: str
+    mac_address: str
+    address: str
+    type: str
+    comment: Optional[str] = None
+    server: Optional[str] = None
+    disabled: bool = False
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class RouterIpBindingsResponse(BaseModel):
+    connected: bool
+    router_id: UUID
+    router_name: str
+    count: int
+    bindings: list[RouterIpBindingResponse]
+    error: Optional[str] = None
+
+
 class RouterLogsResponse(BaseModel):
     connected: bool
     router_id: UUID

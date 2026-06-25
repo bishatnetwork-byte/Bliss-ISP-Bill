@@ -26,6 +26,9 @@ from app.schemas.router import (
     RouterDeployHeartbeatRequest,
     RouterDeployHeartbeatResponse,
     RouterFeaturesResponse,
+    RouterIpBindingPayload,
+    RouterIpBindingResponse,
+    RouterIpBindingsResponse,
     RouterPingRequest,
     RouterPingResponse,
     RouterPublishScriptRequest,
@@ -64,14 +67,18 @@ from app.services.routers.hotspot_config import (
 from app.services.routers.routeros import (
     get_active_hotspot_users,
     get_hotspot_vouchers,
+    get_hotspot_ip_bindings,
     get_router_logs,
     get_router_features,
     get_router_status,
+    create_hotspot_ip_binding,
+    delete_hotspot_ip_binding,
     ping_tcp,
     ping_from_router,
     reboot_router,
     router_defaults,
     test_connection,
+    update_hotspot_ip_binding,
 )
 from app.models.notification import Notification
 from app.services.notification import notify
@@ -461,6 +468,74 @@ def router_vouchers(
         router_name=db_router.name,
         **result,
     )
+
+
+@router.get("/routers/{router_id}/ip-bindings", response_model=RouterIpBindingsResponse)
+def router_ip_bindings(
+    router_id: UUID,
+    user: CurrentUser,
+    session: SessionDep,
+) -> RouterIpBindingsResponse:
+    db_router = get_router_with_ownership(session, router_id, user.id)
+    result = get_hotspot_ip_bindings(db_router)
+    return RouterIpBindingsResponse(
+        router_id=db_router.id,
+        router_name=db_router.name,
+        **result,
+    )
+
+
+@router.post("/routers/{router_id}/ip-bindings", response_model=RouterIpBindingResponse, status_code=status.HTTP_201_CREATED)
+def router_create_ip_binding(
+    router_id: UUID,
+    payload: RouterIpBindingPayload,
+    user: CurrentUser,
+    session: SessionDep,
+) -> RouterIpBindingResponse:
+    db_router = get_router_with_ownership(session, router_id, user.id)
+    try:
+        return RouterIpBindingResponse(**create_hotspot_ip_binding(db_router, payload.model_dump()))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not create IP binding on {db_router.name}: {exc}",
+        ) from exc
+
+
+@router.put("/routers/{router_id}/ip-bindings/{binding_id}", response_model=RouterIpBindingResponse)
+def router_update_ip_binding(
+    router_id: UUID,
+    binding_id: str,
+    payload: RouterIpBindingPayload,
+    user: CurrentUser,
+    session: SessionDep,
+) -> RouterIpBindingResponse:
+    db_router = get_router_with_ownership(session, router_id, user.id)
+    try:
+        return RouterIpBindingResponse(**update_hotspot_ip_binding(db_router, binding_id, payload.model_dump()))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not update IP binding on {db_router.name}: {exc}",
+        ) from exc
+
+
+@router.delete("/routers/{router_id}/ip-bindings/{binding_id}", response_model=MessageResponse)
+def router_delete_ip_binding(
+    router_id: UUID,
+    binding_id: str,
+    user: CurrentUser,
+    session: SessionDep,
+) -> MessageResponse:
+    db_router = get_router_with_ownership(session, router_id, user.id)
+    try:
+        delete_hotspot_ip_binding(db_router, binding_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not delete IP binding on {db_router.name}: {exc}",
+        ) from exc
+    return MessageResponse(message="IP binding deleted")
 
 
 @router.get("/routers/{router_id}/logs", response_model=RouterLogsResponse)

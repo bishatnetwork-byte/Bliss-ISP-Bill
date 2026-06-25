@@ -20,6 +20,7 @@ import SubdomainHandoff from './pages/Auth/SubdomainHandoff';
 import CaptiveIndex from './pages/CaptivePages/index';
 import CaptivePreview from './pages/CaptivePages/preview_page';
 import HotspotPages from './pages/CaptivePages/HotspotPages';
+import IPBindingsPage from './pages/IPBindings';
 import BranchesPage from './pages/Branches';
 import Dashboard from './pages/Dashboard';
 import MessagesPage from './pages/Messages';
@@ -38,7 +39,7 @@ import Withdrawal from './pages/Sales/Withdrawal';
 import WithdrawalHistory from './pages/Sales/WithdrawalHistory';
 import TransactionsPage from './pages/History/Transcations';
 import SupportsIndex from './pages/Supports/index';
-import VouchersIndex from './pages/Vouchers/index';
+import Vouchers from './pages/Vouchers/Vouchers';
 import CreateVouchers from './pages/Vouchers/CreateVouchers';
 import ActiveUsersPage from './pages/Vouchers/ActiveUsers';
 import PlatformAdminPage from './pages/PlatformAdmin';
@@ -161,9 +162,10 @@ const AppRoutes = () => {
         <Route path="/bulk-sms" element={protectedElement(<PermissionRoute permission="support"><BulkSMSPage /></PermissionRoute>)} />
         <Route path="/sales" element={protectedElement(<PermissionRoute permission="sales"><SalesIndex /></PermissionRoute>)} />
         <Route path="/sales/customer/:phone" element={protectedElement(<PermissionRoute permission="sales"><CustomerDetail /></PermissionRoute>)} />
-        <Route path="/vouchers" element={protectedElement(<PermissionRoute permission="vouchers"><VouchersIndex /></PermissionRoute>)} />
+        <Route path="/vouchers" element={protectedElement(<PermissionRoute permission="vouchers"><Vouchers /></PermissionRoute>)} />
         <Route path="/vouchers/create" element={protectedElement(<PermissionRoute permission="vouchers"><CreateVouchers /></PermissionRoute>)} />
         <Route path="/active-users" element={protectedElement(<PermissionRoute permission="vouchers"><ActiveUsersPage /></PermissionRoute>)} />
+        <Route path="/ip-bindings" element={protectedElement(<PermissionRoute permission="routers"><IPBindingsPage /></PermissionRoute>)} />
         <Route path="/router" element={protectedElement(<PermissionRoute permission="routers"><RoutersIndex /></PermissionRoute>)} />
         <Route path="/router/configure" element={protectedElement(<PermissionRoute permission="routers"><ConfigureRouter /></PermissionRoute>)} />
         <Route path="/router/setup" element={protectedElement(<PermissionRoute permission="routers"><SetUpProvison /></PermissionRoute>)} />

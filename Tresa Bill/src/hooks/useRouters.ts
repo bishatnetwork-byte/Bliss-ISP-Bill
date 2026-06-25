@@ -1,5 +1,5 @@
 import { useQueries, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { renultApi, RouterCreate, RouterUpdate, RouterTrialUpdate, RouterPingRequest, RouterTestConnectionRequest, HotspotProvisionConfig, RouterPackagePayload, VoucherBatchCreate, RouterPublishScriptResponse, RouterResponse } from "@/api/foreform";
+import { renultApi, RouterCreate, RouterUpdate, RouterTrialUpdate, RouterPingRequest, RouterTestConnectionRequest, HotspotProvisionConfig, RouterPackagePayload, VoucherBatchCreate, RouterPublishScriptResponse, RouterResponse, RouterIpBindingPayload } from "@/api/foreform";
 
 // ── Hook Implementations ─────────────────────────────────────────────
 // All hooks call the real API. On failure the query enters the standard
@@ -139,6 +139,48 @@ export function useRouterVouchers(routerId: string) {
     queryKey: ["routerVouchers", routerId],
     queryFn: () => renultApi.routers.vouchers(routerId),
     enabled: !!routerId,
+  });
+}
+
+export function useRouterIpBindings(routerId: string) {
+  return useQuery({
+    queryKey: ["routerIpBindings", routerId],
+    queryFn: () => renultApi.routers.ipBindings(routerId),
+    enabled: !!routerId,
+    retry: 1,
+  });
+}
+
+export function useCreateRouterIpBinding() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ routerId, payload }: { routerId: string; payload: RouterIpBindingPayload }) =>
+      renultApi.routers.createIpBinding(routerId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["routerIpBindings", variables.routerId] });
+    },
+  });
+}
+
+export function useUpdateRouterIpBinding() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ routerId, bindingId, payload }: { routerId: string; bindingId: string; payload: RouterIpBindingPayload }) =>
+      renultApi.routers.updateIpBinding(routerId, bindingId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["routerIpBindings", variables.routerId] });
+    },
+  });
+}
+
+export function useDeleteRouterIpBinding() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ routerId, bindingId }: { routerId: string; bindingId: string }) =>
+      renultApi.routers.deleteIpBinding(routerId, bindingId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["routerIpBindings", variables.routerId] });
+    },
   });
 }
 

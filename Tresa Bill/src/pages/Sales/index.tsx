@@ -111,7 +111,7 @@ function Sparkline({ data, color, height = 36 }: { data: number[]; color: string
                 points={pts}
                 fill="none"
                 stroke={color}
-                strokeWidth="1.8"
+                strokeWidth="0.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
             />
@@ -557,7 +557,7 @@ export default function SalesIndex() {
 
             <main className=" mx-auto px-4 sm:px-6 py-6">
                 {/* Page Title & Tab Toggles */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 border-b border-border/40 pb-4 ">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4  pb-4 ">
                     <div>
                         <p className="text-sm text-muted-foreground mt-1">
                             Monitor day-to-day sales, generate vouchers, and track router activation sessions.
@@ -585,7 +585,7 @@ export default function SalesIndex() {
                         {/* KPI Cards Grid */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                             {/* Today Sales */}
-                            <Card className="rounded-lg bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
+                            <Card className="rounded bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
                                 <CardHeader className="pb-1 pt-3 px-3 sm:px-4 sm:pt-4">
                                     <span className="text-[12px] sm:text-xs font-bold  text-muted-foreground">Today</span>
                                     <CardTitle className="text-lg sm:text-2xl font-black mt-0.5 text-foreground leading-tight">
@@ -606,11 +606,11 @@ export default function SalesIndex() {
                                         </div>
                                     </div>
                                 </CardContent>
-                                <div className="h-[2px] bg-blue-600" />
+
                             </Card>
 
                             {/* Yesterday Sales */}
-                            <Card className="rounded-lg bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
+                            <Card className="rounded bg-card border border-border/80 shadow-none relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
                                 <CardHeader className="pb-1 pt-3 px-3 sm:px-4 sm:pt-4">
                                     <span className="text-[12px] sm:text-xs font-bold  text-muted-foreground">Yesterday</span>
                                     <CardTitle className="text-lg sm:text-2xl font-black mt-0.5 text-foreground leading-tight">
@@ -631,11 +631,11 @@ export default function SalesIndex() {
                                         </div>
                                     </div>
                                 </CardContent>
-                                <div className="h-[2px] bg-emerald-500" />
+
                             </Card>
 
                             {/* This Week */}
-                            <Card className="rounded-lg bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
+                            <Card className="rounded bg-card border border-border/80 shadow-none relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
                                 <CardHeader className="pb-1 pt-3 px-3 sm:px-4 sm:pt-4">
                                     <span className="text-[12px] sm:text-xs font-bold  text-muted-foreground">This Week</span>
                                     <CardTitle className="text-lg sm:text-2xl font-black mt-0.5 text-foreground leading-tight">
@@ -656,11 +656,11 @@ export default function SalesIndex() {
                                         </div>
                                     </div>
                                 </CardContent>
-                                <div className="h-[2px] bg-cyan-500" />
+
                             </Card>
 
                             {/* This Month */}
-                            <Card className="rounded-lg bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
+                            <Card className="rounded bg-card border border-border/80 shadow-none relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
                                 <CardHeader className="pb-1 pt-3 px-3 sm:px-4 sm:pt-4">
                                     <span className="text-[12px] sm:text-xs font-bold  text-muted-foreground">This Month</span>
                                     <CardTitle className="text-lg sm:text-2xl font-black mt-0.5 text-foreground leading-tight">
@@ -681,12 +681,11 @@ export default function SalesIndex() {
                                         </div>
                                     </div>
                                 </CardContent>
-                                <div className="h-[2px] bg-orange-500" />
                             </Card>
                         </div>
 
                         {/* Filters & Search Panel */}
-                        <Card className=" border border-border/40 shadow-none rounded-md bg-card">
+                        <Card className="rounded-none border border-border/40 shadow-none  bg-card">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-sm font-bold tracking-tight text-foreground flex items-center justify-between">
                                     <p>Filters & Search</p>

@@ -710,6 +710,35 @@ export interface RouterVouchersResponse {
   error: string | null;
 }
 
+export interface RouterIpBinding {
+  id: string;
+  mac_address: string;
+  address: string;
+  type: "bypassed" | "blocked" | "regular";
+  comment: string | null;
+  server: string | null;
+  disabled: boolean;
+  raw: Record<string, any>;
+}
+
+export interface RouterIpBindingPayload {
+  mac_address: string;
+  address: string;
+  type: "bypassed" | "blocked" | "regular";
+  comment?: string | null;
+  server?: string | null;
+  disabled?: boolean;
+}
+
+export interface RouterIpBindingsResponse {
+  connected: boolean;
+  router_id: string;
+  router_name: string;
+  count: number;
+  bindings: RouterIpBinding[];
+  error: string | null;
+}
+
 export interface RouterLogsResponse {
   connected: boolean;
   router_id: string;
@@ -1592,6 +1621,14 @@ export const renultApi = {
       apiRequest<RouterActiveUsersResponse>(`/routers/${routerId}/active-users`),
     vouchers: (routerId: string) =>
       apiRequest<RouterVouchersResponse>(`/routers/${routerId}/vouchers`),
+    ipBindings: (routerId: string) =>
+      apiRequest<RouterIpBindingsResponse>(`/routers/${routerId}/ip-bindings`),
+    createIpBinding: (routerId: string, payload: RouterIpBindingPayload) =>
+      apiRequest<RouterIpBinding>(`/routers/${routerId}/ip-bindings`, { method: "POST", body: JSON.stringify(payload) }),
+    updateIpBinding: (routerId: string, bindingId: string, payload: RouterIpBindingPayload) =>
+      apiRequest<RouterIpBinding>(`/routers/${routerId}/ip-bindings/${encodeURIComponent(bindingId)}`, { method: "PUT", body: JSON.stringify(payload) }),
+    deleteIpBinding: (routerId: string, bindingId: string) =>
+      apiRequest<{ message: string }>(`/routers/${routerId}/ip-bindings/${encodeURIComponent(bindingId)}`, { method: "DELETE" }),
     logs: (routerId: string, limit = 200) =>
       apiRequest<RouterLogsResponse>(`/routers/${routerId}/logs`, { query: { limit } }),
     remoteAccess: (routerId: string) =>

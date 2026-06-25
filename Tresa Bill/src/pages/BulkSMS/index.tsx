@@ -425,7 +425,7 @@ export default function BulkSMSPage() {
                       }}
                     />
                   </div>
-                  <div className="flex items-center justify-between gap-3">
+                  {/* <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium">Admin buy-for-user SMS</p>
                       <p className="text-xs text-muted-foreground">Default is off for purchases made on behalf of another customer.</p>
@@ -434,11 +434,7 @@ export default function BulkSMSPage() {
                       checked={bulkSms.settings.data?.admin_buy_for_sms_enabled || false}
                       onCheckedChange={(checked) => saveAutomation({ admin_buy_for_sms_enabled: checked })}
                     />
-                  </div>
-                  <div className="rounded border bg-muted/30 p-3 text-xs text-muted-foreground">
-                    <CreditCard className="mb-2 h-4 w-4" />
-                    Wallet top-ups can be paid through your payment gateway, then verified from the wallet transaction status screen. Manual wallet balance is used first for SMS sending.
-                  </div>
+                  </div> */}
                 </>
               )}
             </CardContent>
