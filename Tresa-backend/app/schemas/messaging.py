@@ -86,3 +86,46 @@ class BulkSmsSettingsUpdate(BaseModel):
 
 class BulkSmsSettingsResponse(BulkSmsSettingsUpdate):
     sms_cost_ugx: int
+
+
+class SmsWalletResponse(BaseModel):
+    id: str
+    branch_id: str
+    branch_name: str
+    balance: int
+    total_deposited: int
+    total_spent: int
+    is_frozen: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class SmsWalletTransactionResponse(BaseModel):
+    id: str
+    sms_wallet_id: str
+    branch_id: str
+    amount: int
+    transaction_type: str
+    reference: str | None = None
+    status: str
+    source_wallet_transaction_id: str | None = None
+    phone_number: str | None = None
+    gateway_reference: str | None = None
+    gateway_status: str | None = None
+    failure_reason: str | None = None
+    last_checked_at: datetime | None = None
+    created_at: datetime
+
+
+class SmsWalletTransferRequest(BaseModel):
+    amount: int = Field(gt=0, le=10_000_000)
+
+
+class SmsWalletMobileMoneyTopupRequest(BaseModel):
+    amount: int = Field(gt=0, le=10_000_000)
+    phone_number: str = Field(min_length=9, max_length=20)
+
+
+class SmsWalletMutationResponse(BaseModel):
+    transaction: SmsWalletTransactionResponse
+    wallet: SmsWalletResponse

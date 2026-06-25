@@ -337,12 +337,7 @@ export default function IPBindingsPage() {
       <main className="mx-auto max-w-7xl space-y-4 px-3 py-4 sm:space-y-5 sm:px-6 sm:py-5">
         <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="rounded border-primary/20 bg-primary/10 text-primary">MikroTik</Badge>
-              <Badge variant="secondary" className="rounded">IP Bindings</Badge>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight sm:text-xl">IP Bindings</h1>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+            <p className="hidden md:flex mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
               Manage MikroTik hotspot IP bindings for trusted devices, blocked clients, and pinned MAC-to-IP access.
             </p>
           </div>

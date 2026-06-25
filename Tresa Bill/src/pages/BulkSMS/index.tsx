@@ -18,12 +18,14 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useBulkSms } from "@/hooks/useBulkSms";
 import { cn } from "@/lib/utils";
+import WalletTopup from "./WalletTopup";
 import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
   Clock3,
   CreditCard,
+  DollarSignIcon,
   Loader2,
   MessageSquareText,
   Plus,
@@ -89,6 +91,7 @@ export default function BulkSMSPage() {
     () => localStorage.getItem("selected-workspace") || "",
   );
   const [composerOpen, setComposerOpen] = useState(false);
+  const [walletTopupOpen, setWalletTopupOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
   const [manualNumber, setManualNumber] = useState("");
@@ -100,6 +103,7 @@ export default function BulkSMSPage() {
   const bulkSms = useBulkSms(branchId);
   const contacts = bulkSms.contacts.data?.contacts || [];
   const walletBalance = bulkSms.wallet.data?.balance || 0;
+  const mainWalletBalance = bulkSms.mainWallet.data?.balance || 0;
   const smsCost = bulkSms.settings.data?.sms_cost_ugx || 0;
   const lowBalanceThreshold = bulkSms.settings.data?.low_balance_threshold || LOW_BALANCE_THRESHOLD;
   const isWalletLow = Boolean(branchId) && !bulkSms.wallet.isLoading && walletBalance < lowBalanceThreshold;
@@ -277,10 +281,16 @@ export default function BulkSMSPage() {
             <h1 className="text-xl font-bold">Bulk SMS</h1>
             <p className="mt-1 text-sm text-muted-foreground">Send voucher codes to customers and control captive-portal SMS automation.</p>
           </div>
-          <Button className="gap-2" onClick={() => setComposerOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Compose
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" className="gap-2" onClick={() => setWalletTopupOpen(true)} disabled={!branchId}>
+              <DollarSignIcon className="h-4 w-4" />
+              Top up SMS wallet
+            </Button>
+            <Button className="gap-2" onClick={() => setComposerOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Compose
+            </Button>
+          </div>
         </div>
 
         {isWalletLow && (
@@ -293,11 +303,17 @@ export default function BulkSMSPage() {
           </Alert>
         )}
 
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
           <Card className="rounded border-primary/10 shadow-none">
             <CardContent className="flex items-center justify-between p-4">
               <div><p className="text-xs text-muted-foreground">SMS wallet</p><p className="mt-1 text-2xl font-bold">UGX {walletBalance.toLocaleString()}</p></div>
               <Wallet className={cn("h-7 w-7", isWalletLow ? "text-red-500" : "text-primary/40")} />
+            </CardContent>
+          </Card>
+          <Card className="rounded border-primary/10 shadow-none">
+            <CardContent className="flex items-center justify-between p-4">
+              <div><p className="text-xs text-muted-foreground">Main wallet</p><p className="mt-1 text-2xl font-bold">UGX {mainWalletBalance.toLocaleString()}</p></div>
+              <CreditCard className="h-7 w-7 text-primary/40" />
             </CardContent>
           </Card>
           <Card className="rounded border-primary/10 shadow-none">
@@ -547,6 +563,18 @@ export default function BulkSMSPage() {
           </div>
         </SheetContent>
       </Sheet>
+      <WalletTopup
+        open={walletTopupOpen}
+        onOpenChange={setWalletTopupOpen}
+        branchId={branchId}
+        smsWallet={bulkSms.wallet.data}
+        mainWallet={bulkSms.mainWallet.data}
+        transactions={bulkSms.walletTransactions.data || []}
+        isLoadingTransactions={bulkSms.walletTransactions.isLoading}
+        transferToWallet={bulkSms.transferToWallet}
+        mobileMoneyTopup={bulkSms.mobileMoneyTopup}
+        verifyMobileMoneyTopup={bulkSms.verifyMobileMoneyTopup}
+      />
     </div>
   );
 }

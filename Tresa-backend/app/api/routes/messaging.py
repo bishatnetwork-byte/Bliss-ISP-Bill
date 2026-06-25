@@ -1,4 +1,3 @@
-import time
 from collections import Counter
 from datetime import datetime
 from uuid import UUID
@@ -11,8 +10,7 @@ from app.api.deps import CurrentUser
 from app.core.config import settings
 from app.db.session import SessionDep
 from app.models.branch import Branch
-from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
-from app.models.platform_ledger import PlatformLedgerEntry
+from app.models.branch_wallet import BranchWallet, SmsWalletTransaction
 from app.models.message import MessageDraft, MessageLog
 from app.services.snmp_monitor import get_or_create_preferences
 from app.models.router import Router
@@ -30,6 +28,11 @@ from app.schemas.messaging import (
     MessageDraftUpdate,
     BulkSmsSettingsResponse,
     BulkSmsSettingsUpdate,
+    SmsWalletMobileMoneyTopupRequest,
+    SmsWalletMutationResponse,
+    SmsWalletResponse,
+    SmsWalletTransactionResponse,
+    SmsWalletTransferRequest,
 )
 from app.services.access import require_branch_access
 from app.services.messaging import (
@@ -39,6 +42,7 @@ from app.services.messaging import (
     sms_failure_reason,
     sms_was_accepted,
 )
+from app.services import sms_wallet as sms_wallet_svc
 
 router = APIRouter(tags=["Messaging"])
 
@@ -73,49 +77,37 @@ def _fail_log(session: SessionDep, row: MessageLog, error: str) -> None:
     session.commit()
 
 
-def _charge_bulk_sms(session: SessionDep, branch: Branch, user: User, count: int) -> tuple[int, int]:
-    """Debit the branch wallet for `count` accepted SMS. Returns (amount_charged, wallet_balance)."""
-    wallet = session.exec(
-        select(BranchWallet)
-        .where(BranchWallet.branch_id == branch.id)
-        .with_for_update()
-    ).first()
-    if not wallet or count <= 0:
-        return 0, wallet.balance if wallet else 0
+def _sms_wallet_response(wallet, branch_name: str) -> SmsWalletResponse:
+    return SmsWalletResponse(
+        id=str(wallet.id),
+        branch_id=str(wallet.branch_id),
+        branch_name=branch_name,
+        balance=wallet.balance,
+        total_deposited=wallet.total_deposited,
+        total_spent=wallet.total_spent,
+        is_frozen=wallet.is_frozen,
+        created_at=wallet.created_at,
+        updated_at=wallet.updated_at,
+    )
 
-    cost_per_sms = settings.sms_notification_cost
-    amount = min(wallet.balance, cost_per_sms * count)
-    if amount > 0:
-        wallet.balance -= amount
-        wallet.total_fees_paid += amount
-        wallet.updated_at = datetime.utcnow()
-        reference = f"SMS-BULK-{branch.id}-{int(time.time())}"
-        session.add(
-            BranchWalletTransaction(
-                wallet_id=wallet.id,
-                branch_id=branch.id,
-                amount=amount,
-                fee_amount=amount,
-                net_amount=0,
-                transaction_type="SMS_NOTIFICATION",
-                reference=reference,
-            )
-        )
-        session.add(
-            PlatformLedgerEntry(
-                branch_wallet_id=wallet.id,
-                branch_id=branch.id,
-                user_id=user.id,
-                amount=amount,
-                fee_type="SMS_NOTIFICATION",
-                source_amount=amount,
-                fee_rate=1,
-                reference=reference,
-            )
-        )
-        session.add(wallet)
-        session.commit()
-    return amount, wallet.balance
+
+def _sms_txn_response(txn: SmsWalletTransaction) -> SmsWalletTransactionResponse:
+    return SmsWalletTransactionResponse(
+        id=str(txn.id),
+        sms_wallet_id=str(txn.sms_wallet_id),
+        branch_id=str(txn.branch_id),
+        amount=txn.amount,
+        transaction_type=txn.transaction_type.lower(),
+        reference=txn.reference,
+        status=txn.status,
+        source_wallet_transaction_id=str(txn.source_wallet_transaction_id) if txn.source_wallet_transaction_id else None,
+        phone_number=txn.phone_number,
+        gateway_reference=txn.gateway_reference,
+        gateway_status=txn.gateway_status,
+        failure_reason=txn.failure_reason,
+        last_checked_at=txn.last_checked_at,
+        created_at=txn.created_at,
+    )
 
 
 def branch_vouchers(session: SessionDep, branch_id: UUID) -> list[VoucherPurchase]:
@@ -320,6 +312,112 @@ def update_bulk_sms_settings(
     return _bulk_sms_settings_response(preferences)
 
 
+@router.get(
+    "/branches/{branch_id}/messages/wallet",
+    response_model=SmsWalletResponse,
+)
+def get_sms_wallet(
+    branch_id: UUID,
+    user: CurrentUser,
+    session: SessionDep,
+) -> SmsWalletResponse:
+    branch, _staff = require_branch_access(session, branch_id, user, "support")
+    wallet = sms_wallet_svc.get_sms_wallet_for_branch(session, branch_id)
+    return _sms_wallet_response(wallet, branch.name)
+
+
+@router.get(
+    "/branches/{branch_id}/messages/wallet/transactions",
+    response_model=list[SmsWalletTransactionResponse],
+)
+def list_sms_wallet_transactions(
+    branch_id: UUID,
+    user: CurrentUser,
+    session: SessionDep,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> list[SmsWalletTransactionResponse]:
+    require_branch_access(session, branch_id, user, "support")
+    wallet = sms_wallet_svc.get_sms_wallet_for_branch(session, branch_id)
+    txns = sms_wallet_svc.list_sms_transactions(session, wallet.id, limit, offset)
+    return [_sms_txn_response(txn) for txn in txns]
+
+
+@router.post(
+    "/branches/{branch_id}/messages/wallet/transfer",
+    response_model=SmsWalletMutationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def transfer_to_sms_wallet(
+    branch_id: UUID,
+    payload: SmsWalletTransferRequest,
+    user: CurrentUser,
+    session: SessionDep,
+) -> SmsWalletMutationResponse:
+    branch, _staff = require_branch_access(session, branch_id, user, "support")
+    branch_wallet = session.exec(select(BranchWallet).where(BranchWallet.branch_id == branch.id)).first()
+    if not branch_wallet:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Main wallet not found")
+    sms_wallet = sms_wallet_svc.get_sms_wallet_for_branch(session, branch_id)
+    txn, updated_wallet = sms_wallet_svc.transfer_from_branch_wallet(
+        session,
+        branch_wallet.id,
+        sms_wallet.id,
+        payload.amount,
+        user.id,
+    )
+    return SmsWalletMutationResponse(
+        transaction=_sms_txn_response(txn),
+        wallet=_sms_wallet_response(updated_wallet, branch.name),
+    )
+
+
+@router.post(
+    "/branches/{branch_id}/messages/wallet/mobile-money-topups",
+    response_model=SmsWalletMutationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def initiate_sms_wallet_mobile_money_topup(
+    branch_id: UUID,
+    payload: SmsWalletMobileMoneyTopupRequest,
+    user: CurrentUser,
+    session: SessionDep,
+) -> SmsWalletMutationResponse:
+    branch, _staff = require_branch_access(session, branch_id, user, "support")
+    sms_wallet = sms_wallet_svc.get_sms_wallet_for_branch(session, branch_id)
+    phone = normalize_sms_phone(payload.phone_number)
+    txn, updated_wallet = sms_wallet_svc.initiate_mobile_money_topup(
+        session,
+        sms_wallet.id,
+        payload.amount,
+        phone,
+    )
+    return SmsWalletMutationResponse(
+        transaction=_sms_txn_response(txn),
+        wallet=_sms_wallet_response(updated_wallet, branch.name),
+    )
+
+
+@router.get(
+    "/branches/{branch_id}/messages/wallet/mobile-money-topups/{transaction_id}/status",
+    response_model=SmsWalletMutationResponse,
+)
+def verify_sms_wallet_mobile_money_topup(
+    branch_id: UUID,
+    transaction_id: UUID,
+    user: CurrentUser,
+    session: SessionDep,
+) -> SmsWalletMutationResponse:
+    branch, _staff = require_branch_access(session, branch_id, user, "support")
+    txn, updated_wallet = sms_wallet_svc.verify_mobile_money_topup(session, transaction_id)
+    if updated_wallet.branch_id != branch_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "SMS wallet transaction not found")
+    return SmsWalletMutationResponse(
+        transaction=_sms_txn_response(txn),
+        wallet=_sms_wallet_response(updated_wallet, branch.name),
+    )
+
+
 @router.post(
     "/branches/{branch_id}/messages/send",
     response_model=BulkMessageResponse,
@@ -371,11 +469,12 @@ def send_bulk_message(
         )
 
     cost_per_sms = settings.sms_notification_cost
-    wallet = session.exec(select(BranchWallet).where(BranchWallet.branch_id == branch.id)).first()
-    if not wallet or wallet.is_frozen or wallet.balance < cost_per_sms:
+    estimated_cost = cost_per_sms * len(requested_numbers)
+    sms_wallet = sms_wallet_svc.get_sms_wallet_for_branch(session, branch.id)
+    if sms_wallet.is_frozen or sms_wallet.balance < max(cost_per_sms, estimated_cost):
         error = (
-            f"Insufficient branch wallet balance. Each SMS costs {cost_per_sms} UGX "
-            "top up the branch wallet to send messages."
+            f"Insufficient SMS wallet balance. This send needs {estimated_cost} UGX "
+            f"at {cost_per_sms} UGX per SMS."
         )
         _fail_log(session, activity, error)
         raise HTTPException(
@@ -436,7 +535,19 @@ def send_bulk_message(
 
     sent = sum(result.success for result in results)
     failed = len(results) - sent
-    total_charged, wallet_balance = _charge_bulk_sms(session, branch, user, sent)
+    total_charged = 0
+    wallet_balance = sms_wallet.balance
+    if sent:
+        total_charged = cost_per_sms * sent
+        charged, wallet_balance = sms_wallet_svc.charge_sms(
+            session,
+            branch.id,
+            user.id,
+            total_charged,
+            f"SMS-BULK-{activity.id}",
+        )
+        if not charged:
+            total_charged = 0
     activity.recipients = requested_numbers
     activity.status = "completed" if failed == 0 else "partial" if sent else "failed"
     activity.sent = sent

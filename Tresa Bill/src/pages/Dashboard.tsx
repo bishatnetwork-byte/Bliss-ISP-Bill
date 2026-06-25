@@ -463,7 +463,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-foreground leading-none">{isOnline ? activeClients : "–"}</h4>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-none overflow-auto">Leases</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-none overflow-auto">Lease</p>
                     </div>
                   </div>
 

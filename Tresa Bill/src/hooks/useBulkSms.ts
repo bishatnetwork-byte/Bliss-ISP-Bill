@@ -1,6 +1,7 @@
 import {
   BulkMessageRequest,
   MessageDraftResponse,
+  SmsWalletMutationResponse,
   renultApi,
 } from "@/api/foreform";
 import { useBranchWallet } from "@/hooks/useWallet";
@@ -41,16 +42,40 @@ export function useBulkSms(branchId: string) {
     refetchOnWindowFocus: false,
   });
 
-  const wallet = useBranchWallet(branchId, Boolean(branchId));
+  const mainWallet = useBranchWallet(branchId, Boolean(branchId));
+
+  const wallet = useQuery({
+    queryKey: ["bulkSmsWallet", branchId],
+    queryFn: () => renultApi.messages.wallet(branchId),
+    enabled: Boolean(branchId),
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const walletTransactions = useQuery({
+    queryKey: ["bulkSmsWalletTransactions", branchId],
+    queryFn: () => renultApi.messages.walletTransactions(branchId, { limit: 50 }),
+    enabled: Boolean(branchId),
+    staleTime: 20 * 1000,
+  });
+
+  const refreshWallets = (data?: SmsWalletMutationResponse) => {
+    if (data) queryClient.setQueryData(["bulkSmsWallet", branchId], data.wallet);
+    queryClient.invalidateQueries({ queryKey: ["bulkSmsWallet", branchId] });
+    queryClient.invalidateQueries({ queryKey: ["bulkSmsWalletTransactions", branchId] });
+    queryClient.invalidateQueries({ queryKey: ["branchWallet", branchId] });
+    queryClient.invalidateQueries({ queryKey: ["branchTransactions", branchId] });
+    queryClient.invalidateQueries({ queryKey: ["myWallets"] });
+    queryClient.invalidateQueries({ queryKey: ["platformSummary"] });
+    window.dispatchEvent(new CustomEvent("bulk-sms-balance-change"));
+  };
 
   const send = useMutation({
     mutationFn: (payload: BulkMessageRequest) => renultApi.messages.send(branchId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bulkSmsActivity", branchId] });
       queryClient.invalidateQueries({ queryKey: ["bulkSmsDraft", branchId] });
-      queryClient.invalidateQueries({ queryKey: ["branchWallet", branchId] });
-      queryClient.invalidateQueries({ queryKey: ["myWallets"] });
-      window.dispatchEvent(new CustomEvent("bulk-sms-balance-change"));
+      refreshWallets();
     },
   });
 
@@ -73,5 +98,34 @@ export function useBulkSms(branchId: string) {
     },
   });
 
-  return { contacts, activity, draft, settings, wallet, send, saveDraft, saveSettings };
+  const transferToWallet = useMutation({
+    mutationFn: (payload: { amount: number }) => renultApi.messages.transferToWallet(branchId, payload),
+    onSuccess: refreshWallets,
+  });
+
+  const mobileMoneyTopup = useMutation({
+    mutationFn: (payload: { amount: number; phone_number: string }) => renultApi.messages.mobileMoneyTopup(branchId, payload),
+    onSuccess: refreshWallets,
+  });
+
+  const verifyMobileMoneyTopup = useMutation({
+    mutationFn: (transactionId: string) => renultApi.messages.verifyMobileMoneyTopup(branchId, transactionId),
+    onSuccess: refreshWallets,
+  });
+
+  return {
+    contacts,
+    activity,
+    draft,
+    settings,
+    mainWallet,
+    wallet,
+    walletTransactions,
+    send,
+    saveDraft,
+    saveSettings,
+    transferToWallet,
+    mobileMoneyTopup,
+    verifyMobileMoneyTopup,
+  };
 }

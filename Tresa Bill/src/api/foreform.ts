@@ -1194,6 +1194,40 @@ export interface BulkSmsSettingsResponse {
   sms_cost_ugx: number;
 }
 
+export interface SmsWalletResponse {
+  id: string;
+  branch_id: string;
+  branch_name: string;
+  balance: number;
+  total_deposited: number;
+  total_spent: number;
+  is_frozen: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SmsWalletTransactionResponse {
+  id: string;
+  sms_wallet_id: string;
+  branch_id: string;
+  amount: number;
+  transaction_type: string;
+  reference: string | null;
+  status: string;
+  source_wallet_transaction_id: string | null;
+  phone_number: string | null;
+  gateway_reference: string | null;
+  gateway_status: string | null;
+  failure_reason: string | null;
+  last_checked_at: string | null;
+  created_at: string;
+}
+
+export interface SmsWalletMutationResponse {
+  transaction: SmsWalletTransactionResponse;
+  wallet: SmsWalletResponse;
+}
+
 export interface VoucherRouterSyncResponse {
   success: boolean;
   router_id: string;
@@ -1356,7 +1390,7 @@ export interface WalletTransactionResponse {
   id: string;
   wallet_id: string;
   branch_id: string;
-  transaction_type: "deposit" | "withdrawal";
+  transaction_type: string;
   amount: number;
   fee_amount: number;
   net_amount: number;
@@ -1870,6 +1904,22 @@ export const renultApi = {
         method: "PUT",
         body: JSON.stringify(payload),
       }),
+    wallet: (branchId: string) =>
+      apiRequest<SmsWalletResponse>(`/branches/${branchId}/messages/wallet`),
+    walletTransactions: (branchId: string, query?: { limit?: number; offset?: number }) =>
+      apiRequest<SmsWalletTransactionResponse[]>(`/branches/${branchId}/messages/wallet/transactions`, { query }),
+    transferToWallet: (branchId: string, payload: { amount: number }) =>
+      apiRequest<SmsWalletMutationResponse>(`/branches/${branchId}/messages/wallet/transfer`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    mobileMoneyTopup: (branchId: string, payload: { amount: number; phone_number: string }) =>
+      apiRequest<SmsWalletMutationResponse>(`/branches/${branchId}/messages/wallet/mobile-money-topups`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    verifyMobileMoneyTopup: (branchId: string, transactionId: string) =>
+      apiRequest<SmsWalletMutationResponse>(`/branches/${branchId}/messages/wallet/mobile-money-topups/${transactionId}/status`),
   },
   wallets: {
     config: () =>

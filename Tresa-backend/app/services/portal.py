@@ -18,11 +18,10 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.models.captive_portal import CaptivePortal
 from app.models.branch import Branch
-from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
+from app.models.branch_wallet import BranchWallet
 from app.models.message import MessageLog
 from app.models.notification import Notification
 from app.models.notification_preference import NotificationPreference
-from app.models.platform_ledger import PlatformLedgerEntry
 from app.models.portal_payment import PortalPayment
 from app.models.router import Router
 from app.models.staff import Staff
@@ -31,6 +30,7 @@ from app.models.voucher_purchase import VoucherPurchase
 from app.models.wallet import Wallet
 from app.services import renult_pay
 from app.services import wallet as wallet_svc
+from app.services import sms_wallet as sms_wallet_svc
 from app.services.messaging import (
     normalize_sms_phone,
     render_voucher_message,
@@ -523,45 +523,8 @@ def _portal_sms_preferences(session: Session, user: User) -> NotificationPrefere
 
 
 def _charge_portal_sms(session: Session, branch: Branch, user: User, reference: str) -> tuple[bool, int]:
-    wallet = session.exec(
-        select(BranchWallet)
-        .where(BranchWallet.branch_id == branch.id)
-        .with_for_update()
-    ).first()
     cost = settings.sms_notification_cost
-    if not wallet or wallet.is_frozen or wallet.balance < cost:
-        return False, wallet.balance if wallet else 0
-
-    wallet.balance -= cost
-    wallet.total_fees_paid += cost
-    wallet.updated_at = datetime.utcnow()
-    session.add(
-        BranchWalletTransaction(
-            wallet_id=wallet.id,
-            branch_id=branch.id,
-            amount=cost,
-            fee_amount=cost,
-            net_amount=0,
-            transaction_type="SMS_NOTIFICATION",
-            reference=reference,
-        )
-    )
-    session.add(
-        PlatformLedgerEntry(
-            branch_wallet_id=wallet.id,
-            branch_id=branch.id,
-            user_id=user.id,
-            amount=cost,
-            fee_type="SMS_NOTIFICATION",
-            source_amount=cost,
-            fee_rate=1,
-            reference=reference,
-        )
-    )
-    session.add(wallet)
-    session.commit()
-    session.refresh(wallet)
-    return True, wallet.balance
+    return sms_wallet_svc.charge_sms(session, branch.id, user.id, cost, reference)
 
 
 def _send_low_balance_sms(
@@ -606,7 +569,7 @@ def _send_portal_voucher_sms(
     if payment.buy_for != "self" and not preferences.bulk_sms_admin_buy_for_enabled:
         return
 
-    wallet = session.exec(select(BranchWallet).where(BranchWallet.branch_id == branch.id)).first()
+    wallet = sms_wallet_svc.get_sms_wallet_for_branch(session, branch.id)
     balance = wallet.balance if wallet else 0
     if balance < preferences.bulk_sms_low_balance_threshold:
         if preferences.bulk_sms_low_balance_enabled and balance >= settings.sms_notification_cost:

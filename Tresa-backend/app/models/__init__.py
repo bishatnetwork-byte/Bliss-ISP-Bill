@@ -15,7 +15,7 @@ from app.models.voucher_job import VoucherJob
 from app.models.portal_payment import PortalPayment
 from app.models.withdrawal_challenge import WithdrawalChallenge
 from app.models.wallet import Wallet, WalletTransaction
-from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
+from app.models.branch_wallet import BranchWallet, BranchWalletTransaction, SmsWallet, SmsWalletTransaction
 from app.models.platform_ledger import PlatformLedgerEntry
 from app.models.telegram_connection import TelegramConnection
 from app.models.portal_ad import PortalAd
@@ -48,6 +48,8 @@ __all__ = [
     "WalletTransaction",
     "BranchWallet",
     "BranchWalletTransaction",
+    "SmsWallet",
+    "SmsWalletTransaction",
     "PlatformLedgerEntry",
     "TelegramConnection",
     "PortalAd",

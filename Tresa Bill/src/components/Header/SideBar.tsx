@@ -26,17 +26,13 @@ import {
   LucidePercentSquare,
   Megaphone,
   MessageCircleMoreIcon,
-  MessagesSquare,
   MoreHorizontal,
   Network,
-  Package,
   PackagePlusIcon,
   PackageSearchIcon,
   PanelLeft,
   Plus,
-  Settings,
-  Ticket,
-  Users
+  Settings
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -199,7 +195,7 @@ interface RouterStatusCache {
 // Routers are polled in the background every 30 minutes - frequent enough to
 // notice an outage without re-triggering the "checking..." pulse animation
 // (and the resulting sidebar flicker) on every navigation.
-const ROUTER_STATUS_REFRESH_INTERVAL = 30 * 60 * 1000;
+const ROUTER_STATUS_REFRESH_INTERVAL = 10 * 60 * 1000;
 const ROUTER_STATUS_CACHE_TTL = ROUTER_STATUS_REFRESH_INTERVAL;
 const routerStatusCacheKey = (branchId: string) =>
   `renult-router-status:${branchId}`;

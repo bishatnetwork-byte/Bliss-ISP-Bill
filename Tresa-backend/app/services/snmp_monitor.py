@@ -10,14 +10,14 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.db.session import engine
 from app.models.branch import Branch
-from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
+from app.models.branch_wallet import SmsWallet
 from app.models.notification import Notification
 from app.models.notification_preference import NotificationPreference
-from app.models.platform_ledger import PlatformLedgerEntry
 from app.models.router import Router
 from app.models.user import User
 from app.services.email import send_email
 from app.services.messaging import normalize_sms_phone, send_sms, sms_was_accepted
+from app.services import sms_wallet as sms_wallet_svc
 from app.services.telegram import send_branch_event
 
 SYS_UPTIME_OID = (1, 3, 6, 1, 2, 1, 1, 3, 0)
@@ -132,49 +132,14 @@ def _send_status_email(user: User, router: Router, online: bool) -> None:
 
 
 def _charge_sms(session: Session, branch: Branch, user: User, router: Router) -> bool:
-    wallet = session.exec(
-        select(BranchWallet)
-        .where(BranchWallet.branch_id == branch.id)
-        .with_for_update()
-    ).first()
     cost = settings.sms_notification_cost
-    if not wallet or wallet.is_frozen or wallet.balance < cost:
-        return False
-    wallet.balance -= cost
-    wallet.total_fees_paid += cost
-    wallet.updated_at = datetime.utcnow()
     reference = f"SNMP-{router.id}-{int(time.time())}"
-    session.add(
-        BranchWalletTransaction(
-            wallet_id=wallet.id,
-            branch_id=branch.id,
-            amount=cost,
-            fee_amount=cost,
-            net_amount=0,
-            transaction_type="SMS_NOTIFICATION",
-            reference=reference,
-        )
-    )
-    session.add(
-        PlatformLedgerEntry(
-            branch_wallet_id=wallet.id,
-            branch_id=branch.id,
-            user_id=user.id,
-            amount=cost,
-            fee_type="SMS_NOTIFICATION",
-            source_amount=cost,
-            fee_rate=1,
-            reference=reference,
-        )
-    )
-    session.add(wallet)
-    return True
+    charged, _balance = sms_wallet_svc.charge_sms(session, branch.id, user.id, cost, reference)
+    return charged
 
 
 def _can_afford_sms(session: Session, branch: Branch) -> bool:
-    wallet = session.exec(
-        select(BranchWallet).where(BranchWallet.branch_id == branch.id)
-    ).first()
+    wallet = session.exec(select(SmsWallet).where(SmsWallet.branch_id == branch.id)).first()
     return bool(
         wallet
         and not wallet.is_frozen
