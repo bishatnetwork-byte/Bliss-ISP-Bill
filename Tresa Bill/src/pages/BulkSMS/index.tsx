@@ -92,6 +92,7 @@ export default function BulkSMSPage() {
   );
   const [composerOpen, setComposerOpen] = useState(false);
   const [walletTopupOpen, setWalletTopupOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
   const [manualNumber, setManualNumber] = useState("");
@@ -286,6 +287,10 @@ export default function BulkSMSPage() {
               <DollarSignIcon className="h-4 w-4" />
               Top up SMS wallet
             </Button>
+            <Button variant="outline" className="gap-2" onClick={() => setSettingsOpen(true)} disabled={!branchId}>
+              <Settings2 className="h-4 w-4" />
+              Settings
+            </Button>
             <Button className="gap-2" onClick={() => setComposerOpen(true)}>
               <Plus className="h-4 w-4" />
               Compose
@@ -336,12 +341,17 @@ export default function BulkSMSPage() {
           </Card>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
-          <Card className="rounded border-primary/10 shadow-none">
+        <Card className="rounded border-primary/10 shadow-none">
             <CardHeader className="border-b">
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <MessageSquareText className="h-4 w-4 text-primary" />
-                Delivery history
+            <CardTitle className="flex items-center justify-between gap-3 text-sm">
+              <span className="flex items-center gap-2">
+                  <MessageSquareText className="h-4 w-4 text-primary" />
+                  Delivery history
+              </span>
+              <Button variant="ghost" size="sm" className="h-8 gap-2 px-2 text-xs" onClick={() => setSettingsOpen(true)} disabled={!branchId}>
+                <Settings2 className="h-3.5 w-3.5" />
+                Settings
+              </Button>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -388,74 +398,6 @@ export default function BulkSMSPage() {
               )}
             </CardContent>
           </Card>
-
-          <Card className="rounded border-primary/10 shadow-none">
-            <CardHeader className="border-b">
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <Settings2 className="h-4 w-4 text-primary" />
-                Automation
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5 p-4">
-              {bulkSms.settings.isLoading ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium">Send voucher code after portal purchase</p>
-                      <p className="text-xs text-muted-foreground">Off by default. Uses wallet balance for each SMS.</p>
-                    </div>
-                    <Switch
-                      checked={bulkSms.settings.data?.voucher_sms_enabled || false}
-                      onCheckedChange={(checked) => saveAutomation({ voucher_sms_enabled: checked })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium">Low-balance SMS warning</p>
-                      <p className="text-xs text-muted-foreground">Stops auto voucher SMS and warns the account phone when balance is low.</p>
-                    </div>
-                    <Switch
-                      checked={bulkSms.settings.data?.low_balance_sms_enabled || false}
-                      onCheckedChange={(checked) => saveAutomation({ low_balance_sms_enabled: checked })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="low-balance">Warning threshold</Label>
-                    <Input
-                      id="low-balance"
-                      type="number"
-                      min={smsCost || 1}
-                      value={thresholdInput}
-                      onBlur={saveThreshold}
-                      onChange={(event) => setThresholdInput(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.currentTarget.blur();
-                        }
-                      }}
-                    />
-                  </div>
-                  {/* <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium">Admin buy-for-user SMS</p>
-                      <p className="text-xs text-muted-foreground">Default is off for purchases made on behalf of another customer.</p>
-                    </div>
-                    <Switch
-                      checked={bulkSms.settings.data?.admin_buy_for_sms_enabled || false}
-                      onCheckedChange={(checked) => saveAutomation({ admin_buy_for_sms_enabled: checked })}
-                    />
-                  </div> */}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
       </main>
 
       <Sheet open={composerOpen} onOpenChange={setComposerOpen}>
@@ -563,6 +505,80 @@ export default function BulkSMSPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+          <SheetHeader className="border-b px-6 py-5 text-left">
+            <SheetTitle className="flex items-center gap-2">
+              <Settings2 className="h-4 w-4 text-primary" />
+              SMS Wallet Settings
+            </SheetTitle>
+            <SheetDescription>Manage automation and low-balance rules for this branch's SMS wallet.</SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            {bulkSms.settings.isLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="rounded border bg-muted/20 p-4">
+                  <p className="text-xs text-muted-foreground">Current SMS wallet</p>
+                  <p className="mt-1 text-2xl font-bold">UGX {walletBalance.toLocaleString()}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Each SMS costs UGX {(smsCost || 0).toLocaleString()}.</p>
+                </div>
+
+                <div className="flex items-start justify-between gap-4 rounded border p-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Send voucher code after portal purchase</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Uses the separate SMS wallet for each automated voucher SMS.</p>
+                  </div>
+                  <Switch
+                    checked={bulkSms.settings.data?.voucher_sms_enabled || false}
+                    onCheckedChange={(checked) => saveAutomation({ voucher_sms_enabled: checked })}
+                  />
+                </div>
+
+                <div className="flex items-start justify-between gap-4 rounded border p-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Low-balance SMS warning</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Pauses auto voucher SMS and warns the account phone when balance is low.</p>
+                  </div>
+                  <Switch
+                    checked={bulkSms.settings.data?.low_balance_sms_enabled || false}
+                    onCheckedChange={(checked) => saveAutomation({ low_balance_sms_enabled: checked })}
+                  />
+                </div>
+
+                <div className="space-y-2 rounded border p-4">
+                  <Label htmlFor="settings-low-balance">Warning threshold</Label>
+                  <Input
+                    id="settings-low-balance"
+                    type="number"
+                    min={smsCost || 1}
+                    value={thresholdInput}
+                    onBlur={saveThreshold}
+                    onChange={(event) => setThresholdInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.currentTarget.blur();
+                      }
+                    }}
+                  />
+                </div>
+
+                <Button variant="outline" className="w-full gap-2" onClick={() => setWalletTopupOpen(true)}>
+                  <DollarSignIcon className="h-4 w-4" />
+                  Top up SMS wallet
+                </Button>
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <WalletTopup
         open={walletTopupOpen}
         onOpenChange={setWalletTopupOpen}
