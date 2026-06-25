@@ -54,9 +54,9 @@ function normalizeUgandanPhone(value: string): string | null {
 
 function renderPreview(message: string, contact?: MessageContactResponse) {
   return message
-    .replaceAll("{wifi_name}", contact?.wifi_name || "WIFI NAME")
-    .replaceAll("{code}", contact?.voucher_code || "ABC123")
-    .replaceAll("{}", contact?.voucher_code || "ABC123");
+    .replace(/{wifi_name}/g, contact?.wifi_name || "WIFI NAME")
+    .replace(/{code}/g, contact?.voucher_code || "ABC123")
+    .replace(/{}/g, contact?.voucher_code || "ABC123");
 }
 
 function statusStyle(status: MessageActivityResponse["status"]) {
