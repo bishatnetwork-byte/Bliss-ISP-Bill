@@ -911,11 +911,7 @@ def _walled_garden_sync_script_source(host_patterns: list[str]) -> str:
 
 
 def _sync_walled_garden_scheduler(api: Any, host_patterns: list[str]) -> None:
-    # "policy" is intentionally excluded: the tresa-monitor API user's own
-    # group is `api,read,write,test`, and RouterOS refuses to assign a script
-    # or scheduler a policy right the calling user doesn't itself hold
-    # ("user's policy does not allow to set such script policy"). The script
-    # only reads/writes walled-garden entries, so read+write+test is enough.
+    # The script only reads/writes walled-garden entries, so read+write+test is enough.
     script_resource = api.get_resource("/system/script")
     script_params = {
         "source": _walled_garden_sync_script_source(host_patterns),

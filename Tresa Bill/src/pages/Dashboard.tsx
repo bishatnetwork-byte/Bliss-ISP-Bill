@@ -22,8 +22,6 @@ import {
   Coins,
   Cpu,
   Database,
-  Eye,
-  EyeOff,
   ExternalLink,
   RotateCw,
   Ticket,
@@ -33,7 +31,6 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRouters, useRouterStatus, useBranchVouchers, useBranchActiveUsers, useBranchRouterStatus } from "@/hooks/useRouters";
-import { useBranchWallet } from "@/hooks/useWallet";
 import { voucherUiStatus } from "@/lib/voucherStatus";
 
 import {
@@ -76,7 +73,7 @@ function pickWanInterface(interfaces?: Record<string, any>[]) {
 
 function PeriodBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-primary">
+    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-primary">
       {label}
     </span>
   );
@@ -84,7 +81,7 @@ function PeriodBadge({ label }: { label: string }) {
 
 function LiveBadge() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-600">
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600">
       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
       Live
     </span>
@@ -118,18 +115,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [chartType, setChartType] = useState<"area" | "bar">("area");
-  const [balanceHidden, setBalanceHidden] = useState(
-    () => localStorage.getItem("mobile-money-balance-hidden") !== "false",
-  );
   const { user } = useAuth();
-
-  const toggleBalanceHidden = () => {
-    setBalanceHidden((prev) => {
-      const next = !prev;
-      localStorage.setItem("mobile-money-balance-hidden", String(next));
-      return next;
-    });
-  };
 
   const getVoucherStatusBadgeClass = (status: string) => {
     switch (status) {
@@ -191,7 +177,6 @@ export default function Dashboard() {
   const { data: routers = [], isLoading: isRoutersLoading } = useRouters(branchId);
   const firstRouterId = routers[0]?.id || "";
   const { data: statusData, refetch: refetchStatus } = useRouterStatus(firstRouterId);
-  const { data: wallet, isLoading: isWalletLoading } = useBranchWallet(branchId, user?.account_type !== "staff");
   const { data: revenueShare } = useQuery({
     queryKey: ["revenueShare", branchId],
     queryFn: () => renultApi.staff.revenueShare(branchId),
@@ -320,19 +305,154 @@ export default function Dashboard() {
     return cells;
   }, [vouchersData]);
 
+  const periodSummary = useMemo(() => {
+    const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const addDays = (date: Date, days: number) => {
+      const next = new Date(date);
+      next.setDate(next.getDate() + days);
+      return next;
+    };
+    const startOfWeek = (date: Date) => {
+      const start = startOfDay(date);
+      const day = start.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      start.setDate(start.getDate() + diff);
+      return start;
+    };
+    const now = new Date();
+    const today = startOfDay(now);
+    const yesterday = addDays(today, -1);
+    const thisWeek = startOfWeek(now);
+    const lastWeek = addDays(thisWeek, -7);
+    const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const thisYear = new Date(now.getFullYear(), 0, 1);
+
+    const rows = [
+      { label: "Today", start: today, end: addDays(today, 1), dot: "bg-emerald-500" },
+      { label: "Yesterday", start: yesterday, end: today, dot: "bg-slate-400" },
+      { label: "This Week", start: thisWeek, end: addDays(now, 1), dot: "bg-blue-500" },
+      { label: "Last Week", start: lastWeek, end: thisWeek, dot: "bg-slate-500" },
+      { label: "This Month", start: thisMonth, end: addDays(now, 1), dot: "bg-indigo-500" },
+      { label: "Last Month", start: lastMonth, end: thisMonth, dot: "bg-cyan-500" },
+      { label: "This Year", start: thisYear, end: addDays(now, 1), dot: "bg-violet-500" },
+    ];
+
+    return rows.map((row) => {
+      const vouchers = (vouchersData?.vouchers || []).filter((voucher) => {
+        const createdAt = new Date(voucher.created_at);
+        return createdAt >= row.start && createdAt < row.end;
+      });
+      const activated = vouchers.filter(isActivatedVoucher);
+      const cash = activated
+        .filter((voucher) => !voucher.payment_reference || voucher.payment_reference.startsWith("BAT-"))
+        .reduce((sum, voucher) => sum + voucher.amount, 0);
+      const mobileMoney = activated
+        .filter((voucher) => voucher.payment_reference && !voucher.payment_reference.startsWith("BAT-"))
+        .reduce((sum, voucher) => sum + voucher.amount, 0);
+      const total = cash + mobileMoney;
+
+      return {
+        ...row,
+        cash,
+        mobileMoney,
+        total,
+        totalItems: activated.length,
+        cashItems: activated.filter((voucher) => !voucher.payment_reference || voucher.payment_reference.startsWith("BAT-")).length,
+        mobileItems: activated.filter((voucher) => voucher.payment_reference && !voucher.payment_reference.startsWith("BAT-")).length,
+      };
+    });
+  }, [vouchersData]);
+
+  const paymentChartData = useMemo(() => {
+    const grouped: Record<string, { date: string; sortKey: string; cash: number; mobileMoney: number; total: number; tans: number }> = {};
+    (vouchersData?.vouchers || []).forEach((voucher) => {
+      const createdAt = new Date(voucher.created_at);
+      const sortKey = voucher.created_at.slice(0, 10);
+      const date = createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      if (!grouped[date]) grouped[date] = { date, sortKey, cash: 0, mobileMoney: 0, total: 0, tans: 0 };
+      if (isActivatedVoucher(voucher)) {
+        const amount = voucher.amount ?? 0;
+        if (!voucher.payment_reference || voucher.payment_reference.startsWith("BAT-")) {
+          grouped[date].cash += amount;
+        } else {
+          grouped[date].mobileMoney += amount;
+        }
+        grouped[date].total += amount;
+      }
+      grouped[date].tans += 1;
+    });
+    return Object.values(grouped).sort((a, b) => a.sortKey.localeCompare(b.sortKey)).slice(-7);
+  }, [vouchersData]);
+
+  const todaysTransactions = periodSummary[0]?.totalItems ?? 0;
+  const todaysRevenue = periodSummary[0]?.total ?? todayVoucherSales;
+  const monthRevenue = periodSummary[4]?.total ?? 0;
+  const displayName = user?.full_name?.split(" ")[0] || user?.email?.split("@")[0] || "there";
+  const onlineRouterCount = routerStatusQueries.filter((query) => query.data?.connected).length || (isOnline ? 1 : 0);
+  const updatedAt = new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
   return (
-    <div className={`min-h-screen bg-background transition-all duration-300 ${sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[280px]"}`}>
+    <div className={`min-h-screen bg-[#f8fafc] text-slate-950 transition-all duration-300 dark:bg-background dark:text-foreground ${sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[280px]"}`}>
       <SEO title="Dashboard" />
       <AppHeader />
 
-      <main className="max-w-screen mx-auto px-4 sm:px-6 py-4">
-        {/* form */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold">Dashboard</h2>
+      <main className="mx-auto max-w-full px-3 py-3 sm:px-6 sm:py-5">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[12px] font-medium text-slate-500">Good morning, {displayName}</p>
+            <h1 className="text-lg font-black tracking-tight text-slate-950 dark:text-foreground">
+              {new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <Badge className="rounded border border-orange-200 bg-orange-50 px-2 py-1 text-[12px] font-bold text-orange-600 hover:bg-orange-50 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-300">
+              {onlineRouterCount}/{routers.length || 0} Routers Online
+            </Badge>
+          </div>
+        </div>
+
+        <section className="mb-5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
+          <MetricTile
+            title="Today's Revenue"
+            value={isVouchersLoading ? "..." : todaysRevenue.toLocaleString()}
+            subtitle={`${todaysTransactions} transactions`}
+            accent="emerald"
+            icon={<TrendingUp className="h-4 w-4" />}
+            onClick={() => navigate("/withdraw")}
+          />
+          <MetricTile
+            title="Today's Sales"
+            value={isVouchersLoading ? "..." : todaysTransactions.toLocaleString()}
+            subtitle="vouchers sold"
+            accent="indigo"
+            icon={<BarChart3 className="h-4 w-4" />}
+          />
+          <MetricTile
+            title="Active Users"
+            value={isActiveUsersLoading ? "..." : onlineUsersCount.toLocaleString()}
+            subtitle={`${offlineWithSession} waiting session`}
+            accent="cyan"
+            icon={<User className="h-4 w-4" />}
+          />
+          <MetricTile
+            title="This Month"
+            value={isVouchersLoading ? "..." : monthRevenue.toLocaleString()}
+            subtitle="total revenue"
+            accent="violet"
+            icon={<Coins className="h-4 w-4" />}
+          />
+        </section>
+
+        <section className="mb-5">
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-black tracking-tight">Analytics</h2>
+              <p className="text-[12px] text-slate-500">Revenue trends and payment breakdowns</p>
+            </div>
             <div className="flex items-center gap-2">
               <Select defaultValue="today">
-                <SelectTrigger className="w-[130px] h-9 text-xs bg-background">
+                <SelectTrigger className="h-9 w-[118px] rounded border-border bg-card text-xs">
                   <SelectValue placeholder="Date Range" />
                 </SelectTrigger>
                 <SelectContent>
@@ -348,513 +468,273 @@ export default function Dashboard() {
                   handleRefresh();
                   if (firstRouterId) refetchStatus();
                 }}
-                className="gap-1.5 h-9 px-3 flex items-center text-xs"
+                className="h-9 gap-1.5 rounded bg-[#6c5ce7] px-3 text-xs font-bold hover:bg-[#5b4ad1]"
               >
-                <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
+                <RotateCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
                 <span>Refresh</span>
               </Button>
             </div>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <button
-              onClick={() => navigate("/withdraw")}
-              className="bg-card border border-primary/40 hover:border-primary/60 transition-all rounded p-5 flex flex-col justify-between text-left h-full w-full relative group shadow-[0_0_10px_hsl(var(--primary)/0.05)]"
-            >
-              <div className="flex justify-between items-start w-full">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold text-muted-foreground">Net Sales</span>
-                  <PeriodBadge label="Today" />
-                </div>
-                <TrendingUp className="w-4 h-4 text-emerald-500 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+          <div className="rounded border border-border bg-card p-3">
+            <div className="mb-3 flex items-start justify-between">
+              <div>
+                <h3 className="text-sm font-black">Payment Trends</h3>
+                <p className="text-[12px] text-slate-500">Grouped by day</p>
               </div>
-              <div className="mt-3">
-                {isVouchersLoading ? (
-                  <Skeleton className="h-8 w-28" />
-                ) : (
-                  <h3 className="text-2xl font-black text-foreground tracking-tight">
-                    UGX {todayVoucherSales.toLocaleString()}
-                  </h3>
-                )}
-                <p className="text-[11px] text-muted-foreground mt-1.5 font-medium">
-                  Voucher sales recorded today. Wallet credit is tracked separately.
-                </p>
-              </div>
-            </button>
-            {user?.account_type !== "staff" ? <div
-              className="bg-card border border-primary/40 hover:border-primary/60 transition-all rounded p-5 flex flex-col justify-between text-left h-full w-full relative group shadow-[0_0_10px_hsl(var(--primary)/0.05)]"
-            >
-              <div className="flex justify-between items-start w-full">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold text-muted-foreground">Mobile Money Credits</span>
-                  <LiveBadge />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleBalanceHidden(); }}
-                    className="text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label={balanceHidden ? "Show balance" : "Hide balance"}
-                  >
-                    {balanceHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                  <button onClick={() => navigate("/withdraw")} className="cursor-pointer">
-                    <Coins className="w-4 h-4 text-amber-500 transition-transform group-hover:scale-110" />
-                  </button>
-                </div>
-              </div>
-              <button onClick={() => navigate("/withdraw")} className="mt-3 text-left cursor-pointer">
-                {isWalletLoading ? (
-                  <Skeleton className="h-8 w-28" />
-                ) : (
-                  <h3 className={cn(
-                    "text-2xl font-black text-foreground tracking-tight",
-                    balanceHidden && "blur-sm select-none",
-                  )}>
-                    UGX {(wallet?.balance ?? 0).toLocaleString()}
-                  </h3>
-                )}
-                <p className="text-[11px] text-muted-foreground mt-1.5 font-medium">Net prepaid balance.</p>
+              <button
+                onClick={() => setChartType((prev) => (prev === "area" ? "bar" : "area"))}
+                className="flex h-8 w-8 items-center justify-center rounded border border-border bg-card text-foreground transition hover:bg-muted"
+                title={chartType === "area" ? "Switch to bar chart" : "Switch to area chart"}
+              >
+                {chartType === "area" ? <BarChart3 className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}
               </button>
-            </div> : <div className="bg-card border border-primary/40 rounded p-5 flex flex-col justify-between">
-              <span className="text-xs font-semibold text-muted-foreground">Agent Access</span>
-              <h3 className="mt-3 text-xl font-black capitalize">{user?.staff_role || "Agent"}</h3>
-              <p className="mt-1.5 text-[11px] text-muted-foreground">Branch operations only. Wallet and settings remain owner controlled.</p>
-            </div>}
-            <div className="col-span-2 md:col-span-1 bg-card border border-primary/40 rounded p-5 flex flex-col justify-between min-h-[150px]">
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    {user?.account_type === "staff" ? "My Agent Share" : "My Sales Voucher"}
-                  </span>
-                  <p className="mt-1 text-[10px] font-semibold text-primary">
-                    {revenueShare?.current_user_percentage ?? 100}% of recorded sales
-                  </p>
-                </div>
-                <BarChart3 className="h-4 w-4 text-primary" />
-              </div>
-              <h3 className="mt-2 text-2xl font-black">
-                UGX {(revenueShare?.current_user_amount ?? 0).toLocaleString()}
-              </h3>
-              <div className="h-10 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
-                    <Area type="monotone" dataKey="sales" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.15)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
             </div>
-            <SystemInsightsPopover routerId={firstRouterId}>
-              <button className="col-span-2 lg:col-span-1 bg-card border border-primary/40 hover:border-primary/60 transition-all rounded p-5 flex flex-col justify-between text-left h-full w-full relative group shadow-[0_0_10px_hsl(var(--primary)/0.05)] cursor-pointer">
-                <div className="flex justify-between items-start w-full">
-                  <span className="text-xs font-semibold text-muted-foreground truncate max-w-[150px]">
-                    System Insights ({selectedRouterName})
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <span className={cn("w-1.5 h-1.5 rounded-full", isOnline ? "bg-emerald-500 animate-pulse" : "bg-rose-500")} />
-                    <span className={cn("text-[12px] font-semibold", isOnline ? "text-emerald-500" : "text-rose-500")}>
-                      {isOnline ? "Online" : "Offline"}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 mt-4 w-full">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors shrink-0">
-                      <User className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-foreground leading-none">{isOnline ? activeClients : "–"}</h4>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-none overflow-auto">Lease</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 border-l border-border/30 pl-2">
-                    <div className="w-8 h-8 rounded flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors shrink-0">
-                      <Cpu className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-foreground leading-none">{isOnline ? `${cpuUsage}%` : "–"}</h4>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-none">CPU</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 border-l border-border/30 pl-2">
-                    <div className="w-8 h-8 rounded flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors shrink-0">
-                      <Database className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-foreground leading-none">{isOnline ? `${memoryUsage}%` : "–"}</h4>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-none">RAM</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 w-full mt-4 text-[10px] text-emerald-500/80">
-                  <ChevronLeft className="w-3 h-3 cursor-pointer hover:text-emerald-500 shrink-0" />
-                  <div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden relative">
-                    <div className="absolute left-0 top-0 bottom-0 bg-emerald-500 rounded-full transition-all duration-300" style={{ width: `${isOnline ? cpuUsage : 0}%` }} />
-                  </div>
-                  <ChevronRight className="w-3 h-3 cursor-pointer hover:text-emerald-500 shrink-0" />
-                </div>
-              </button>
-            </SystemInsightsPopover>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3">
-            <div className="bg-card border border-primary/40 rounded p-5 flex flex-col justify-between min-h-[150px]">
-              <div className="flex justify-between items-start w-full">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold text-muted-foreground">Active Users</span>
-                  <LiveBadge />
-                </div>
-                <MiniBarChart
-                  bars={[
-                    { value: Math.max(onlineUsersCount, 0.4), color: "#10b981" },
-                    { value: Math.max(offlineWithSession, 0.4), color: "#f59e0b" },
-                  ]}
-                />
-              </div>
-              <div className="mt-3">
-                {isActiveUsersLoading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : (
-                  <h3 className="text-2xl font-black text-foreground tracking-tight">{onlineUsersCount}</h3>
-                )}
-                <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                  <Badge className="bg-emerald-500/10 text-emerald-600 border-none text-[10px] gap-1 font-semibold">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    {onlineUsersCount} online
-                  </Badge>
-                  <Badge className="bg-amber-500/10 text-amber-600 border-none text-[10px] gap-1 font-semibold">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                    {offlineWithSession} offline · active session
-                  </Badge>
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-1.5 font-medium">
-                  Connected to a hotspot now vs. holding an unused active voucher session.
-                </p>
-              </div>
+            <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <SummaryPill label="Total" value={paymentChartData.reduce((sum, row) => sum + row.total, 0)} color="slate" />
+              <SummaryPill label="Cash" value={paymentChartData.reduce((sum, row) => sum + row.cash, 0)} color="emerald" />
+              <SummaryPill label="Mobile" value={paymentChartData.reduce((sum, row) => sum + row.mobileMoney, 0)} color="indigo" />
+              <SummaryPill label="Trans" value={paymentChartData.reduce((sum, row) => sum + row.tans, 0)} color="slate" />
             </div>
-
-            <div className="bg-card border border-primary/40 rounded p-5 flex flex-col justify-between min-h-[150px]">
-              <div className="flex justify-between items-start w-full">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold text-muted-foreground">Data Usage</span>
-                  <PeriodBadge label="This Month" />
-                </div>
-                <MiniBarChart
-                  bars={[
-                    { value: Math.max(dataUsageTotals.rx, 1), color: "#10b981" },
-                    { value: Math.max(dataUsageTotals.tx, 1), color: "#f59e0b" },
-                  ]}
-                />
-              </div>
-              <div className="mt-3">
-                {isDataUsageLoading ? (
-                  <Skeleton className="h-8 w-24" />
-                ) : (
-                  <h3 className="text-2xl font-black text-foreground tracking-tight">{formatBytes(dataUsageTotal)}</h3>
-                )}
-                <div className="flex items-center gap-3 mt-2 text-[11px] font-semibold">
-                  <span className="flex items-center gap-1 text-emerald-600">
-                    <ArrowDown className="w-3 h-3" /> {formatBytes(dataUsageTotals.rx)}
-                  </span>
-                  <span className="flex items-center gap-1 text-amber-600">
-                    <ArrowUp className="w-3 h-3" /> {formatBytes(dataUsageTotals.tx)}
-                  </span>
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-1.5 font-medium">
-                  Download and upload totals across all branch routers.
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => navigate("/settings/subscriptions")}
-              className="bg-card border border-primary/40 hover:border-primary/60 rounded p-5 flex flex-col justify-between min-h-[150px] text-left transition-all sm:col-span-2"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <span className="text-xs font-semibold text-muted-foreground">Subscription Countdown</span>
-                  <p className="mt-1 text-[10px] font-semibold text-primary">ISP bills and recurring payments</p>
-                </div>
-                <CalendarClock className="h-4 w-4 text-primary" />
-              </div>
-              {isSubscriptionsLoading ? (
-                <Skeleton className="mt-5 h-10 w-44" />
-              ) : nearestSubscription ? (
-                <div className="mt-4 grid gap-4 lg:grid-cols-[220px_1fr]">
-                  <div>
-                    <h3 className="text-2xl font-black text-foreground">
-                      {nearestSubscription.days_until_due < 0
-                        ? `${Math.abs(nearestSubscription.days_until_due)} overdue`
-                        : nearestSubscription.days_until_due === 0
-                          ? "Due today"
-                          : `${nearestSubscription.days_until_due} days`}
-                    </h3>
-                    <p className="mt-1 text-xs font-semibold text-foreground">{nearestSubscription.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {nearestSubscription.currency} {nearestSubscription.amount.toLocaleString()} · {nearestSubscription.provider || nearestSubscription.category}
-                    </p>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                    {subscriptions.slice(0, 4).map((item) => (
-                      <div key={item.id} className="rounded border border-border/20 bg-muted/20 px-3 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-[11px] font-semibold">{item.name}</span>
-                          {item.reminder_due && <BellRing className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
-                        </div>
-                        <p className="mt-1 text-[10px] text-muted-foreground">
-                          {item.days_until_due < 0
-                            ? `${Math.abs(item.days_until_due)} day(s) overdue`
-                            : item.days_until_due === 0
-                              ? "Due today"
-                              : `${item.days_until_due} day(s) left`}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-4">
-                  <h3 className="text-xl font-black text-foreground">No bills saved</h3>
-                  <p className="mt-1 text-[11px] text-muted-foreground">Add your ISP bill or another subscription to start daily countdown reminders.</p>
-                </div>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Analytics Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 mt-6">
-          {/* Left: Chart Card */}
-          <Card className="lg:col-span-2 bg-card border border-border/40 shadow-none rounded">
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    Performance Analytics
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Voucher sales & form responses over the last 7 days
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-3 text-[10px] sm:text-xs">
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <span className="w-2.5 h-2.5 rounded-full bg-primary" />
-                    Voucher Sales
-                  </span>
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    Responses
-                  </span>
-                  <button
-                    onClick={() => setChartType((prev) => (prev === "area" ? "bar" : "area"))}
-                    className={cn(
-                      "ml-1 w-7 h-7 rounded flex items-center justify-center transition-all duration-300",
-                      chartType === "bar"
-                        ? "bg-primary/10 text-primary"
-                        : "bg-muted/30 text-muted-foreground"
-                    )}
-                    title={chartType === "area" ? "Switch to Bar Chart" : "Switch to Line Chart"}
-                  >
-                    {chartType === "area" ? (
-                      <ArrowUp className="w-3.5 h-3.5 transition-transform duration-300" />
-                    ) : (
-                      <BarChart3 className="w-3.5 h-3.5 transition-transform duration-300" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="h-64 pt-4">
+            <div className="h-[280px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 {chartType === "area" ? (
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="colorResponses" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border)/0.5)" />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                    <YAxis tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                        borderRadius: "8px",
-                        fontSize: "11px",
-                        color: "hsl(var(--foreground))"
-                      }}
-                    />
-                    <Area type="monotone" dataKey="sales" stroke="hsl(var(--primary))" strokeWidth={2} fillOpacity={1} fill="url(#colorSales)" />
-                    <Area type="monotone" dataKey="responses" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorResponses)" />
+                  <AreaChart data={paymentChartData} margin={{ top: 10, right: 6, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                    <XAxis dataKey="date" tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#94a3b8" }} />
+                    <YAxis tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#94a3b8" }} />
+                    <Tooltip content={<DashboardTooltip />} />
+                    <Area type="monotone" dataKey="cash" stroke="#20c997" fill="#dffaf0" strokeWidth={2} />
+                    <Area type="monotone" dataKey="mobileMoney" stroke="#6865f2" fill="#e9ecff" strokeWidth={2} />
                   </AreaChart>
                 ) : (
-                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorBarSales" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.85} />
-                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                      </linearGradient>
-                      <linearGradient id="colorBarResponses" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.85} />
-                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.4} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border)/0.5)" />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                    <YAxis tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                        borderRadius: "8px",
-                        fontSize: "11px",
-                        color: "hsl(var(--foreground))"
-                      }}
-                    />
-                    <Bar dataKey="sales" fill="url(#colorBarSales)" radius={[4, 4, 0, 0]} barSize={18} />
-                    <Bar dataKey="responses" fill="url(#colorBarResponses)" radius={[4, 4, 0, 0]} barSize={18} />
+                  <BarChart data={paymentChartData} margin={{ top: 10, right: 6, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                    <XAxis dataKey="date" tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#94a3b8" }} />
+                    <YAxis tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#94a3b8" }} />
+                    <Tooltip content={<DashboardTooltip />} />
+                    <Bar dataKey="cash" fill="#20c997" radius={[4, 4, 0, 0]} barSize={14} />
+                    <Bar dataKey="mobileMoney" fill="#6865f2" radius={[4, 4, 0, 0]} barSize={14} />
                   </BarChart>
                 )}
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
+            </div>
+            <div className="mt-1 flex items-center justify-center gap-4 text-[12px] font-bold text-slate-500">
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#20c997]" />Cash</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#6865f2]" />Mobile Money</span>
+            </div>
+          </div>
+        </section>
 
-          {/* Right: Heatmap Card */}
-          <Card className="bg-card border border-border/40 shadow-none rounded">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                Recent Sales
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Recent Voucher Purchases
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <div className="flex flex-col gap-4">
-                {/* Heatmap Grid */}
-                <div className="grid grid-cols-12 gap-1.5 mt-2 select-none">
-                  {heatmapData.map((cell) => {
-                    let colorClass = "bg-muted/30";
-                    if (cell.level === 1) colorClass = "bg-emerald-500/20 dark:bg-emerald-500/10";
-                    else if (cell.level === 2) colorClass = "bg-emerald-500/40 dark:bg-emerald-500/25";
-                    else if (cell.level === 3) colorClass = "bg-emerald-500/70 dark:bg-emerald-500/50";
-                    else if (cell.level === 4) colorClass = "bg-emerald-500 dark:bg-emerald-500/85";
-                    return (
-                      <div
-                        key={cell.day}
-                        className={`aspect-square w-full rounded-[2px] transition-all hover:scale-125 hover:shadow-sm cursor-pointer ${colorClass}`}
-                        title={`${cell.count} activities`}
-                      />
-                    );
-                  })}
-                </div>
-
-                {/* Heatmap Legend */}
-                <div className="flex justify-between items-center text-[10px] text-muted-foreground pt-1">
-                  <span>Less active</span>
-                  <div className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-[1px] bg-muted/30" />
-                    <span className="w-2.5 h-2.5 rounded-[1px] bg-emerald-500/20" />
-                    <span className="w-2.5 h-2.5 rounded-[1px] bg-emerald-500/40" />
-                    <span className="w-2.5 h-2.5 rounded-[1px] bg-emerald-500/70" />
-                    <span className="w-2.5 h-2.5 rounded-[1px] bg-emerald-500" />
-                  </div>
-                  <span>More active</span>
-                </div>
+        <section className="mb-5 grid gap-3 lg:grid-cols-[1fr_320px]">
+          <div className="rounded border border-border bg-card p-3">
+            <div className="mb-3 flex items-start justify-between">
+              <div>
+                <h3 className="text-sm font-black">Period Summary</h3>
+                <p className="text-[12px] text-slate-500">Updated {updatedAt}</p>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+              <Button variant="outline" size="icon" className="h-8 w-8 rounded border-border bg-card">
+                <RotateCw className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {periodSummary.map((period) => (
+                <div key={period.label} className="rounded bg-card px-1 py-1">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={cn("h-2 w-2 rounded-full", period.dot)} />
+                      <span className="text-[12px] font-black text-slate-700 dark:text-foreground">{period.label}</span>
+                    </div>
+                    <div className="text-right text-xs font-black">
+                      {period.total.toLocaleString()}
+                      <span className="ml-1 text-[12px] font-semibold text-slate-400">({period.totalItems} tans)</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <PaymentBreakdown label="Cash" value={period.cash} transactions={period.cashItems} tone="emerald" />
+                    <PaymentBreakdown label="Mobile Money" value={period.mobileMoney} transactions={period.mobileItems} tone="indigo" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
-        {/* Recent Bought Vouchers Section */}
-        <Card className="bg-card border border-border/10 shadow-none mb-8 rounded">
-          <CardHeader className="pb-3 flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Ticket className="w-4 h-4 text-amber-500" />
-                Recent Bought Vouchers
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Real-time log of captive portal voucher transactions
-              </CardDescription>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/voucher-support")}
-              className="text-xs text-primary hover:text-primary/80 font-semibold flex items-center gap-1 p-0 h-auto"
+          <div className="space-y-3">
+            <SystemInsightsPopover routerId={firstRouterId}>
+              <button className="w-full cursor-pointer rounded border border-[#8b7cf6] bg-card p-4 text-left transition hover:border-[#6c5ce7]">
+                <div className="mb-6 flex items-center justify-between">
+                  <span className="max-w-[210px] truncate text-xs font-black text-slate-700 dark:text-foreground">
+                    System Insights ({selectedRouterName})
+                  </span>
+                  <span className={cn("flex items-center gap-1 text-xs font-bold", isOnline ? "text-emerald-500" : "text-rose-500")}>
+                    <span className={cn("h-1.5 w-1.5 rounded-full", isOnline ? "bg-emerald-500" : "bg-rose-500")} />
+                    {isOnline ? "Online" : "Offline"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <InsightStat icon={<User className="h-4 w-4" />} value={isOnline ? activeClients : "–"} label="Lease" />
+                  <InsightStat icon={<Cpu className="h-4 w-4" />} value={isOnline ? `${cpuUsage}%` : "–"} label="CPU" />
+                  <InsightStat icon={<Database className="h-4 w-4" />} value={isOnline ? `${memoryUsage}%` : "–"} label="RAM" />
+                </div>
+                <div className="mt-5 flex items-center gap-3 text-emerald-400">
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-emerald-400" style={{ width: `${isOnline ? cpuUsage : 0}%` }} />
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </div>
+              </button>
+            </SystemInsightsPopover>
+
+            <button
+              onClick={() => navigate("/settings/subscriptions")}
+              className="w-full rounded border border-border bg-card p-4 text-left transition hover:border-[#6c5ce7]"
             >
-              View Registry <ExternalLink className="w-3 h-3" />
-            </Button>
-          </CardHeader>
-          <CardContent className="p-5 flex-1 flex flex-col justify-between">
-            <div className="overflow-x-auto rounded border border-border/10">
-              <Table>
-                <TableHeader className="bg-muted/40 font-semibold">
-                  <TableRow>
-                    <TableHead className="w-[140px] text-xs">Voucher Code</TableHead>
-                    <TableHead className="text-xs">Buyer</TableHead>
-                    <TableHead className="text-xs">Phone Number</TableHead>
-                    <TableHead className="text-xs">Internet Package</TableHead>
-                    <TableHead className="text-xs">Paid</TableHead>
-                    <TableHead className="text-xs">Purchase Date</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
-                    <TableHead className="w-[80px] text-right text-xs">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentVouchers.map((voucher) => (
-                    <TableRow
-                      key={voucher.id}
-                      className="cursor-pointer hover:bg-muted/30 group transition-colors"
-                      onClick={() => copyVoucherCode(voucher.id)}
-                    >
-                      <TableCell className="font-mono text-xs font-semibold text-primary">{voucher.id}</TableCell>
-                      <TableCell className="text-xs font-semibold">
-                        <div>{voucher.buyerName}</div>
-                        <div className="text-[10px] text-muted-foreground font-normal">{voucher.email}</div>
-                      </TableCell>
-                      <TableCell className="text-xs font-semibold font-mono text-foreground/80">{voucher.phone}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-medium">{voucher.packageName}</TableCell>
-                      <TableCell className="text-xs font-bold text-foreground">UGX {voucher.pricePaid.toLocaleString()}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-medium">
-                        {new Date(voucher.purchaseTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        <Badge className={cn("text-[10px] px-2 py-0 border-none font-semibold rounded-full", getVoucherStatusBadgeClass(voucher.status))}>
-                          {voucher.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyVoucherCode(voucher.id);
-                          }}
-                          className="h-8 px-2 text-xs text-primary hover:bg-primary/10 rounded font-semibold"
-                        >
-                          Copy
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-black text-slate-700 dark:text-foreground">Subscription Countdown</p>
+                  <p className="text-[12px] text-slate-500">ISP bills and recurring payments</p>
+                </div>
+                <CalendarClock className="h-4 w-4 text-[#6c5ce7]" />
+              </div>
+              {isSubscriptionsLoading ? (
+                <Skeleton className="mt-4 h-8 w-32" />
+              ) : nearestSubscription ? (
+                <div className="mt-4">
+                  <p className="text-2xl font-black">
+                    {nearestSubscription.days_until_due < 0
+                      ? `${Math.abs(nearestSubscription.days_until_due)} overdue`
+                      : nearestSubscription.days_until_due === 0
+                        ? "Due today"
+                        : `${nearestSubscription.days_until_due} days`}
+                  </p>
+                  <p className="mt-1 text-xs font-bold">{nearestSubscription.name}</p>
+                  <p className="text-[12px] text-slate-500">
+                    {nearestSubscription.currency} {nearestSubscription.amount.toLocaleString()} · {nearestSubscription.provider || nearestSubscription.category}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-4 text-xs text-slate-500">No bills saved yet.</p>
+              )}
+            </button>
+          </div>
+        </section>
       </main>
 
+    </div>
+  );
+}
+
+function MetricTile({
+  title,
+  value,
+  subtitle,
+  accent,
+  icon,
+  onClick,
+}: {
+  title: string;
+  value: string;
+  subtitle: string;
+  accent: "emerald" | "indigo" | "cyan" | "violet";
+  icon: React.ReactNode;
+  onClick?: () => void;
+}) {
+  const accentClasses = {
+    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300",
+    indigo: "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300",
+    cyan: "bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-300",
+    violet: "bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300",
+  };
+  const Component = onClick ? "button" : "div";
+
+  return (
+    <Component
+      onClick={onClick}
+      className="min-h-[104px] rounded border border-border bg-card p-3 text-left transition hover:border-[#6c5ce7]"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-[12px] font-bold text-slate-500">{title}</p>
+          <p className="mt-2 break-words text-xl font-black leading-tight text-foreground">{value}</p>
+        </div>
+        <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded", accentClasses[accent])}>
+          {icon}
+        </span>
+      </div>
+      <p className="mt-2 text-[12px] font-medium text-slate-500">{subtitle}</p>
+    </Component>
+  );
+}
+
+function SummaryPill({ label, value, color }: { label: string; value: number; color: "slate" | "emerald" | "indigo" }) {
+  const colors = {
+    slate: "text-foreground",
+    emerald: "text-emerald-600",
+    indigo: "text-indigo-600",
+  };
+
+  return (
+    <div className="rounded bg-muted px-3 py-2 text-center">
+      <p className="text-[12px] font-bold text-slate-500">{label}</p>
+      <p className={cn("mt-1 text-xs font-black", colors[color])}>{value.toLocaleString()}</p>
+    </div>
+  );
+}
+
+function PaymentBreakdown({
+  label,
+  value,
+  transactions,
+  tone,
+}: {
+  label: string;
+  value: number;
+  transactions: number;
+  tone: "emerald" | "indigo";
+}) {
+  const toneClass = tone === "emerald"
+    ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300"
+    : "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300";
+
+  return (
+    <div className={cn("rounded px-3 py-2", toneClass)}>
+      <p className="text-[12px] font-bold">{label}</p>
+      <p className="mt-1 text-xs font-black">{value.toLocaleString()}</p>
+      <p className="mt-0.5 text-[12px] opacity-75">{transactions} tans</p>
+    </div>
+  );
+}
+
+function InsightStat({ icon, value, label }: { icon: React.ReactNode; value: React.ReactNode; label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-slate-500">
+        {icon}
+      </span>
+      <span>
+        <span className="block text-sm font-black leading-none text-foreground">{value}</span>
+        <span className="mt-1 block text-[12px] font-bold text-slate-500">{label}</span>
+      </span>
+    </div>
+  );
+}
+
+function DashboardTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const cash = payload.find((item: any) => item.dataKey === "cash")?.value ?? 0;
+  const mobileMoney = payload.find((item: any) => item.dataKey === "mobileMoney")?.value ?? 0;
+
+  return (
+    <div className="rounded border border-border bg-card px-3 py-2 text-xs">
+      <p className="mb-2 font-black text-foreground">{label}</p>
+      <p className="flex items-center gap-2 font-bold text-emerald-600">
+        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+        Cash {Number(cash).toLocaleString()}
+      </p>
+      <p className="mt-1 flex items-center gap-2 font-bold text-indigo-600">
+        <span className="h-2 w-2 rounded-full bg-indigo-500" />
+        Mobile {Number(mobileMoney).toLocaleString()}
+      </p>
     </div>
   );
 }
@@ -875,11 +755,11 @@ function SystemInsightsPopover({ children, routerId }: { children: React.ReactNo
       <PopoverTrigger asChild>
         {children}
       </PopoverTrigger>
-      <PopoverContent className="w-[calc(100vw-32px)] sm:w-[360px] p-5 bg-card rounded shadow-xl border border-border/50" align="end" sideOffset={12}>
+      <PopoverContent className="w-[calc(100vw-32px)] sm:w-[360px] p-5 bg-card rounded border border-border/50" align="end" sideOffset={12}>
         <div className="space-y-4">
           <div>
             <h4 className="font-bold text-sm text-foreground">Router Insights</h4>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Live status and network health check log</p>
+            <p className="text-[12px] text-muted-foreground mt-0.5">Live status and network health check log</p>
           </div>
 
           {/* WireGuard Status */}
@@ -889,11 +769,11 @@ function SystemInsightsPopover({ children, routerId }: { children: React.ReactNo
                 <span className={cn("w-2 h-2 rounded-full", isOnline ? "bg-emerald-500 animate-pulse" : "bg-rose-500")} />
                 Tunnel Connection
               </span>
-              <Badge className={cn("border-none text-[10px] py-0 font-semibold", isOnline ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500")} variant="outline">
+              <Badge className={cn("border-none text-[12px] py-0 font-semibold", isOnline ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500")} variant="outline">
                 {isOnline ? "Online" : "Offline"}
               </Badge>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground pt-1 border-t border-border/20">
+            <div className="grid grid-cols-2 gap-2 text-[12px] text-muted-foreground pt-1 border-t border-border/20">
               <div>
                 <p className="font-medium">Board Model</p>
                 <p className="text-foreground font-semibold mt-0.5">{statusData?.system_resource?.['board-name'] || "–"}</p>
@@ -908,11 +788,11 @@ function SystemInsightsPopover({ children, routerId }: { children: React.ReactNo
           {/* Detailed stats */}
           <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
             <div className="p-2 bg-muted/10 rounded border border-border/0">
-              <p className="text-muted-foreground text-[10px]">Memory Load</p>
+              <p className="text-muted-foreground text-[12px]">Memory Load</p>
               <p className="font-bold text-foreground mt-0.5">{memoryText}</p>
             </div>
             <div className="p-2 bg-muted/10 rounded border border-border/0">
-              <p className="text-muted-foreground text-[10px]">OS Version</p>
+              <p className="text-muted-foreground text-[12px]">OS Version</p>
               <p className="font-bold text-foreground mt-0.5">{statusData?.system_resource?.version ? `v${statusData.system_resource.version}` : "–"}</p>
             </div>
           </div>

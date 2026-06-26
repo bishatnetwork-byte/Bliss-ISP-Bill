@@ -7,7 +7,7 @@
 
 :local apiPassword   "ac23353c63370ee0e6e323f9e5fb9cd5"
 :local ipsecSecret   "k1YFP7xMv02keVk4oTmF558cchIUuasJqJEDK8kSrTBiSS6c"
-:local backendHost   "renult.vercel.app"
+:local backendHost   "api.bliss-isp.com"
 :local chrPublicIp   "23.92.30.38"
 :local chrIdentity   "Tresa-CHR-Concentrator"
 :local tunnelSubnet  "10.0.0.0/16"

@@ -6,7 +6,7 @@ function portalConfig() {
 }
 
 function apiBase() {
-  return (portalConfig().apiBaseUrl || "https://api.renult.xyz").replace(/\/$/, "");
+  return (portalConfig().apiBaseUrl || "https://api.bliss-isp.com").replace(/\/$/, "");
 }
 
 function routerName() {

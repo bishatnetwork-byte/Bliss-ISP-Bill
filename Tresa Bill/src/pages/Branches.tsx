@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Building2, Pencil, Plus, Trash2, User, UserPlus } from "lucide-react";
+import { Building2, Handshake, Pencil, Plus, Trash2, User, UserPlus } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -22,18 +22,72 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+type PartnerPayoutMode = "percentage" | "fixed" | "daily";
+
+interface PartnerAgreement {
+  id: string;
+  name: string;
+  phone_number: string;
+  email: string;
+  payout_mode: PartnerPayoutMode;
+  percentage: number;
+  fixed_amount: number;
+  daily_revenue_amount: number;
+  applies_online: boolean;
+  applies_voucher: boolean;
+  is_active: boolean;
+  created_at: string;
+}
+
+const defaultPartnerForm = {
+  name: "",
+  phone_number: "",
+  email: "",
+  payout_mode: "percentage" as PartnerPayoutMode,
+  percentage: 50,
+  fixed_amount: 0,
+  daily_revenue_amount: 0,
+  applies_online: true,
+  applies_voucher: true,
+  is_active: true,
+};
+
+function partnerStorageKey(branchId: string) {
+  return `branch-partners:${branchId}`;
+}
+
+function loadStoredPartners(branchId: string): PartnerAgreement[] {
+  try {
+    const raw = localStorage.getItem(partnerStorageKey(branchId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredPartners(branchId: string, partners: PartnerAgreement[]) {
+  localStorage.setItem(partnerStorageKey(branchId), JSON.stringify(partners));
+}
+
+function formatMoney(amount: number) {
+  return `UGX ${Number(amount || 0).toLocaleString()}`;
+}
+
 export default function BranchesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [branches, setBranches] = useState<BranchResponse[]>([]);
   const [staff, setStaff] = useState<StaffResponse[]>([]);
+  const [partners, setPartners] = useState<PartnerAgreement[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(localStorage.getItem("selected-workspace"));
   const [isLoading, setIsLoading] = useState(true);
   const [isStaffLoading, setIsStaffLoading] = useState(false);
   const [isBranchOpen, setIsBranchOpen] = useState(false);
   const [isStaffOpen, setIsStaffOpen] = useState(false);
+  const [isPartnerOpen, setIsPartnerOpen] = useState(false);
   const [isEditStaffOpen, setIsEditStaffOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffResponse | null>(null);
   const [branchName, setBranchName] = useState("");
+  const [partnerForm, setPartnerForm] = useState(defaultPartnerForm);
   const [staffForm, setStaffForm] = useState({
     full_name: "",
     email: "",
@@ -93,9 +147,17 @@ export default function BranchesPage() {
   useEffect(() => { loadBranches(); }, [loadBranches]);
   useEffect(() => { loadStaff(); }, [loadStaff]);
   useEffect(() => {
+    if (!selectedBranch?.id) {
+      setPartners([]);
+      return;
+    }
+    setPartners(loadStoredPartners(selectedBranch.id));
+  }, [selectedBranch?.id]);
+  useEffect(() => {
     const action = searchParams.get("new");
     if (action === "branch") setIsBranchOpen(true);
     if (action === "staff") setIsStaffOpen(true);
+    if (action === "partner") setIsPartnerOpen(true);
   }, [searchParams]);
   useEffect(() => {
     const handler = (event: Event) => {
@@ -139,6 +201,31 @@ export default function BranchesPage() {
     } catch (err: unknown) {
       toast.error(errorMessage(err, "Failed to add staff"));
     }
+  };
+
+  const createPartner = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedBranch) return;
+    if (!partnerForm.applies_online && !partnerForm.applies_voucher) {
+      toast.error("Choose Online payments, Voucher sales, or both.");
+      return;
+    }
+
+    const next: PartnerAgreement = {
+      id: crypto.randomUUID(),
+      ...partnerForm,
+      percentage: Math.min(100, Math.max(0, Number(partnerForm.percentage || 0))),
+      fixed_amount: Math.max(0, Number(partnerForm.fixed_amount || 0)),
+      daily_revenue_amount: Math.max(0, Number(partnerForm.daily_revenue_amount || 0)),
+      created_at: new Date().toISOString(),
+    };
+    const nextPartners = [next, ...partners];
+    setPartners(nextPartners);
+    saveStoredPartners(selectedBranch.id, nextPartners);
+    setPartnerForm(defaultPartnerForm);
+    setIsPartnerOpen(false);
+    setSearchParams({});
+    toast.success("Partner agreement added");
   };
 
   const deleteStaff = async (id: string) => {
@@ -197,6 +284,36 @@ export default function BranchesPage() {
     }
   };
 
+  const togglePartnerActive = (partner: PartnerAgreement) => {
+    if (!selectedBranch) return;
+    const nextPartners = partners.map((item) => (
+      item.id === partner.id ? { ...item, is_active: !item.is_active } : item
+    ));
+    setPartners(nextPartners);
+    saveStoredPartners(selectedBranch.id, nextPartners);
+    toast.success(`${partner.name} ${partner.is_active ? "paused" : "activated"}`);
+  };
+
+  const deletePartner = (id: string) => {
+    if (!selectedBranch) return;
+    const nextPartners = partners.filter((item) => item.id !== id);
+    setPartners(nextPartners);
+    saveStoredPartners(selectedBranch.id, nextPartners);
+    toast.success("Partner agreement removed");
+  };
+
+  const partnerPayoutLabel = (partner: PartnerAgreement) => {
+    if (partner.payout_mode === "percentage") return `${partner.percentage}% share`;
+    if (partner.payout_mode === "fixed") return `${formatMoney(partner.fixed_amount)} fixed`;
+    return `${formatMoney(partner.daily_revenue_amount)} daily`;
+  };
+
+  const partnerSourceLabel = (partner: PartnerAgreement) => {
+    if (partner.applies_online && partner.applies_voucher) return "Online + Voucher";
+    if (partner.applies_online) return "Online";
+    return "Voucher";
+  };
+
   const selectBranch = (branch: BranchResponse) => {
     setSelectedBranchId(branch.id);
     localStorage.setItem("selected-workspace", branch.id);
@@ -221,6 +338,10 @@ export default function BranchesPage() {
             <Button className="h-10 text-xs gap-1.5" disabled={!selectedBranch} onClick={() => setIsStaffOpen(true)}>
               <UserPlus className="w-4 h-4" />
               Add New Staff
+            </Button>
+            <Button className="h-10 text-xs gap-1.5" disabled={!selectedBranch} onClick={() => setIsPartnerOpen(true)}>
+              <Handshake className="w-4 h-4" />
+              Add Partner
             </Button>
           </div>
         </div>
@@ -267,82 +388,151 @@ export default function BranchesPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-none border-border/0">
-            <CardHeader className="border-b border-border/40">
-              <CardTitle className="text-base flex items-center gap-2">
-                <User className="w-4 h-4 text-primary" />
-                {selectedBranch ? `${selectedBranch.name} Staff` : "Staff"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {isStaffLoading ? (
-                <div className="space-y-3 p-4">
-                  {[1, 2, 3].map((item) => (
-                    <div key={item} className="flex items-center gap-3">
-                      <Skeleton className="h-7 w-7 rounded-full" />
-                      <Skeleton className="h-3 flex-1" />
-                      <Skeleton className="h-3 w-24" />
-                      <Skeleton className="h-3 w-16" />
-                    </div>
-                  ))}
+          <div className="space-y-4">
+            <Card className="rounded-none border-border/0">
+              <CardHeader className="border-b border-border/40">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <User className="w-4 h-4 text-primary" />
+                  {selectedBranch ? `${selectedBranch.name} Staff` : "Staff"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {isStaffLoading ? (
+                  <div className="space-y-3 p-4">
+                    {[1, 2, 3].map((item) => (
+                      <div key={item} className="flex items-center gap-3">
+                        <Skeleton className="h-7 w-7 rounded-full" />
+                        <Skeleton className="h-3 flex-1" />
+                        <Skeleton className="h-3 w-24" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                    ))}
+                  </div>
+                ) : !selectedBranch ? (
+                  <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">Create a branch to add staff.</div>
+                ) : staff.length === 0 ? (
+                  <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">No staff for this branch yet.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Share</TableHead>
+                        <TableHead>Active</TableHead>
+                        <TableHead className="w-16" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {staff.map((person) => (
+                        <TableRow key={person.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Avatar className="w-7 h-7">
+                                <AvatarImage src={person.avatar_url} />
+                                <AvatarFallback>{person.full_name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                              </Avatar>
+                              <span className="font-medium text-xs">{person.full_name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs">{person.email}</TableCell>
+                          <TableCell className="text-xs">{person.phone_number || "-"}</TableCell>
+                          <TableCell className="text-xs capitalize">{person.role}</TableCell>
+                          <TableCell className="text-xs font-semibold">{person.share_percentage}%</TableCell>
+                          <TableCell>
+                            <Switch
+                              checked={person.is_active}
+                              onCheckedChange={() => toggleStaffActive(person)}
+                              aria-label={person.is_active ? "Deactivate agent" : "Activate agent"}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => openEditStaff(person)} className="text-muted-foreground hover:text-primary transition-colors" aria-label="Edit staff">
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => deleteStaff(person.id)} className="text-muted-foreground hover:text-destructive transition-colors" aria-label="Delete staff">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-none border-border/0">
+              <CardHeader className="border-b border-border/40">
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Handshake className="w-4 h-4 text-primary" />
+                    Partner Revenue Service
+                  </CardTitle>
+                  <Button size="sm" className="h-8 text-xs gap-1.5" disabled={!selectedBranch} onClick={() => setIsPartnerOpen(true)}>
+                    <Plus className="w-3.5 h-3.5" />
+                    Partner
+                  </Button>
                 </div>
-              ) : !selectedBranch ? (
-                <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">Create a branch to add staff.</div>
-              ) : staff.length === 0 ? (
-                <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">No staff for this branch yet.</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Share</TableHead>
-                      <TableHead>Active</TableHead>
-                      <TableHead className="w-16" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {staff.map((person) => (
-                      <TableRow key={person.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="w-7 h-7">
-                              <AvatarImage src={person.avatar_url} />
-                              <AvatarFallback>{person.full_name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                            <span className="font-medium text-xs">{person.full_name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs">{person.email}</TableCell>
-                        <TableCell className="text-xs">{person.phone_number || "-"}</TableCell>
-                        <TableCell className="text-xs capitalize">{person.role}</TableCell>
-                        <TableCell className="text-xs font-semibold">{person.share_percentage}%</TableCell>
-                        <TableCell>
-                          <Switch
-                            checked={person.is_active}
-                            onCheckedChange={() => toggleStaffActive(person)}
-                            aria-label={person.is_active ? "Deactivate agent" : "Activate agent"}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => openEditStaff(person)} className="text-muted-foreground hover:text-primary transition-colors" aria-label="Edit staff">
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button onClick={() => deleteStaff(person.id)} className="text-muted-foreground hover:text-destructive transition-colors" aria-label="Delete staff">
+              </CardHeader>
+              <CardContent className="p-0">
+                {!selectedBranch ? (
+                  <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">Create a branch to add partner agreements.</div>
+                ) : partners.length === 0 ? (
+                  <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">No partner agreements for this branch yet.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Partner</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Applies to</TableHead>
+                        <TableHead>Payout</TableHead>
+                        <TableHead>Active</TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {partners.map((partner) => (
+                        <TableRow key={partner.id}>
+                          <TableCell>
+                            <div>
+                              <p className="text-xs font-semibold">{partner.name}</p>
+                              <p className="text-[11px] text-muted-foreground">{new Date(partner.created_at).toLocaleDateString()}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <div>
+                              <p>{partner.phone_number || "-"}</p>
+                              <p className="text-[11px] text-muted-foreground">{partner.email || "-"}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs font-medium">{partnerSourceLabel(partner)}</TableCell>
+                          <TableCell className="text-xs font-semibold">{partnerPayoutLabel(partner)}</TableCell>
+                          <TableCell>
+                            <Switch
+                              checked={partner.is_active}
+                              onCheckedChange={() => togglePartnerActive(partner)}
+                              aria-label={partner.is_active ? "Pause partner agreement" : "Activate partner agreement"}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <button onClick={() => deletePartner(partner.id)} className="text-muted-foreground hover:text-destructive transition-colors" aria-label="Delete partner">
                               <Trash2 className="w-4 h-4" />
                             </button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </main>
 
@@ -427,6 +617,100 @@ export default function BranchesPage() {
               <Button type="submit" className="w-full h-9 gap-2">
                 <UserPlus className="w-4 h-4" />
                 Invite Agent
+              </Button>
+            </div>
+          </form>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={isPartnerOpen} onOpenChange={(open) => { setIsPartnerOpen(open); if (!open) setSearchParams({}); }}>
+        <SheetContent side="right" className="w-full sm:max-w-md flex flex-col gap-0 p-0">
+          <SheetHeader className="px-6 py-5 border-b border-border/40">
+            <SheetTitle>
+              <div className="flex items-center gap-2.5">
+                <div>
+                  <p className="text-sm font-semibold">Add Partner</p>
+                  {selectedBranch && (
+                    <p className="text-xs text-muted-foreground font-normal">Configure revenue sharing for {selectedBranch.name}</p>
+                  )}
+                </div>
+              </div>
+            </SheetTitle>
+          </SheetHeader>
+          <form onSubmit={createPartner} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Partner name</Label>
+              <Input placeholder="Partner company or person" value={partnerForm.name} onChange={(e) => setPartnerForm((p) => ({ ...p, name: e.target.value }))} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Phone number <span className="text-muted-foreground">(optional)</span></Label>
+              <Input placeholder="+256 700 000000" value={partnerForm.phone_number} onChange={(e) => setPartnerForm((p) => ({ ...p, phone_number: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Email address <span className="text-muted-foreground">(optional)</span></Label>
+              <Input type="email" placeholder="partner@example.com" value={partnerForm.email} onChange={(e) => setPartnerForm((p) => ({ ...p, email: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Revenue source</Label>
+              <div className="grid grid-cols-2 gap-2 rounded border border-border/60 p-3 bg-muted/20">
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <Checkbox
+                    checked={partnerForm.applies_online}
+                    onCheckedChange={(checked) => setPartnerForm((p) => ({ ...p, applies_online: Boolean(checked) }))}
+                  />
+                  Online payments
+                </label>
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <Checkbox
+                    checked={partnerForm.applies_voucher}
+                    onCheckedChange={(checked) => setPartnerForm((p) => ({ ...p, applies_voucher: Boolean(checked) }))}
+                  />
+                  Voucher sales
+                </label>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Payout type</Label>
+              <Select value={partnerForm.payout_mode} onValueChange={(payout_mode) => setPartnerForm((prev) => ({ ...prev, payout_mode: payout_mode as PartnerPayoutMode }))}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select payout type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="percentage" className="text-xs">Percentage share</SelectItem>
+                  <SelectItem value="fixed" className="text-xs">Fixed amount</SelectItem>
+                  <SelectItem value="daily" className="text-xs">Daily revenue amount</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {partnerForm.payout_mode === "percentage" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Partner share (%)</Label>
+                <Input type="number" min={0} max={100} step="0.1" value={partnerForm.percentage} onChange={(e) => setPartnerForm((p) => ({ ...p, percentage: Number(e.target.value) }))} />
+              </div>
+            )}
+            {partnerForm.payout_mode === "fixed" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Fixed amount</Label>
+                <Input type="number" min={0} step="100" value={partnerForm.fixed_amount} onChange={(e) => setPartnerForm((p) => ({ ...p, fixed_amount: Number(e.target.value) }))} />
+              </div>
+            )}
+            {partnerForm.payout_mode === "daily" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Daily revenue amount</Label>
+                <Input type="number" min={0} step="100" value={partnerForm.daily_revenue_amount} onChange={(e) => setPartnerForm((p) => ({ ...p, daily_revenue_amount: Number(e.target.value) }))} />
+              </div>
+            )}
+            <div className="flex items-center justify-between rounded border border-border/60 p-3 bg-muted/20">
+              <div>
+                <Label className="text-xs font-medium">Agreement active</Label>
+                <p className="text-[11px] text-muted-foreground">Inactive agreements stay saved but do not count for payouts.</p>
+              </div>
+              <Switch checked={partnerForm.is_active} onCheckedChange={(checked) => setPartnerForm((p) => ({ ...p, is_active: checked }))} />
+            </div>
+            <div className="pt-2">
+              <Button type="submit" className="w-full h-9 gap-2">
+                <Handshake className="w-4 h-4" />
+                Save Partner Agreement
               </Button>
             </div>
           </form>

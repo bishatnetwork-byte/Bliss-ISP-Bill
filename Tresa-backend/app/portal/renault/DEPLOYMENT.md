@@ -42,7 +42,7 @@ add action=allow dst-host=*.airtel.africa
 ```
 
 - `vercel.app` / `*.vercel.app` covers both the backend API
-  (`renult.vercel.app`) and the Renult Pay gateway
+  (`api.bliss-isp.com`) and the Renult Pay gateway
   (`renult-pay.vercel.app`) both are Vercel-hosted, so this single
   wildcard keeps working even if either project's domain changes.
 - The `mtn.*` / `airtel.*` entries allow MTN and Airtel mobile money

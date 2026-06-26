@@ -52,7 +52,7 @@ class PlatformAdminPermissionsTests(unittest.TestCase):
         create.assert_called_once_with("zone-1", {
             "name": "musoke.renult.xyz",
             "type": "CNAME",
-            "content": "app.renult.xyz",
+            "content": "account.bliss-isp.com",
             "ttl": 600,
             "disabled": False,
             "proxied": False,
@@ -65,7 +65,7 @@ class PlatformAdminPermissionsTests(unittest.TestCase):
             "id": "record-1",
             "name": "musoke.renult.xyz",
             "type": "CNAME",
-            "content": "app.renult.xyz",
+            "content": "account.bliss-isp.com",
         }],
     )
     @patch("app.api.routes.platform_admin.list_zones", return_value=[{"id": "zone-1", "name": "renult.xyz"}])

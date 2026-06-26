@@ -13,4 +13,4 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://app.renult.xyz/sitemap.xml
+Sitemap: https://account.bliss-isp.com/sitemap.xml

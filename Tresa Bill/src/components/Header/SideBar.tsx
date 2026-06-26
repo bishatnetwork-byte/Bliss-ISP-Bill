@@ -64,7 +64,7 @@ const primaryNavItems: NavItem[] = [
     path: "/",
   },
   {
-    label: "My Active Users",
+    label: "Active Users",
     icon: <LucidePercentSquare className="w-5 h-5" />, //Mikrotiks Router
     path: "/active-users",
   },

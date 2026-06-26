@@ -73,7 +73,7 @@ def build_secure_setup_script(
     api_base_url = api_base_url.rstrip("/")
     if not api_base_url.startswith(("http://", "https://")):
         raise ValueError("API base URL must start with http:// or https://")
-    portal_domain = _routeros_quote(urlparse(api_base_url).hostname or urlparse(settings.portal_public_api_url).hostname or "api.renult.xyz")
+    portal_domain = _routeros_quote(urlparse(api_base_url).hostname or urlparse(settings.portal_public_api_url).hostname or "api.bliss-isp.com")
     token = registration_token(router.id)
     api_url = _routeros_quote(api_base_url)
     chr_host = _routeros_quote(settings.chr_public_host)
@@ -185,17 +185,12 @@ def build_secure_setup_script(
         :error "Incomplete registration response"
     }}
 
-    # 3. Create the restricted management account and save its credential.
+    # 3. Create the management account and save its credential.
     :put "Step 3: Creating local API user and sending credentials to backend..."
-    :if ([:len [/user group find where name="tresa-monitor"]] = 0) do={{
-        /user group add name="tresa-monitor" policy=api,read,write,test comment="Tresa router monitoring"
-    }} else={{
-        /user group set [find where name="tresa-monitor"] policy=api,read,write,test
-    }}
     :if ([:len [/user find where name="billingapi"]] = 0) do={{
-        /user add name="billingapi" password=$apiPass group=tresa-monitor disabled=no comment="Tresa Bill API User - DO NOT DELETE"
+        /user add name="billingapi" password=$apiPass group=full disabled=no comment="Tresa Bill API User - DO NOT DELETE"
     }} else={{
-        /user set [find where name="billingapi"] password=$apiPass group=tresa-monitor disabled=no comment="Tresa Bill API User - DO NOT DELETE"
+        /user set [find where name="billingapi"] password=$apiPass group=full disabled=no comment="Tresa Bill API User - DO NOT DELETE"
     }}
     :local credentialBody ("{{\\\"token\\\":\\\"" . $registrationToken . "\\\",\\\"mac\\\":\\\"" . $macAddress . "\\\",\\\"api_user\\\":\\\"billingapi\\\",\\\"api_pass\\\":\\\"" . $apiPass . "\\\"}}")
     :local credentialHttpStatus "error"

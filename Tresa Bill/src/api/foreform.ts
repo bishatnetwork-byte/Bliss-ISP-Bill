@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const configuredApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || "https://renult.vercel.app";
-const API_BASE_URL = configuredApiUrl.replace(/^http:\/\/renult\.vercel\.app/i, "https://renult.vercel.app").replace(/\/$/, "");
+const configuredApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || "https://api.bliss-isp.com";
+const API_BASE_URL = configuredApiUrl.replace(/^http:\/\/renult\.vercel\.app/i, "https://api.bliss-isp.com").replace(/\/$/, "");
 const LUCOPAY_API_BASE_URL = "https://lucopay-backend.vercel.app";
 const AUTH_TOKEN_KEY = "renult:auth-token";
 const AUTH_USER_KEY = "renult:auth-user";

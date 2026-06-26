@@ -648,8 +648,8 @@ def publish_router_setup_script(
         script_url=url,
         mikrotik_v7_command=f'/import url="{fetch_url}"',
         mikrotik_v6_command=(
-            f'/tool fetch url="{fetch_url}" dst-path=tresa-setup.rsc\n'
-            ":delay 2s; /import file-name=tresa-setup.rsc"
+            f'/tool fetch url="{fetch_url}" dst-path=tresa-setup.rsc; '
+            ":delay 25s; /import file-name=tresa-setup.rsc"
         ),
         expires_note=(
             "Script contains a 48-hour registration token. "

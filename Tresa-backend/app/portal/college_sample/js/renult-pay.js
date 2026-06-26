@@ -3,7 +3,7 @@ const RenultPortal = {
   selectedPackage: null,
 
   apiBase() {
-    return (this.config.apiBaseUrl || "https://api.renult.xyz").replace(/\/$/, "");
+    return (this.config.apiBaseUrl || "https://api.bliss-isp.com").replace(/\/$/, "");
   },
 
   routerName() {

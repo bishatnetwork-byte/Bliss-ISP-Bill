@@ -18,7 +18,7 @@ interface SEOProps {
 }
 
 const SITE_NAME = 'Renault';
-const BASE_URL = 'https://app.renult.xyz';
+const BASE_URL = 'https://account.bliss-isp.com';
 const DEFAULT_OG_IMAGE = `${BASE_URL}/og-image.png`;
 const DEFAULT_DESCRIPTION =
     'Renault is a MikroTik hotspot billing and voucher management platform for internet providers in Uganda.';

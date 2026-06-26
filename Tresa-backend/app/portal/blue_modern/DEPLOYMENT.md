@@ -26,11 +26,11 @@ must exist in the Renault billing backend.
 Allow the Renault payment and voucher API before authentication:
 
 ```routeros
-/ip hotspot walled-garden add dst-host=renult.vercel.app
+/ip hotspot walled-garden add dst-host=api.bliss-isp.com
 ```
 
 If the router uses a strict DNS or firewall policy, also ensure hotspot clients
-can resolve DNS and make HTTPS connections to `renult.vercel.app`.
+can resolve DNS and make HTTPS connections to `api.bliss-isp.com`.
 
 ## Hotspot profile
 

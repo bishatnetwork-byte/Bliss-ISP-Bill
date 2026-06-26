@@ -59,6 +59,25 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+const subnetMaskOptions = [8, 16, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30];
+
+function ipv4ToInt(ip: string): number | null {
+  const parts = ip.trim().split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return null;
+  }
+  return parts.reduce((acc, part) => (acc << 8) + part, 0) >>> 0;
+}
+
+function intToIpv4(value: number): string {
+  return [
+    (value >>> 24) & 255,
+    (value >>> 16) & 255,
+    (value >>> 8) & 255,
+    value & 255,
+  ].join(".");
+}
+
 export default function SetUpProvison() {
   const navigate = useNavigate();
   const routeState = useLocation();
@@ -92,7 +111,6 @@ export default function SetUpProvison() {
   // ── Step 2: Provisioning script / connection check ───────────
   const [isCopied, setIsCopied] = useState(false);
   const [pollConnection, setPollConnection] = useState(false);
-  const [showFallback, setShowFallback] = useState(false);
 
   // ── Step 3: Hardware & services ──────────────────────────────
   const [hardware, setHardware] = useState<RouterHardwareResponse | null>(null);
@@ -106,6 +124,7 @@ export default function SetUpProvison() {
 
   // ── Step 4: Network, WiFi & apply ────────────────────────────
   const [subnetAddress, setSubnetAddress] = useState("172.16.0.0");
+  const [subnetMask, setSubnetMask] = useState(24);
   const [dnsServers, setDnsServers] = useState("8.8.8.8,8.8.4.4");
   const [wifiEnabled, setWifiEnabled] = useState(true);
   const [wifiSsid, setWifiSsid] = useState("Renult Free WiFi");
@@ -154,15 +173,23 @@ export default function SetUpProvison() {
   }, [hardware]);
 
   const calculated = useMemo(() => {
-    const ip = subnetAddress.trim() || "172.16.0.0";
-    const parts = ip.split(".");
-    const base = parts.length === 4 ? parts.slice(0, 3).join(".") : "172.16.0";
+    const fallbackNetwork = ipv4ToInt("172.16.0.0") ?? 0;
+    const requestedIp = ipv4ToInt(subnetAddress) ?? fallbackNetwork;
+    const hostCount = 2 ** (32 - subnetMask);
+    const mask = subnetMask === 0 ? 0 : (0xffffffff << (32 - subnetMask)) >>> 0;
+    const network = (requestedIp & mask) >>> 0;
+    const broadcast = (network + hostCount - 1) >>> 0;
+    const firstHost = (network + 1) >>> 0;
+    const secondHost = (network + 2) >>> 0;
+    const lastUsableHost = Math.max(secondHost, broadcast - 1);
+
     return {
-      bridgeIp: `${base}.1`,
-      poolStart: `${base}.2`,
-      poolEnd: `${base}.254`,
+      network: intToIpv4(network),
+      bridgeIp: intToIpv4(firstHost),
+      poolStart: intToIpv4(secondHost),
+      poolEnd: intToIpv4(lastUsableHost),
     };
-  }, [subnetAddress]);
+  }, [subnetAddress, subnetMask]);
 
   // Stop polling once the router checks in
   useEffect(() => {
@@ -237,18 +264,10 @@ export default function SetUpProvison() {
   };
 
   // ── Step 2: copy script + auto-check connection ───────────────
-  const handleCopyPrimary = async () => {
-    if (!publishedScript) return;
-    await navigator.clipboard.writeText(publishedScript.mikrotik_v7_command);
-    toast.success("Setup command copied. Paste it into the router's terminal.");
-    setIsCopied(true);
-    if (!connected) setPollConnection(true);
-  };
-
-  const handleCopyFallback = async () => {
+  const handleCopySetupCommand = async () => {
     if (!publishedScript) return;
     await navigator.clipboard.writeText(publishedScript.mikrotik_v6_command);
-    toast.success("Fallback commands copied. Paste both lines into the router's terminal.");
+    toast.success("Setup command copied. Paste it into the router's terminal.");
     setIsCopied(true);
     if (!connected) setPollConnection(true);
   };
@@ -279,7 +298,7 @@ export default function SetUpProvison() {
           wan_interface_index: wanPort,
           mgmt_interface_index: null,
           bridge_ip: calculated.bridgeIp,
-          bridge_subnet: 24,
+          bridge_subnet: subnetMask,
           pool_start: calculated.poolStart,
           pool_end: calculated.poolEnd,
           rate_limit: "2M/2M",
@@ -334,7 +353,6 @@ export default function SetUpProvison() {
     setPublishedScript(null);
     setIsCopied(false);
     setPollConnection(false);
-    setShowFallback(false);
     setHardware(null);
     setWanPort(1);
     setEnableHotspot(true);
@@ -344,6 +362,7 @@ export default function SetUpProvison() {
     setIspUsername("");
     setIspPassword("");
     setSubnetAddress("172.16.0.0");
+    setSubnetMask(24);
     setDnsServers("8.8.8.8,8.8.4.4");
     setWifiEnabled(true);
     setWifiSsid("Renult Free WiFi");
@@ -560,19 +579,18 @@ export default function SetUpProvison() {
                   Provisioning Script
                 </h2>
                 <p className="text-sm text-slate-600 mb-4">
-                  Paste this single command into your MikroTik terminal (Winbox or SSH). It downloads and applies the full configuration automatically.
+                  Paste this RouterOS v6 command into your MikroTik terminal (Winbox or SSH). It downloads and applies the full configuration automatically.
                 </p>
 
                 <div className="space-y-5">
                   {publishedScript ? (
                     <>
-                      {/* Primary v7 command */}
                       <div className="relative border border-slate-200 rounded bg-slate-50 p-4">
                         <div className="absolute right-3 top-3">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={handleCopyPrimary}
+                            onClick={handleCopySetupCommand}
                             className="h-8 gap-1.5 text-xs border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
                           >
                             <Clipboard className="h-3.5 w-3.5" />
@@ -580,44 +598,11 @@ export default function SetUpProvison() {
                           </Button>
                         </div>
                         <div className="text-xs font-semibold text-gray-600 mb-2">
-                          RouterOS v7  single command (recommended)
+                          RouterOS v6.45+ setup command
                         </div>
                         <pre className="text-xs font-mono text-slate-800 break-all select-all pr-24 whitespace-pre-wrap leading-relaxed">
-                          {publishedScript.mikrotik_v7_command}
+                          {publishedScript.mikrotik_v6_command}
                         </pre>
-                      </div>
-
-                      {/* Fallback */}
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => setShowFallback((v) => !v)}
-                          className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80"
-                        >
-                          {showFallback ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                          {showFallback ? "Hide" : "Show"} RouterOS v6 fallback commands
-                        </button>
-                        {showFallback && (
-                          <div className="relative border border-slate-200 rounded bg-slate-50 p-4 mt-2">
-                            <div className="absolute right-3 top-3">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handleCopyFallback}
-                                className="h-8 gap-1.5 text-xs border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
-                              >
-                                <Clipboard className="h-3.5 w-3.5" />
-                                Copy
-                              </Button>
-                            </div>
-                            <div className="text-xs font-semibold text-gray-600 mb-2">
-                              RouterOS v6.45+  fallback (two lines)
-                            </div>
-                            <pre className="text-xs font-mono text-slate-800 break-all select-all pr-20 whitespace-pre-wrap leading-relaxed">
-                              {publishedScript.mikrotik_v6_command}
-                            </pre>
-                          </div>
-                        )}
                       </div>
                     </>
                   ) : (
@@ -930,19 +915,38 @@ export default function SetUpProvison() {
                   </h2>
                   <div className="space-y-5">
                     <div className="grid gap-5 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="subnet-address" className="text-sm font-medium text-slate-700">
-                          Hotspot Subnet<span className="text-destructive ml-0.5">*</span>
-                        </Label>
-                        <Input
-                          id="subnet-address"
-                          value={subnetAddress}
-                          onChange={(e) => setSubnetAddress(e.target.value)}
-                          placeholder="e.g. 172.16.0.0"
-                          className="border-slate-200 focus-visible:ring-primary h-10"
-                        />
-                        <p className="text-xs text-slate-400 mt-1">
-                          /24 network used for the hotspot bridge and PPPoE clients.
+                      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+                        <div className="space-y-2">
+                          <Label htmlFor="subnet-address" className="text-sm font-medium text-slate-700">
+                            Hotspot Subnet<span className="text-destructive ml-0.5">*</span>
+                          </Label>
+                          <Input
+                            id="subnet-address"
+                            value={subnetAddress}
+                            onChange={(e) => setSubnetAddress(e.target.value)}
+                            placeholder="e.g. 172.16.0.0"
+                            className="border-slate-200 focus-visible:ring-primary h-10"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="subnet-mask" className="text-sm font-medium text-slate-700">
+                            Mask
+                          </Label>
+                          <Select value={String(subnetMask)} onValueChange={(value) => setSubnetMask(Number(value))}>
+                            <SelectTrigger id="subnet-mask" className="border-slate-200 focus:ring-primary h-10">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {subnetMaskOptions.map((mask) => (
+                                <SelectItem key={mask} value={String(mask)}>
+                                  /{mask}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <p className="text-xs text-slate-400 sm:col-span-2">
+                          Network used for the hotspot bridge and PPPoE clients.
                         </p>
                       </div>
                       <div className="space-y-2">
@@ -967,7 +971,7 @@ export default function SetUpProvison() {
                         Calculated Values
                       </div>
                       <p className="text-sm font-medium text-slate-800">
-                        Bridge IP: <span className="font-semibold text-primary">{calculated.bridgeIp}/24</span> · Pool: <span className="font-semibold text-primary">{calculated.poolStart} - {calculated.poolEnd}</span>
+                        Network: <span className="font-semibold text-primary">{calculated.network}/{subnetMask}</span> · Bridge IP: <span className="font-semibold text-primary">{calculated.bridgeIp}/{subnetMask}</span> · Pool: <span className="font-semibold text-primary">{calculated.poolStart} - {calculated.poolEnd}</span>
                       </p>
                     </div>
                   </div>
