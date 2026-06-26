@@ -55,6 +55,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import ReportsPanel from "../AdminMode/Reports";
+import { SmsGatewayManagerContent } from "../AdminMode/SmsGatewayManager";
 import PlatformAdminLayout, { PlatformAdminSection } from "./PlatformAdminLayout";
 
 const ADMIN_TABS = [
@@ -419,6 +420,7 @@ export default function PlatformAdminPage() {
             onClearAll={() => window.confirm("Clear all message log entries?") && clearMessageDiagnostics.mutate()}
           />
         )}
+        {activeTab === "sms_gateways" && <SmsGatewayManagerContent />}
         {activeTab === "tunnels" && (
           <TunnelsPanel rows={tunnels.data || []} loading={tunnels.isLoading} onToggle={(id, active) => tunnelMutation.mutate({ id, active })} />
         )}

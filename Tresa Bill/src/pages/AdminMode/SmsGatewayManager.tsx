@@ -36,6 +36,14 @@ function credentialsHint(gateway: SmsGatewayResponse) {
 }
 
 export default function SmsGatewayManagerPage() {
+  return (
+    <PlatformAdminLayout activeSection="sms_gateways" title="SMS Gateway Manager">
+      <SmsGatewayManagerContent />
+    </PlatformAdminLayout>
+  );
+}
+
+export function SmsGatewayManagerContent() {
   const queryClient = useQueryClient();
   const [drafts, setDrafts] = useState<GatewayDraft>({});
   const [balanceProvider, setBalanceProvider] = useState<string | null>(null);
@@ -100,7 +108,6 @@ export default function SmsGatewayManagerPage() {
   };
 
   return (
-    <PlatformAdminLayout activeSection="sms_gateways" title="SMS Gateway Manager">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -226,7 +233,6 @@ export default function SmsGatewayManagerPage() {
           })}
         </div>
       </div>
-    </PlatformAdminLayout>
   );
 }
 
