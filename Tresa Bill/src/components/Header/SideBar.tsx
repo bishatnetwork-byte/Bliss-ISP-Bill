@@ -116,7 +116,7 @@ const supportNavItems: NavItem[] = [
 
 const secondaryNavItems: NavItem[] = [
   {
-    label: "Mikrotik Router",
+    label: "Mikrotik Routers",
     icon: <MikrotikIcon className="w-5 h-5" />, //Mikrotiks Router
     path: "/router",
   },
