@@ -489,7 +489,7 @@ def send_bulk_message(
                 contact = contacts[phone_number]
                 rendered = render_voucher_message(message, contact.wifi_name, contact.voucher_code)
                 try:
-                    response = send_sms(rendered, [phone_number])
+                    response = send_sms(rendered, [phone_number], session)
                     accepted = sms_was_accepted(response, phone_number)
                     results.append(
                         MessageSendResult(
@@ -510,7 +510,7 @@ def send_bulk_message(
                         )
                     )
         else:
-            response = send_sms(message, requested_numbers)
+            response = send_sms(message, requested_numbers, session)
             results = [
                 MessageSendResult(
                     phone_number=phone_number,
@@ -527,10 +527,10 @@ def send_bulk_message(
             detail=str(exc),
         ) from exc
     except Exception as exc:
-        _fail_log(session, activity, f"Africa's Talking SMS request failed: {exc}")
+        _fail_log(session, activity, f"SMS gateway request failed: {exc}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Africa's Talking SMS request failed: {exc}",
+            detail=f"SMS gateway request failed: {exc}",
         ) from exc
 
     sent = sum(result.success for result in results)

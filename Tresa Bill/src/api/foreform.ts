@@ -357,6 +357,32 @@ export interface PlatformMessageDiagnosticResponse {
   updated_at: string;
 }
 
+export interface SmsGatewayResponse {
+  id: "africastalking" | "julysms" | string;
+  label: string;
+  enabled: boolean;
+  is_default: boolean;
+  is_configured: boolean;
+  credentials_source: "dashboard" | "env" | "missing" | string;
+  sender_id: string | null;
+  supports_balance: boolean;
+}
+
+export interface SmsGatewayUpdatePayload {
+  enabled: boolean;
+  username?: string;
+  api_key?: string;
+  sender_id?: string;
+  client_id?: string;
+  client_secret?: string;
+}
+
+export interface SmsGatewayBalanceResponse {
+  provider: string;
+  balance: unknown;
+  raw: unknown;
+}
+
 export interface PlatformUserDetailResponse {
   user: PlatformUserResponse;
   branches: Array<{
@@ -1818,6 +1844,14 @@ export const renultApi = {
       apiRequest<PlatformVoucherAuditResponse[]>("/platform-admin/voucher-audit", { query: { search: search || undefined, limit: 500 } }),
     messageDiagnostics: (query?: { search?: string; status_filter?: string; limit?: number }) =>
       apiRequest<PlatformMessageDiagnosticResponse[]>("/platform-admin/message-diagnostics", { query }),
+    smsGateways: () =>
+      apiRequest<SmsGatewayResponse[]>("/platform-admin/sms-gateways"),
+    updateSmsGateway: (provider: string, payload: SmsGatewayUpdatePayload) =>
+      apiRequest<SmsGatewayResponse[]>(`/platform-admin/sms-gateways/${provider}`, { method: "PUT", body: JSON.stringify(payload) }),
+    setDefaultSmsGateway: (provider: string) =>
+      apiRequest<SmsGatewayResponse[]>(`/platform-admin/sms-gateways/${provider}/default`, { method: "POST" }),
+    smsGatewayBalance: (provider: string) =>
+      apiRequest<SmsGatewayBalanceResponse>(`/platform-admin/sms-gateways/${provider}/balance`),
     audit: () => apiRequest<PlatformAuditResponse[]>("/platform-admin/audit", { query: { limit: 500 } }),
     storage: (prefix = "") =>
       apiRequest<PlatformStorageObjectResponse[]>("/platform-admin/storage", { query: { prefix } }),

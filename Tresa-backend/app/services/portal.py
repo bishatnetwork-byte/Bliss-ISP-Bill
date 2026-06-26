@@ -543,7 +543,7 @@ def _send_low_balance_sms(
             f"Renult Bulk SMS warning: {branch.name} SMS wallet balance is "
             f"UGX {balance:,}. Auto voucher SMS is paused until you top up."
         )
-        response = send_sms(message, [phone])
+        response = send_sms(message, [phone], session)
         accepted = sms_was_accepted(response, phone)
         if accepted:
             _charge_portal_sms(session, branch, user, f"SMS-LOW-{branch.id}-{int(datetime.utcnow().timestamp())}")
@@ -611,7 +611,7 @@ def _send_portal_voucher_sms(
     session.refresh(log)
 
     try:
-        response = send_sms(message, [phone])
+        response = send_sms(message, [phone], session)
         accepted = sms_was_accepted(response, phone)
         charged, wallet_balance = (
             _charge_portal_sms(session, branch, user, f"SMS-PORTAL-{payment.reference}")

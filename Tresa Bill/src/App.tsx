@@ -60,6 +60,7 @@ import TelegramConnectPage from "./pages/Settings/TelegramConnect";
 import AdsMobPage from "./pages/Settings/AdsMob";
 import AdsAnalyticsPage from "./pages/Settings/AdsAnalytics";
 import MikrotikManagerPage from "./pages/PlatformAdmin/MikrotikManager";
+import SmsGatewayManagerPage from "./pages/AdminMode/SmsGatewayManager";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -193,6 +194,7 @@ const AppRoutes = () => {
         <Route path="/settings/adsmob" element={protectedElement(<OwnerRoute permission="settings"><AdsMobPage /></OwnerRoute>)} />
         <Route path="/settings/adsmob/analytics" element={protectedElement(<OwnerRoute permission="settings"><AdsAnalyticsPage /></OwnerRoute>)} />
         <Route path="/platform-admin/mikrotik-manager" element={protectedElement(<PlatformAdminRoute><MikrotikManagerPage /></PlatformAdminRoute>)} />
+        <Route path="/platform-admin/sms-gateways" element={protectedElement(<PlatformAdminRoute><SmsGatewayManagerPage /></PlatformAdminRoute>)} />
         <Route path="/settings/support" element={protectedElement(<OwnerRoute permission="settings"><Campign /></OwnerRoute>)} />
         <Route path="/campaigns" element={protectedElement(<Campign />)} />
 

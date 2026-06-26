@@ -65,6 +65,7 @@ const ADMIN_TABS = [
   ["broadcasts", "Broadcasts"],
   ["voucher_audit", "Voucher Audit"],
   ["message_diagnostics", "Message Diagnostics"],
+  ["sms_gateways", "SMS Gateways"],
   ["tunnels", "Tunnels"],
   ["storage", "Cloud Files"],
   ["dns", "DNS"],

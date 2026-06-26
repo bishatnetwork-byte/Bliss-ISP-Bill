@@ -33,6 +33,9 @@ class Settings:
     africastalking_api_key: str | None = os.getenv("AFRICASTALKING_API_KEY")
     africastalking_sender_id: str | None = os.getenv("AFRICASTALKING_SENDER_ID") or None
     africastalking_enqueue: bool = os.getenv("AFRICASTALKING_ENQUEUE", "true").lower() == "true"
+    julysms_client_id: str | None = os.getenv("JULYSMS_CLIENT_ID")
+    julysms_client_secret: str | None = os.getenv("JULYSMS_CLIENT_SECRET")
+    julysms_api_base_url: str = os.getenv("JULYSMS_API_BASE_URL", "https://app.julysms.com/api/v1").rstrip("/")
     sms_notification_cost: int = int(os.getenv("SMS_NOTIFICATION_COST", "29"))
     r2_account_id: str | None = os.getenv("R2_ACCOUNT_ID")
     r2_access_key_id: str | None = os.getenv("R2_ACCESS_KEY_ID")

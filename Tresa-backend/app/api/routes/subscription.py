@@ -94,7 +94,7 @@ def _send_subscription_reminder(
         phone = row.sms_phone or user.phone_number
         if phone:
             try:
-                send_sms(body, [normalize_sms_phone(phone)])
+                send_sms(body, [normalize_sms_phone(phone)], session)
             except Exception:
                 pass
 

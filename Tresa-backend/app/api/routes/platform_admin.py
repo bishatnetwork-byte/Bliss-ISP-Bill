@@ -53,6 +53,9 @@ from app.schemas.platform_admin import (
     PlatformSessionResponse,
     PlatformSettingsResponse,
     PlatformSettingsUpdate,
+    SmsGatewayBalanceResponse,
+    SmsGatewayResponse,
+    SmsGatewayUpdate,
     PlatformStorageObjectResponse,
     PlatformSubadminUpdate,
     PlatformTunnelResponse,
@@ -89,11 +92,19 @@ from app.services.dns_provider import (
     provider_name as dns_provider_name,
 )
 from app.services.email import send_email
-from app.services.messaging import normalize_sms_phone, send_sms
+from app.services.messaging import (
+    SMS_GATEWAY_DEFINITIONS,
+    check_sms_gateway_balance,
+    configured_sms_gateways,
+    default_sms_gateway,
+    normalize_sms_phone,
+    send_sms,
+)
 from app.services.platform_admin import (
     ADMIN_PERMISSIONS,
     USER_SECTIONS,
     audit,
+    get_setting,
     permissions_for,
     set_settings,
     settings_snapshot,
@@ -942,6 +953,100 @@ def update_settings(
     return PlatformSettingsResponse(**values)
 
 
+def _sms_gateway_response_rows(session: SessionDep) -> list[SmsGatewayResponse]:
+    default_provider = default_sms_gateway(session)
+    gateway_rows = configured_sms_gateways(session)
+    return [
+        SmsGatewayResponse(
+            id=provider,
+            label=row["label"],
+            enabled=row["enabled"],
+            is_default=provider == default_provider,
+            is_configured=row["is_configured"],
+            credentials_source=row["credentials_source"],
+            sender_id=row.get("sender_id"),
+            supports_balance=provider == "julysms",
+        )
+        for provider, row in gateway_rows.items()
+    ]
+
+
+@router.get("/sms-gateways", response_model=list[SmsGatewayResponse])
+def sms_gateways(
+    session: SessionDep,
+    admin: User = _admin("sms_gateways"),
+) -> list[SmsGatewayResponse]:
+    del admin
+    return _sms_gateway_response_rows(session)
+
+
+@router.put("/sms-gateways/{provider}", response_model=list[SmsGatewayResponse])
+def update_sms_gateway(
+    provider: str,
+    payload: SmsGatewayUpdate,
+    session: SessionDep,
+    admin: User = _admin("sms_gateways"),
+) -> list[SmsGatewayResponse]:
+    if provider not in SMS_GATEWAY_DEFINITIONS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "SMS gateway is not supported")
+    gateways = get_setting(session, "sms_gateways", {}) or {}
+    current = gateways.get(provider, {}) or {}
+    updates = payload.model_dump(exclude_unset=True)
+    current["enabled"] = payload.enabled
+    for key, value in updates.items():
+        if key == "enabled":
+            continue
+        if value is not None:
+            current[key] = value.strip() if isinstance(value, str) else value
+    gateways[provider] = current
+    set_settings(session, {"sms_gateways": gateways}, admin.id)
+    audit(
+        session,
+        admin,
+        "sms_gateway_updated",
+        "sms_gateway",
+        provider,
+        {"provider": provider, "enabled": payload.enabled, "updated_fields": sorted(updates.keys())},
+    )
+    return _sms_gateway_response_rows(session)
+
+
+@router.post("/sms-gateways/{provider}/default", response_model=list[SmsGatewayResponse])
+def set_default_sms_gateway(
+    provider: str,
+    session: SessionDep,
+    admin: User = _admin("sms_gateways"),
+) -> list[SmsGatewayResponse]:
+    if provider not in SMS_GATEWAY_DEFINITIONS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "SMS gateway is not supported")
+    gateway_rows = configured_sms_gateways(session)
+    row = gateway_rows.get(provider)
+    if not row or not row["enabled"]:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enable this SMS gateway before making it default")
+    if not row["is_configured"]:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Add credentials before making this SMS gateway default")
+    set_settings(session, {"sms_gateway_default": provider}, admin.id)
+    audit(session, admin, "sms_gateway_default_changed", "sms_gateway", provider)
+    return _sms_gateway_response_rows(session)
+
+
+@router.get("/sms-gateways/{provider}/balance", response_model=SmsGatewayBalanceResponse)
+def sms_gateway_balance(
+    provider: str,
+    session: SessionDep,
+    admin: User = _admin("sms_gateways"),
+) -> SmsGatewayBalanceResponse:
+    del admin
+    if provider not in SMS_GATEWAY_DEFINITIONS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "SMS gateway is not supported")
+    try:
+        raw = check_sms_gateway_balance(provider, session)
+    except RuntimeError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    balance = raw.get("balance") or raw.get("units") or raw.get("credit") or raw.get("data") or raw
+    return SmsGatewayBalanceResponse(provider=provider, balance=balance, raw=raw)
+
+
 @router.get("/wallets", response_model=list[PlatformWalletResponse])
 def wallets(
     session: SessionDep,
@@ -1723,7 +1828,7 @@ def broadcasts(
                 failed += 1
         if sms_numbers:
             try:
-                send_sms(payload.message, sms_numbers)
+                send_sms(payload.message, sms_numbers, session)
                 sms_sent = len(sms_numbers)
             except Exception:
                 failed += len(sms_numbers)
@@ -1841,7 +1946,9 @@ def health(
         "configured" if settings.r2_account_id and settings.r2_bucket_name else "not configured",
         "configured" if dns_is_configured() else "not configured",
         "configured" if settings.resend_key else "not configured",
-        "configured" if settings.africastalking_api_key else "not configured",
+        f"{default_sms_gateway(session)} configured"
+        if any(row["enabled"] and row["is_configured"] for row in configured_sms_gateways(session).values())
+        else "not configured",
         "configured" if settings.marz_api_credentials else "not configured",
     ]
     return PlatformHealthResponse(

@@ -152,6 +152,32 @@ class PlatformSettingsUpdate(BaseModel):
         return self
 
 
+class SmsGatewayResponse(BaseModel):
+    id: str
+    label: str
+    enabled: bool
+    is_default: bool
+    is_configured: bool
+    credentials_source: str
+    sender_id: Optional[str] = None
+    supports_balance: bool = False
+
+
+class SmsGatewayUpdate(BaseModel):
+    enabled: bool
+    username: Optional[str] = Field(default=None, max_length=200)
+    api_key: Optional[str] = Field(default=None, max_length=500)
+    sender_id: Optional[str] = Field(default=None, max_length=50)
+    client_id: Optional[str] = Field(default=None, max_length=200)
+    client_secret: Optional[str] = Field(default=None, max_length=500)
+
+
+class SmsGatewayBalanceResponse(BaseModel):
+    provider: str
+    balance: Any
+    raw: Any
+
+
 class PlatformWalletResponse(BaseModel):
     id: UUID
     user_id: UUID

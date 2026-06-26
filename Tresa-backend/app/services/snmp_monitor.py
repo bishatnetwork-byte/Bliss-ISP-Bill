@@ -188,7 +188,7 @@ def _notify_transition(
         try:
             phone = normalize_sms_phone(preferences.sms_phone_number)
             if _can_afford_sms(session, branch):
-                response = send_sms(f"Renult alert: {router.name} is {state}.", [phone])
+                response = send_sms(f"Renult alert: {router.name} is {state}.", [phone], session)
                 if sms_was_accepted(response, phone):
                     _charge_sms(session, branch, user, router)
                 else:

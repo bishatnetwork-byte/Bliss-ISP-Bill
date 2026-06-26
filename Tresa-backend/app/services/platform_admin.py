@@ -22,6 +22,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "voucher_prefix": "",
     "voucher_prefix_order": "prefix-first",
     "telegram_access_alerts": False,
+    "sms_gateway_default": "africastalking",
+    "sms_gateways": {
+        "africastalking": {"enabled": True},
+        "julysms": {"enabled": False},
+    },
 }
 
 ADMIN_PERMISSIONS = {
@@ -33,6 +38,7 @@ ADMIN_PERMISSIONS = {
     "broadcasts",
     "voucher_audit",
     "message_diagnostics",
+    "sms_gateways",
     "tunnels",
     "storage",
     "dns",

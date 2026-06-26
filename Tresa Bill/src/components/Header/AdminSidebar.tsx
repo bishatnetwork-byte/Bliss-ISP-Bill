@@ -12,6 +12,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Mail,
+  MessageSquare,
   MessageSquareWarning,
   Network,
   PanelLeft,
@@ -31,6 +32,7 @@ export const PLATFORM_ADMIN_SECTIONS = [
   { id: "broadcasts", label: "Broadcasts", icon: Mail },
   { id: "voucher_audit", label: "Voucher Audit", icon: FileClock },
   { id: "message_diagnostics", label: "Message Control", icon: MessageSquareWarning },
+  { id: "sms_gateways", label: "SMS Gateways", icon: MessageSquare, path: "/platform-admin/sms-gateways" },
   { id: "tunnels", label: "Tunnels Control", icon: Network },
   { id: "mikrotik_manager", label: "MikroTik Manager", icon: ServerCog, path: "/platform-admin/mikrotik-manager" },
   { id: "storage", label: "Cloud Files", icon: Cloud },
@@ -52,7 +54,7 @@ const SECTIONS_GROUPS = [
   },
   {
     title: "Infrastructure",
-    items: ["voucher_audit", "message_diagnostics", "tunnels", "mikrotik_manager", "storage", "dns"],
+    items: ["voucher_audit", "message_diagnostics", "sms_gateways", "tunnels", "mikrotik_manager", "storage", "dns"],
   },
   {
     title: "System & Security",
