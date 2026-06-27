@@ -115,7 +115,13 @@ function VoucherSyncAgent() {
       try {
         const routers = await renultApi.routers.list(branchId);
         await Promise.allSettled(
-          routers.filter((router) => router.is_active).map((router) => renultApi.packages.fetchVouchers(router.id)),
+          routers.filter((router) => router.is_active).map(async (router) => {
+            try {
+              await renultApi.packages.fetchVouchers(router.id);
+            } catch {
+              // Best-effort reconciliation: one unreachable router should not create noisy unhandled fetches.
+            }
+          }),
         );
         queryClient.invalidateQueries({ queryKey: ["branchVouchers", branchId] });
         queryClient.invalidateQueries({ queryKey: ["voucherSupportSummary", branchId] });

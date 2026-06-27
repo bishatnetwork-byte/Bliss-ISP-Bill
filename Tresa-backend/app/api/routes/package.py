@@ -669,7 +669,26 @@ def fetch_router_vouchers_into_database(
     session: SessionDep,
 ) -> VoucherRouterSyncResponse:
     db_router = check_router_ownership(session, router_id, user.id)
-    return _fetch_router_vouchers_into_database(session, db_router)
+    try:
+        return _fetch_router_vouchers_into_database(session, db_router)
+    except HTTPException as exc:
+        session.rollback()
+        return VoucherRouterSyncResponse(
+            success=False,
+            router_id=db_router.id,
+            router_name=db_router.name,
+            failed=1,
+            errors=[str(exc.detail)],
+        )
+    except Exception as exc:
+        session.rollback()
+        return VoucherRouterSyncResponse(
+            success=False,
+            router_id=db_router.id,
+            router_name=db_router.name,
+            failed=1,
+            errors=[str(exc)],
+        )
 
 
 @router.post("/routers/{router_id}/vouchers/sync", response_model=VoucherRouterSyncResponse)
@@ -886,8 +905,10 @@ def list_branch_vouchers(
             try:
                 _fetch_router_vouchers_into_database(session, db_router)
             except HTTPException:
+                session.rollback()
                 continue
             except Exception:
+                session.rollback()
                 continue
 
     branch_filter = col(VoucherPurchase.router_name).in_(router_names)
