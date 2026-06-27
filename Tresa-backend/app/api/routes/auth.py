@@ -24,6 +24,7 @@ from app.schemas.auth import (
     SubdomainHandoffRequest,
     SubdomainHandoffResponse,
     UserResponse,
+    UserUpdateRequest,
     VerifyEmailRequest,
 )
 from app.services.auth import auth_response, create_verification_code, user_response, verify_email_code, verify_reset_code
@@ -314,6 +315,24 @@ def reset_password(payload: ResetPasswordRequest, session: SessionDep) -> AuthRe
 
 @router.get("/me", response_model=UserResponse)
 def me(user: CurrentUser, session: SessionDep) -> UserResponse:
+    return user_response(user, session)
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_me(payload: UserUpdateRequest, user: CurrentUser, session: SessionDep) -> UserResponse:
+    if payload.full_name is not None:
+        full_name = payload.full_name.strip()
+        if len(full_name) < 2:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Full name is required")
+        user.full_name = full_name
+    if payload.phone_number is not None:
+        phone_number = payload.phone_number.strip()
+        user.phone_number = phone_number or None
+
+    user.updated_at = datetime.utcnow()
+    session.add(user)
+    session.commit()
+    session.refresh(user)
     return user_response(user, session)
 
 

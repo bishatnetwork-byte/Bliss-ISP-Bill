@@ -131,11 +131,6 @@ const secondaryNavItems: NavItem[] = [
     path: "/remote-access",
   },
   {
-    label: "Network Tree",
-    icon: <Network className="w-5 h-5" />,
-    path: "/network",
-  },
-  {
     label: "Branches & Agents",
     icon: <Megaphone className="w-5 h-5" />,
     path: "/branches",

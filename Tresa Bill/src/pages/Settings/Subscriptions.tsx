@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { BellRing, CalendarClock, Loader2, Mail, MessageSquare, Pencil, Plus, Trash2 } from "lucide-react";
+import { BellRing, CalendarClock, Loader2, Mail, MessageSquare, PanelRightClose, Pencil, Plus, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import SettingsLayout from "./SettingsLayout";
@@ -74,6 +74,7 @@ export default function SubscriptionsPage() {
   const [items, setItems] = useState<SubscriptionResponse[]>([]);
   const [form, setForm] = useState<SubscriptionPayload>(blankForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const categorySelectValue = CATEGORY_OPTIONS.includes(form.category) ? form.category : "__custom__";
@@ -107,6 +108,22 @@ export default function SubscriptionsPage() {
     setEditingId(null);
   };
 
+  const openNewPanel = () => {
+    resetForm();
+    setIsPanelOpen(true);
+  };
+
+  const closePanel = () => {
+    resetForm();
+    setIsPanelOpen(false);
+  };
+
+  const openEditPanel = (item: SubscriptionResponse) => {
+    setEditingId(item.id);
+    setForm(toPayload(item));
+    setIsPanelOpen(true);
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!form.name.trim()) {
@@ -131,6 +148,7 @@ export default function SubscriptionsPage() {
         toast.success("Subscription saved");
       }
       resetForm();
+      setIsPanelOpen(false);
       await loadSubscriptions();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save subscription");
@@ -170,25 +188,96 @@ export default function SubscriptionsPage() {
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="w-fit rounded">{items.length} saved</Badge>
-            <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs" onClick={resetForm}>
+            <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs" onClick={openNewPanel}>
               <Plus className="h-3.5 w-3.5" />
               New bill
             </Button>
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-          <form onSubmit={handleSubmit} className="h-fit rounded border border-border/20 bg-card p-5 lg:sticky lg:top-20 lg:order-2">
-            <div className="mb-4 flex items-center gap-2">
-              <Plus className="h-4 w-4 text-primary" />
-              <div>
-                <h2 className="text-sm font-semibold">{editingId ? "Edit subscription" : "Add subscription"}</h2>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">Right panel for quick bill setup.</p>
-              </div>
+        <div>
+          <div className="rounded border border-border/20 bg-card">
+            <div className="flex items-center justify-between border-b border-border/20 px-5 py-4">
+              <h2 className="text-sm font-semibold">Upcoming bills</h2>
+              <CalendarClock className="h-4 w-4 text-muted-foreground" />
             </div>
 
-            <div className="space-y-4">
-              <div className="grid gap-2">
+            {isLoading ? (
+              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading subscriptions...
+              </div>
+            ) : sortedItems.length === 0 ? (
+              <div className="flex h-40 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+                No subscriptions yet. Add your ISP bill or any recurring payment to start the countdown.
+              </div>
+            ) : (
+              <div className="divide-y divide-border/20">
+                {sortedItems.map((item) => (
+                  <div key={item.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <h3 className="truncate text-sm font-semibold">{item.name}</h3>
+                        <Badge variant="outline" className={`rounded ${dueClass(item.days_until_due)}`}>{dueLabel(item.days_until_due)}</Badge>
+                        {!item.is_active && <Badge variant="secondary" className="rounded">Paused</Badge>}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {item.provider || item.category} · {item.currency} {item.amount.toLocaleString()} · Due {new Date(`${item.due_date}T00:00:00`).toLocaleDateString()}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Alerts: {item.alert_days_before} day(s) before · {[
+                          item.notify_in_app && "app",
+                          item.notify_email && "email",
+                          item.notify_sms && "sms",
+                        ].filter(Boolean).join(", ") || "none"}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => handleNotify(item)}>
+                        Remind now
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditPanel(item)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(item)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={`fixed inset-0 z-50 bg-black/40 transition-opacity ${isPanelOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        onClick={closePanel}
+      />
+      <aside
+        className={`fixed right-0 top-0 z-50 h-screen w-full max-w-[430px] overflow-y-auto border-l border-border bg-card shadow-2xl transition-transform duration-300 ${isPanelOpen ? "translate-x-0" : "translate-x-full"}`}
+      >
+        <div className="sticky top-0 z-10 border-b border-border/20 bg-card px-5 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded bg-primary/10 text-primary">
+                <Plus className="h-4 w-4" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold">{editingId ? "Edit subscription" : "Add subscription"}</h2>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">Manage bill details and reminder channels.</p>
+              </div>
+            </div>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={closePanel}>
+              <PanelRightClose className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5">
+          <div className="space-y-4">
+            <div className="grid gap-2">
                 <Label htmlFor="sub-name">Name</Label>
                 <Input id="sub-name" value={form.name} onChange={(event) => updateForm("name", event.target.value)} placeholder="Internet subscription" />
               </div>
@@ -274,72 +363,16 @@ export default function SubscriptionsPage() {
                 <Switch id="sub-active" checked={form.is_active} onCheckedChange={(value) => updateForm("is_active", value)} />
               </div>
 
-              <div className="flex gap-2">
-                <Button type="submit" disabled={isSaving} className="flex-1">
-                  {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {editingId ? "Save changes" : "Add subscription"}
-                </Button>
-                {editingId && (
-                  <Button type="button" variant="outline" onClick={resetForm}>Cancel</Button>
-                )}
-              </div>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={isSaving} className="flex-1">
+                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {editingId ? "Save changes" : "Add subscription"}
+              </Button>
+              <Button type="button" variant="outline" onClick={closePanel}>Cancel</Button>
             </div>
-          </form>
-
-          <div className="rounded border border-border/20 bg-card lg:order-1">
-            <div className="flex items-center justify-between border-b border-border/20 px-5 py-4">
-              <h2 className="text-sm font-semibold">Upcoming bills</h2>
-              <CalendarClock className="h-4 w-4 text-muted-foreground" />
-            </div>
-
-            {isLoading ? (
-              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading subscriptions...
-              </div>
-            ) : sortedItems.length === 0 ? (
-              <div className="flex h-40 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-                No subscriptions yet. Add your ISP bill or any recurring payment to start the countdown.
-              </div>
-            ) : (
-              <div className="divide-y divide-border/20">
-                {sortedItems.map((item) => (
-                  <div key={item.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="mb-1 flex flex-wrap items-center gap-2">
-                        <h3 className="truncate text-sm font-semibold">{item.name}</h3>
-                        <Badge variant="outline" className={`rounded ${dueClass(item.days_until_due)}`}>{dueLabel(item.days_until_due)}</Badge>
-                        {!item.is_active && <Badge variant="secondary" className="rounded">Paused</Badge>}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {item.provider || item.category} · {item.currency} {item.amount.toLocaleString()} · Due {new Date(`${item.due_date}T00:00:00`).toLocaleDateString()}
-                      </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        Alerts: {item.alert_days_before} day(s) before · {[
-                          item.notify_in_app && "app",
-                          item.notify_email && "email",
-                          item.notify_sms && "sms",
-                        ].filter(Boolean).join(", ") || "none"}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => handleNotify(item)}>
-                        Remind now
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingId(item.id); setForm(toPayload(item)); }}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(item)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-        </div>
-      </div>
+        </form>
+      </aside>
     </SettingsLayout>
   );
 }

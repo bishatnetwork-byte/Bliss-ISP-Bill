@@ -98,6 +98,34 @@ export function OwnerRoute({ children, permission }: { children: React.ReactNode
   return <>{children}</>;
 }
 
+export function OwnerOrPlatformAdminRoute({
+  children,
+  permission,
+  platformPermission,
+}: {
+  children: React.ReactNode;
+  permission?: string;
+  platformPermission?: string;
+}) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (user?.platform_role) {
+    if (
+      user.platform_role !== "superadmin"
+      && platformPermission
+      && !(user.platform_permissions || []).includes(platformPermission)
+    ) {
+      return <Navigate to="/platform-admin" replace />;
+    }
+    return <>{children}</>;
+  }
+  if (user?.account_type === "staff") return <Navigate to="/" replace />;
+  if (permission && user?.allowed_sections?.length > 0 && !user.allowed_sections.includes(permission)) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+}
+
 export function PermissionRoute({ permission, children }: { permission: string; children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;

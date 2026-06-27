@@ -2,6 +2,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePortalAdAnalytics } from "@/hooks/usePortalAds";
 import { useRouters } from "@/hooks/useRouters";
+import { renultApi } from "@/api/foreform";
+import { useAuth } from "@/lib/auth";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   BarChart3,
@@ -53,12 +56,25 @@ function MetricCard({ label, value, detail, icon: Icon }: {
 
 export default function AdsAnalyticsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isPlatformAdmin = Boolean(user?.platform_role);
   const [searchParams, setSearchParams] = useSearchParams();
   const [branchId, setBranchId] = useState(() => localStorage.getItem("selected-workspace") || "");
-  const { data: routers = [] } = useRouters(branchId);
+  const { data: ownerRouters = [] } = useRouters(branchId);
+  const { data: adminRouters = [] } = useQuery({
+    queryKey: ["platformAdmin", "adsmobAnalyticsRouters"],
+    queryFn: () => renultApi.platformAdmin.routers(""),
+    enabled: isPlatformAdmin,
+  });
+  const routers = (isPlatformAdmin ? adminRouters : ownerRouters).filter((router) => {
+    if (!router.is_active) return false;
+    if (!isPlatformAdmin) return true;
+    const status = `${router.status} ${(router as any).heartbeat_status || ""} ${(router as any).snmp_status || ""}`.toLowerCase();
+    return ["online", "connected", "provisioned"].some((word) => status.includes(word));
+  });
   const [routerId, setRouterId] = useState(() => searchParams.get("router") || "");
   const [days, setDays] = useState(30);
-  const { data, isLoading } = usePortalAdAnalytics(routerId, days);
+  const { data, isLoading } = usePortalAdAnalytics(routerId, days, isPlatformAdmin);
 
   useEffect(() => {
     const handler = (event: Event) => setBranchId((event as CustomEvent<{ id: string }>).detail.id);
@@ -87,12 +103,20 @@ export default function AdsAnalyticsPage() {
               <ArrowLeft className="h-3.5 w-3.5" /> Campaign Studio
             </button>
             <div className="flex items-center gap-2"><h1 className="text-2xl font-bold">Ads Analytics</h1></div>
-            <p className="mt-1 text-sm text-muted-foreground">Measured captive impressions, qualified views, unique visitors, clicks, growth, and areas.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {isPlatformAdmin
+                ? "Measured captive ad performance across online platform MikroTiks."
+                : "Measured captive impressions, qualified views, unique visitors, clicks, growth, and areas."}
+            </p>
           </div>
           <div className="flex gap-2">
             <Select value={routerId} onValueChange={setRouterId}>
               <SelectTrigger className="w-[220px]"><SelectValue placeholder="Select router" /></SelectTrigger>
-              <SelectContent>{routers.map((router) => <SelectItem key={router.id} value={router.id}>{router.name}</SelectItem>)}</SelectContent>
+              <SelectContent>{routers.map((router) => (
+                <SelectItem key={router.id} value={router.id}>
+                  {isPlatformAdmin && "owner_name" in router ? `${router.name} · ${router.owner_name}` : router.name}
+                </SelectItem>
+              ))}</SelectContent>
             </Select>
             <Select value={String(days)} onValueChange={(value) => setDays(Number(value))}>
               <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>

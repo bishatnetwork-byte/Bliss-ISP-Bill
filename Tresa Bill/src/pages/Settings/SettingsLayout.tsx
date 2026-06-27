@@ -10,7 +10,8 @@ import {
   CalendarClock,
   ScrollText,
   Send,
-  User
+  User,
+  Network
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -43,12 +44,6 @@ const navItems: SettingsNavItem[] = [
     icon: <Key className="w-4 h-4" />,
     path: "/settings/password",
   },
-  // {
-  //   id: "wallet-mgmt",
-  //   label: "Wallet Mgmt",
-  //   icon: <Wallet className="w-4 h-4" />,
-  //   path: "/settings/wallet",
-  // },
   {
     id: "billing",
     label: "Recent Transactions",
@@ -73,24 +68,19 @@ const navItems: SettingsNavItem[] = [
     icon: <Bell className="w-4 h-4" />,
     path: "/settings/notifications",
   },
-  {
-    id: "adsmob",
-    label: "AdsMob",
-    icon: <BadgeDollarSign className="w-4 h-4" />,
-    path: "/settings/adsmob",
-  },
-  {
-    id: "ads-analytics",
-    label: "Ads Analytics",
-    icon: <ChartNoAxesCombined className="w-4 h-4" />,
-    path: "/settings/adsmob/analytics",
-  },
+
   {
     id: "campaigns",
     label: "Tickets & Campaigns",
     icon: <Megaphone className="w-4 h-4" />,
     path: "/campaigns",
   },
+    {
+      id: "network-tree",
+      label: "Network Tree",
+      icon: <Network className="w-5 h-5" />,
+      path: "/network",
+    },
 ];
 
 interface SettingsLayoutProps {

@@ -7,7 +7,7 @@ import type React from 'react';
 import { useEffect } from 'react';
 import { Route, BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
 import { Toaster as SonnerToaster } from "sonner";
-import { AuthProvider, OwnerRoute, PermissionRoute, PlatformAdminRoute, ProtectedRoute, useAuth } from './lib/auth';
+import { AuthProvider, OwnerOrPlatformAdminRoute, OwnerRoute, PermissionRoute, PlatformAdminRoute, ProtectedRoute, useAuth } from './lib/auth';
 import PageNotFound from './lib/PageNotFound';
 
 import ForgotPassword from './pages/Auth/ForgotPassword';
@@ -197,8 +197,8 @@ const AppRoutes = () => {
         <Route path="/settings/router-logs" element={protectedElement(<OwnerRoute permission="settings"><RouterLogsPage /></OwnerRoute>)} />
         <Route path="/settings/notifications" element={protectedElement(<OwnerRoute permission="settings"><SettingsPage /></OwnerRoute>)} />
         <Route path="/settings/telegram" element={protectedElement(<OwnerRoute permission="settings"><TelegramConnectPage /></OwnerRoute>)} />
-        <Route path="/settings/adsmob" element={protectedElement(<OwnerRoute permission="settings"><AdsMobPage /></OwnerRoute>)} />
-        <Route path="/settings/adsmob/analytics" element={protectedElement(<OwnerRoute permission="settings"><AdsAnalyticsPage /></OwnerRoute>)} />
+        <Route path="/settings/adsmob" element={protectedElement(<OwnerOrPlatformAdminRoute permission="settings" platformPermission="adsmob"><AdsMobPage /></OwnerOrPlatformAdminRoute>)} />
+        <Route path="/settings/adsmob/analytics" element={protectedElement(<OwnerOrPlatformAdminRoute permission="settings" platformPermission="ads-analytics"><AdsAnalyticsPage /></OwnerOrPlatformAdminRoute>)} />
         <Route path="/platform-admin/mikrotik-manager" element={protectedElement(<PlatformAdminRoute><MikrotikManagerPage /></PlatformAdminRoute>)} />
         <Route path="/platform-admin/sms-gateways" element={protectedElement(<PlatformAdminRoute><SmsGatewayManagerPage /></PlatformAdminRoute>)} />
         <Route path="/settings/support" element={protectedElement(<OwnerRoute permission="settings"><Campign /></OwnerRoute>)} />

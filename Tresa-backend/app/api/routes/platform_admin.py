@@ -72,10 +72,11 @@ from app.schemas.platform_admin import (
     PlatformLedgerEntryFullResponse,
     PlatformAllTransactionResponse,
 )
-from app.schemas.ads import PortalAdCreate, PortalAdResponse, PortalAdUpdate
+from app.schemas.ads import PortalAdAnalyticsResponse, PortalAdCreate, PortalAdResponse, PortalAdUpdate
 from app.schemas.portal import CaptivePortalPushRequest, PushCaptiveResponse
 from app.schemas.router import RouterCredentialsUpdate, RouterPingRequest, RouterPingResponse
 from app.services.ads import (
+    analytics_for_router,
     create_router_ad,
     get_ad_metrics,
     get_router_ads,
@@ -1490,7 +1491,7 @@ def admin_push_router_command(
 def admin_list_router_ads(
     router_id: UUID,
     session: SessionDep,
-    admin: User = _admin("users"),
+    admin: User = _admin("adsmob"),
 ) -> list[PortalAdResponse]:
     del admin
     db_router = _admin_get_router(session, router_id)
@@ -1504,7 +1505,7 @@ def admin_create_router_ad(
     router_id: UUID,
     payload: PortalAdCreate,
     session: SessionDep,
-    admin: User = _admin("users"),
+    admin: User = _admin("adsmob"),
 ) -> PortalAdResponse:
     db_router = _admin_get_router(session, router_id)
     ad = create_router_ad(session, db_router.id, payload)
@@ -1518,7 +1519,7 @@ def admin_update_router_ad(
     ad_id: UUID,
     payload: PortalAdUpdate,
     session: SessionDep,
-    admin: User = _admin("users"),
+    admin: User = _admin("adsmob"),
 ) -> PortalAdResponse:
     _admin_get_router(session, router_id)
     existing = session.get(PortalAd, ad_id)
@@ -1535,7 +1536,7 @@ def admin_delete_router_ad(
     router_id: UUID,
     ad_id: UUID,
     session: SessionDep,
-    admin: User = _admin("users"),
+    admin: User = _admin("adsmob"),
 ) -> MessageResponse:
     existing = session.get(PortalAd, ad_id)
     if not existing or existing.router_id != router_id:
@@ -1544,6 +1545,70 @@ def admin_delete_router_ad(
     session.commit()
     audit(session, admin, "ad_removed", "router", str(router_id), {"ad_id": str(ad_id)})
     return MessageResponse(message="Ad removed.")
+
+
+@router.get("/routers/{router_id}/ads/analytics", response_model=PortalAdAnalyticsResponse)
+def admin_router_ad_analytics(
+    router_id: UUID,
+    session: SessionDep,
+    days: int = Query(default=30, ge=7, le=365),
+    admin: User = _admin("ads-analytics"),
+) -> PortalAdAnalyticsResponse:
+    del admin
+    db_router = _admin_get_router(session, router_id)
+    return PortalAdAnalyticsResponse(**analytics_for_router(session, db_router.id, days))
+
+
+@router.post("/routers/{router_id}/adsmob/publish", response_model=PushCaptiveResponse)
+def admin_publish_router_adsmob(
+    router_id: UUID,
+    session: SessionDep,
+    admin: User = _admin("adsmob"),
+    payload: CaptivePortalPushRequest | None = None,
+) -> PushCaptiveResponse:
+    db_router = _admin_get_router(session, router_id)
+    captive = session.exec(select(CaptivePortal).where(CaptivePortal.router_id == db_router.id)).first()
+    now = datetime.utcnow()
+    if not captive:
+        captive = CaptivePortal(
+            router_id=db_router.id,
+            router_name=normalize_router_name(db_router.name),
+            title=f"{db_router.name} WiFi",
+            description="High-speed internet access portal",
+            portal_template="adsmob",
+        )
+    else:
+        captive.router_name = normalize_router_name(db_router.name)
+        captive.portal_template = "adsmob"
+        captive.updated_at = now
+    session.add(captive)
+    session.commit()
+
+    push_payload = payload or CaptivePortalPushRequest()
+    result = push_captive_files_to_mikrotik(
+        db_router,
+        "adsmob",
+        ftp_username=push_payload.ftp_username,
+        ftp_password=push_payload.ftp_password,
+        ftp_port=push_payload.ftp_port,
+        session=session,
+    )
+    if result["success"]:
+        captive.last_pushed_at = datetime.utcnow()
+        captive.updated_at = datetime.utcnow()
+        session.add(captive)
+        session.commit()
+    audit(session, admin, "adsmob_published", "router", str(db_router.id), {"success": result["success"]})
+    return PushCaptiveResponse(
+        success=result["success"],
+        router_id=db_router.id,
+        router_name=db_router.name,
+        pushed_files=result["pushed_files"],
+        deployed_directory=result.get("deployed_directory"),
+        updated_profiles=result.get("updated_profiles", []),
+        error=result["error"],
+        diagnostics=result.get("diagnostics", {}),
+    )
 
 
 @router.post("/routers/{router_id}/captive/push", response_model=PushCaptiveResponse)

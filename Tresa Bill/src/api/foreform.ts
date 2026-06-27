@@ -87,6 +87,11 @@ export interface AuthResponse {
   user: UserResponse;
 }
 
+export type UserProfileUpdate = {
+  full_name?: string;
+  phone_number?: string | null;
+};
+
 export interface LoginActivityResponse {
   id: string;
   email: string;
@@ -1073,6 +1078,7 @@ export interface VoucherBatchCreate {
   amount?: number | null;
   phone_number?: string | null;
   prefix?: string;
+  postfix?: string;
   code_length?: number;
   code_format?: "alphanumeric-lower" | "alphanumeric-upper" | "numeric" | "alphanumeric-mixed";
   payment_reference?: string | null;
@@ -1558,6 +1564,8 @@ export const renultApi = {
     setPassword: (payload: { current_password?: string | null; new_password: string }) =>
       apiRequest<{ message: string }>("/auth/set-password", { method: "POST", body: JSON.stringify(payload) }),
     me: () => apiRequest<UserResponse>("/auth/me"),
+    updateMe: (payload: UserProfileUpdate) =>
+      apiRequest<UserResponse>("/auth/me", { method: "PATCH", body: JSON.stringify(payload) }),
     loginActivity: (limit = 10) =>
       apiRequest<LoginActivityResponse[]>("/auth/login-activity", { query: { limit } }),
     exchangeSubdomainHandoff: (payload: { code: string; subdomain: string }) =>
@@ -1902,6 +1910,10 @@ export const renultApi = {
       apiRequest<PortalAdResponse>(`/platform-admin/routers/${routerId}/ads/${adId}`, { method: "PUT", body: JSON.stringify(payload) }),
     deleteRouterAd: (routerId: string, adId: string) =>
       apiRequest<{ message: string }>(`/platform-admin/routers/${routerId}/ads/${adId}`, { method: "DELETE" }),
+    routerAdAnalytics: (routerId: string, days = 30) =>
+      apiRequest<PortalAdAnalyticsResponse>(`/platform-admin/routers/${routerId}/ads/analytics`, { query: { days } }),
+    publishRouterAdsMob: (routerId: string) =>
+      apiRequest<PushCaptiveResponse>(`/platform-admin/routers/${routerId}/adsmob/publish`, { method: "POST" }),
     pushRouterCaptive: (routerId: string) =>
       apiRequest<PushCaptiveResponse>(`/platform-admin/routers/${routerId}/captive/push`, { method: "POST" }),
     setRouterCredentials: (routerId: string, payload: { username: string; password: string }) =>

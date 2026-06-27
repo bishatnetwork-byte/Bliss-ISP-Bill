@@ -233,6 +233,73 @@ def _upsert_hotspot_voucher(router: Router, voucher: VoucherPurchase, package: d
         raise RuntimeError(errors[voucher.voucher_code])
 
 
+def _routeros_script_string(value: Any) -> str:
+    escaped = (
+        str(value or "")
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("$", "\\$")
+    )
+    return f'"{escaped}"'
+
+
+def _bulk_hotspot_user_script(vouchers: list[VoucherPurchase], package: dict[str, Any]) -> str:
+    profile = vouchers[0].profile
+    shared_users = str(package.get("devices") or "1")
+    limit_uptime = _hotspot_limit_to_routeros(package.get("limit", ""))
+    lines = [
+        f":local profile {_routeros_script_string(profile)}",
+        (
+            ":if ([:len [/ip hotspot user profile find where name=$profile]] = 0) do={ "
+            f"/ip hotspot user profile add name=$profile shared-users={_routeros_script_string(shared_users)} "
+            "}"
+        ),
+    ]
+    for voucher in vouchers:
+        code = _routeros_script_string(voucher.voucher_code)
+        comment = _routeros_script_string(
+            f"{voucher.phone_number} package={voucher.package_id} ref={voucher.payment_reference or ''}".strip()
+        )
+        params = [
+            f"password={code}",
+            "profile=$profile",
+            f"comment={comment}",
+        ]
+        if limit_uptime:
+            params.append(f"limit-uptime={_routeros_script_string(limit_uptime)}")
+        set_params = " ".join(params)
+        add_params = f"name={code} {set_params}"
+        lines.append(
+            f":if ([:len [/ip hotspot user find where name={code}]] = 0) "
+            f"do={{ /ip hotspot user add {add_params} }} "
+            f"else={{ /ip hotspot user set [find where name={code}] {set_params} }}"
+        )
+    return "\n".join(lines)
+
+
+def _upsert_hotspot_vouchers_with_script(
+    router: Router,
+    vouchers: list[VoucherPurchase],
+    package: dict[str, Any],
+) -> None:
+    script_name = f"TresaVoucherBatch{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
+    script_source = _bulk_hotspot_user_script(vouchers, package)
+    with router_connection(router, socket_timeout=120) as api:
+        scripts = api.get_resource("/system/script")
+        scripts.add(name=script_name, policy="read,write,test,policy", source=script_source)
+        created = scripts.get(name=script_name)
+        script_id = _first_resource_id(created)
+        if not script_id:
+            raise RuntimeError("MikroTik did not return the voucher batch script id")
+        try:
+            scripts.call("run", {"number": script_id})
+        finally:
+            try:
+                scripts.remove(id=script_id)
+            except Exception:
+                pass
+
+
 def _upsert_hotspot_vouchers(
     router: Router,
     vouchers: list[VoucherPurchase],
@@ -240,6 +307,16 @@ def _upsert_hotspot_vouchers(
 ) -> dict[str, str]:
     if not vouchers:
         return {}
+
+    try:
+        _upsert_hotspot_vouchers_with_script(router, vouchers, package)
+        return {}
+    except Exception as script_exc:
+        logger.warning(
+            "Bulk voucher script failed on %s, falling back to per-user API: %s",
+            router.name,
+            script_exc,
+        )
 
     errors: dict[str, str] = {}
     with router_connection(router) as api:

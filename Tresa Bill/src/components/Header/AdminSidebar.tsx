@@ -3,7 +3,9 @@ import { cn } from "@/lib/utils";
 import {
   Activity,
   Banknote,
+  BadgeDollarSign,
   Bell,
+  ChartNoAxesCombined,
   ChartPie,
   Cloud,
   FileClock,
@@ -35,6 +37,8 @@ export const PLATFORM_ADMIN_SECTIONS = [
   { id: "sms_gateways", label: "SMS Gateways", icon: MessageSquare, path: "/platform-admin/sms-gateways" },
   { id: "tunnels", label: "Tunnels Control", icon: Network },
   { id: "mikrotik_manager", label: "MikroTik Manager", icon: ServerCog, path: "/platform-admin/mikrotik-manager" },
+  { id: "adsmob", label: "AdsMob", icon: BadgeDollarSign, path: "/settings/adsmob" },
+  { id: "ads-analytics", label: "Ads Analytics", icon: ChartNoAxesCombined, path: "/settings/adsmob/analytics" },
   { id: "storage", label: "Cloud Files", icon: Cloud },
   { id: "dns", label: "DNS Records", icon: Globe2 },
   { id: "subadmins", label: "Subadmins", icon: UserCog },
@@ -54,7 +58,7 @@ const SECTIONS_GROUPS = [
   },
   {
     title: "Infrastructure",
-    items: ["voucher_audit", "message_diagnostics", "sms_gateways", "tunnels", "mikrotik_manager", "storage", "dns"],
+    items: ["voucher_audit", "message_diagnostics", "sms_gateways", "tunnels", "mikrotik_manager", "adsmob", "ads-analytics", "storage", "dns"],
   },
   {
     title: "System & Security",

@@ -209,28 +209,35 @@ def sync_router_packages(
     )
 
 
-def _voucher_code(length: int, code_format: str, prefix: str, prefix_order: str = "prefix-first") -> str:
+def _clean_voucher_affix(value: str | None) -> str:
+    return re.sub(r"[-\s]+", "", str(value or "").strip())
+
+
+def _voucher_code(length: int, code_format: str, prefix: str, postfix: str = "") -> str:
     upper_alpha = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    lower_alpha = "abcdefghjkmnpqrstuvwxyz"
     mixed_alpha = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     numeric = "0123456789"
     charset = upper_alpha + numeric
     if code_format == "numeric":
         charset = numeric
+    elif code_format == "alphanumeric-lower":
+        charset = lower_alpha + numeric
     elif code_format == "alphanumeric-mixed":
         charset = mixed_alpha
     token = "".join(secrets.choice(charset) for _ in range(length))
-    return f"{token}{prefix}" if prefix_order == "prefix-last" else f"{prefix}{token}"
+    return f"{prefix}{token}{postfix}"
 
 
 def _unique_voucher_codes(
     session: SessionDep,
     payload: VoucherBatchCreate,
     prefix: str,
-    prefix_order: str,
+    postfix: str = "",
 ) -> list[str]:
     codes: set[str] = set()
     while len(codes) < payload.quantity:
-        codes.add(_voucher_code(payload.code_length, payload.code_format, prefix, prefix_order))
+        codes.add(_voucher_code(payload.code_length, payload.code_format, prefix, postfix))
 
     while True:
         existing = set(
@@ -243,7 +250,7 @@ def _unique_voucher_codes(
             return list(codes)
         codes.difference_update(existing)
         while len(codes) < payload.quantity:
-            codes.add(_voucher_code(payload.code_length, payload.code_format, prefix, prefix_order))
+            codes.add(_voucher_code(payload.code_length, payload.code_format, prefix, postfix))
 
 
 def serialize_voucher(voucher: VoucherPurchase) -> VoucherBatchItemResponse:
@@ -302,10 +309,19 @@ def _create_router_vouchers(
     wallet = get_or_create_wallet(session, db_router.name, phone_number)
     vouchers: list[VoucherPurchase] = []
     package_dict = serialize_package(package)
-    effective_prefix = payload.prefix or str(get_setting(session, "voucher_prefix", ""))
+    user_prefix = _clean_voucher_affix(payload.prefix)
+    user_postfix = _clean_voucher_affix(payload.postfix)
+    admin_affix = _clean_voucher_affix(str(get_setting(session, "voucher_prefix", "")))
     prefix_order = str(get_setting(session, "voucher_prefix_order", "prefix-first"))
+    effective_prefix = user_prefix
+    effective_postfix = user_postfix
+    if not user_prefix and not user_postfix and admin_affix:
+        if prefix_order == "prefix-last":
+            effective_postfix = admin_affix
+        else:
+            effective_prefix = admin_affix
 
-    for code in _unique_voucher_codes(session, payload, effective_prefix, prefix_order):
+    for code in _unique_voucher_codes(session, payload, effective_prefix, effective_postfix):
         voucher = VoucherPurchase(
             wallet_id=wallet.id,
             router_name=normalize_router_name(db_router.name),
@@ -323,18 +339,14 @@ def _create_router_vouchers(
         session.add(voucher)
         vouchers.append(voucher)
 
-    report(25, "Database", "Saving voucher queue to PostgreSQL")
-    session.commit()
-    for voucher in vouchers:
-        session.refresh(voucher)
-
-    report(40, "MikroTik", f"Adding {len(vouchers)} hotspot users to {db_router.name}")
+    report(25, "MikroTik", f"Adding {len(vouchers)} hotspot users to {db_router.name}")
     sync_errors: dict[str, str] = {}
     try:
         sync_errors = _upsert_hotspot_vouchers(db_router, vouchers, package_dict)
     except Exception as exc:
         sync_errors = {voucher.voucher_code: str(exc) for voucher in vouchers}
 
+    report(55, "Database", "Saving voucher records to PostgreSQL")
     for voucher in vouchers:
         voucher.status = "PROVISIONED" if voucher.voucher_code not in sync_errors else "ROUTER_SYNC_FAILED"
         session.add(voucher)

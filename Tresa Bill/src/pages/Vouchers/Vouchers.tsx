@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import AppHeader from "@/components/Header/AppHeader";
 import SEO from "@/components/SEO";
 import { Button } from "@/components/ui/button";
@@ -564,6 +565,7 @@ export default function Vouchers() {
         quantity: genQuantity,
         amount: pkg.price,
         prefix: genPrefix || undefined,
+        postfix: genPostfix || undefined,
         code_length: genLength,
         code_format: genFormat,
         payment_reference: batchId,
@@ -1132,18 +1134,18 @@ export default function Vouchers() {
                       <div className="space-y-1">
                         <Label className="text-[10px] text-muted-foreground">Username Prefix</Label>
                         <Input
-                          placeholder="e.g. TR-"
+                          placeholder="e.g. TR"
                           value={genPrefix}
-                          onChange={(e) => setGenPrefix(e.target.value.toUpperCase())}
+                          onChange={(e) => setGenPrefix(e.target.value.toUpperCase().replace(/[-\s]+/g, ""))}
                           className="h-8 text-xs font-mono"
                         />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-[10px] text-muted-foreground">Username Postfix</Label>
                         <Input
-                          placeholder="e.g. -WK"
+                          placeholder="e.g. WK"
                           value={genPostfix}
-                          onChange={(e) => setGenPostfix(e.target.value.toUpperCase())}
+                          onChange={(e) => setGenPostfix(e.target.value.toUpperCase().replace(/[-\s]+/g, ""))}
                           className="h-8 text-xs font-mono"
                         />
                       </div>
@@ -1279,18 +1281,18 @@ export default function Vouchers() {
                       <div className="space-y-1">
                         <Label className="text-[10px] text-muted-foreground">Username Prefix</Label>
                         <Input
-                          placeholder="e.g. TR-"
+                          placeholder="e.g. TR"
                           value={genPrefix}
-                          onChange={(e) => setGenPrefix(e.target.value.toUpperCase())}
+                          onChange={(e) => setGenPrefix(e.target.value.toUpperCase().replace(/[-\s]+/g, ""))}
                           className="h-8 text-xs font-mono"
                         />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-[10px] text-muted-foreground">Username Postfix</Label>
                         <Input
-                          placeholder="e.g. -WK"
+                          placeholder="e.g. WK"
                           value={genPostfix}
-                          onChange={(e) => setGenPostfix(e.target.value.toUpperCase())}
+                          onChange={(e) => setGenPostfix(e.target.value.toUpperCase().replace(/[-\s]+/g, ""))}
                           className="h-8 text-xs font-mono"
                         />
                       </div>

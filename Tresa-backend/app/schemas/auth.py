@@ -41,6 +41,11 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(min_length=8)
 
 
+class UserUpdateRequest(BaseModel):
+    full_name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    phone_number: Optional[str] = Field(default=None, max_length=30)
+
+
 class GoogleAuthRequest(BaseModel):
     id_token: Optional[str] = None
     code: Optional[str] = None

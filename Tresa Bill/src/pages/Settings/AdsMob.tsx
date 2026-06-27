@@ -15,6 +15,8 @@ import {
   useUpdatePortalAd,
 } from "@/hooks/usePortalAds";
 import { useRouters } from "@/hooks/useRouters";
+import { useAuth } from "@/lib/auth";
+import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
   Eye,
@@ -265,13 +267,30 @@ function AdEditor({ draft, setDraft, onSave, saving, saveLabel }: EditorProps) {
 
 export default function AdsMobPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isPlatformAdmin = Boolean(user?.platform_role);
   const [branchId, setBranchId] = useState(() => localStorage.getItem("selected-workspace") || "");
-  const { data: routers = [], isLoading: routersLoading } = useRouters(branchId);
+  const { data: ownerRouters = [], isLoading: ownerRoutersLoading } = useRouters(branchId);
+  const { data: adminRouters = [], isLoading: adminRoutersLoading } = useQuery({
+    queryKey: ["platformAdmin", "adsmobRouters"],
+    queryFn: () => renultApi.platformAdmin.routers(""),
+    enabled: isPlatformAdmin,
+  });
+  const routers = useMemo(() => {
+    const source = isPlatformAdmin ? adminRouters : ownerRouters;
+    return source.filter((router) => {
+      if (!router.is_active) return false;
+      if (!isPlatformAdmin) return true;
+      const status = `${router.status} ${(router as any).heartbeat_status || ""} ${(router as any).snmp_status || ""}`.toLowerCase();
+      return ["online", "connected", "provisioned"].some((word) => status.includes(word));
+    });
+  }, [adminRouters, isPlatformAdmin, ownerRouters]);
+  const routersLoading = isPlatformAdmin ? adminRoutersLoading : ownerRoutersLoading;
   const [routerId, setRouterId] = useState("");
-  const { data: ads = [], isLoading } = usePortalAds(routerId);
-  const createAd = useCreatePortalAd(routerId);
-  const updateAd = useUpdatePortalAd(routerId);
-  const deleteAd = useDeletePortalAd(routerId);
+  const { data: ads = [], isLoading } = usePortalAds(routerId, isPlatformAdmin);
+  const createAd = useCreatePortalAd(routerId, isPlatformAdmin);
+  const updateAd = useUpdatePortalAd(routerId, isPlatformAdmin);
+  const deleteAd = useDeletePortalAd(routerId, isPlatformAdmin);
   const [tab, setTab] = useState("saved");
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<PortalAdUpsert>(DEFAULT_AD);
@@ -322,9 +341,13 @@ export default function AdsMobPage() {
       if (selectedAd) {
         await updateAd.mutateAsync({ adId: selectedAd.id, payload: draft });
       }
-      const captive = await renultApi.captivePortal.get(routerId);
-      await renultApi.captivePortal.upsert(routerId, { ...captive, portal_template: "adsmob" });
-      const result = await renultApi.captivePortal.deployR2(routerId);
+      const result = isPlatformAdmin
+        ? await renultApi.platformAdmin.publishRouterAdsMob(routerId)
+        : await (async () => {
+          const captive = await renultApi.captivePortal.get(routerId);
+          await renultApi.captivePortal.upsert(routerId, { ...captive, portal_template: "adsmob" });
+          return renultApi.captivePortal.deployR2(routerId);
+        })();
       if (!result.success) throw new Error(result.error || "Deployment failed.");
       toast.success("AdsMob portal, assets, and media walled-garden rules published.");
     } catch (error) {
@@ -341,12 +364,20 @@ export default function AdsMobPage() {
           <div>
             <div className="mb-2 flex items-center gap-2 text-primary"><Megaphone className="h-5 w-5" /><span className="text-xs font-semibold uppercase tracking-[0.18em]">Captive advertising</span></div>
             <h1 className="text-2xl font-bold">AdsMob Campaign Studio</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Create rotating campaigns for shops, restaurants, services, and creators.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {isPlatformAdmin
+                ? "Create and publish captive ads to any online MikroTik on the platform."
+                : "Create rotating campaigns for shops, restaurants, services, and creators."}
+            </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Select value={routerId} onValueChange={setRouterId} disabled={routersLoading || !routers.length}>
               <SelectTrigger className="w-full sm:w-[230px]"><SelectValue placeholder="Select router" /></SelectTrigger>
-              <SelectContent>{routers.map((router) => <SelectItem key={router.id} value={router.id}>{router.name}</SelectItem>)}</SelectContent>
+              <SelectContent>{routers.map((router) => (
+                <SelectItem key={router.id} value={router.id}>
+                  {isPlatformAdmin && "owner_name" in router ? `${router.name} · ${router.owner_name}` : router.name}
+                </SelectItem>
+              ))}</SelectContent>
             </Select>
             <Button variant="outline" disabled={!routerId} onClick={() => navigate(`/settings/adsmob/analytics?router=${routerId}`)}><BarChart3 className="mr-2 h-4 w-4" />Analytics</Button>
             <Button disabled={!routerId || publishing} onClick={() => void publish()}>{publishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MonitorPlay className="mr-2 h-4 w-4" />}Publish Portal</Button>
