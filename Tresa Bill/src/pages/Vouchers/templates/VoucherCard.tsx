@@ -100,7 +100,7 @@ export function VoucherCard({
         {/* Code Section */}
         <div className={cn("print-card-code flex flex-1 items-center justify-between px-3 py-1 gap-2", theme.codeBg)}>
           <span className={cn(
-            "print-card-code-text font-mono text-base font-black uppercase tracking-[0.12em]", 
+            "print-card-code-text font-mono text-base font-black tracking-[0.12em]",
             theme.codeText,
             showQrCode ? "text-sm text-left flex-1" : "text-center w-full"
           )}>
@@ -146,7 +146,7 @@ export function VoucherCard({
         {/* Code details */}
         <div className="flex flex-1 items-center justify-between py-1 gap-2">
           <span className={cn(
-            "font-mono text-sm font-black uppercase tracking-[0.1em]",
+            "font-mono text-sm font-black tracking-[0.1em]",
             theme.codeText,
             showQrCode ? "text-left flex-1" : "text-center w-full"
           )}>
@@ -200,7 +200,7 @@ export function VoucherCard({
           </div>
 
           <div className="my-0.5 min-w-0">
-            <span className={cn("block font-mono text-[11px] font-black uppercase tracking-wider truncate", theme.codeText)}>
+            <span className={cn("block font-mono text-[11px] font-black tracking-wider truncate", theme.codeText)}>
               {voucher.code}
             </span>
             {showPackage && (
@@ -245,7 +245,7 @@ export function VoucherCard({
           </div>
 
           <div className="my-0.5 min-w-0">
-            <span className={cn("block font-mono text-[11px] font-black uppercase tracking-wider truncate", theme.codeText)}>
+            <span className={cn("block font-mono text-[11px] font-black tracking-wider truncate", theme.codeText)}>
               {voucher.code}
             </span>
             {showPackage && (
@@ -299,7 +299,7 @@ export function VoucherCard({
       {/* Middle Code */}
       <div className="flex flex-1 items-center justify-between gap-2 my-1">
         <div className="bg-white/15 backdrop-blur-sm border border-white/10 rounded px-2 py-1 flex-1 flex items-center justify-center h-8">
-          <span className="font-mono text-sm font-black uppercase tracking-[0.1em] text-white">
+          <span className="font-mono text-sm font-black tracking-[0.1em] text-white">
             {voucher.code}
           </span>
         </div>

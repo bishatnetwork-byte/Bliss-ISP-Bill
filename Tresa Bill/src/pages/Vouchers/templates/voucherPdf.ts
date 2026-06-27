@@ -167,7 +167,7 @@ function cardCommands(
 
       // Code text shifted left
       const codeFontSize = 11;
-      const codeText = row.code.toUpperCase();
+      const codeText = row.code;
       const codeWidth = estimateWidth(codeText, codeFontSize);
       const codeX = x + Math.max(3, (CARD_W - qrSize - 8 - codeWidth) / 2);
       const codeY = yBottom + FOOTER_H + codeH / 2 - codeFontSize * 0.35;
@@ -175,7 +175,7 @@ function cardCommands(
     } else {
       // Centered code text
       const codeFontSize = 13;
-      const codeText = row.code.toUpperCase();
+      const codeText = row.code;
       const codeWidth = estimateWidth(codeText, codeFontSize);
       const codeX = x + Math.max(2, (CARD_W - codeWidth) / 2);
       const codeY = yBottom + FOOTER_H + codeH / 2 - codeFontSize * 0.35;
@@ -218,14 +218,14 @@ function cardCommands(
       commands.push(drawQrCodePDF(qrText, qrX, qrY, qrSize, qrSize));
 
       const codeFontSize = 10;
-      const codeText = row.code.toUpperCase();
+      const codeText = row.code;
       const codeWidth = estimateWidth(codeText, codeFontSize);
       const codeX = x + Math.max(3, (CARD_W - qrSize - 8 - codeWidth) / 2);
       const codeY = yBottom + FOOTER_H + codeH / 2 - codeFontSize * 0.35 - 2;
       commands.push(textAt(codeX, codeY, "F2", codeFontSize, theme.codeText, codeText));
     } else {
       const codeFontSize = 12;
-      const codeText = row.code.toUpperCase();
+      const codeText = row.code;
       const codeWidth = estimateWidth(codeText, codeFontSize);
       const codeX = x + Math.max(2, (CARD_W - codeWidth) / 2);
       const codeY = yBottom + FOOTER_H + codeH / 2 - codeFontSize * 0.35 - 2;
@@ -269,7 +269,7 @@ function cardCommands(
 
     // Code
     const codeFontSize = 9.5;
-    const codeText = row.code.toUpperCase();
+    const codeText = row.code;
     commands.push(textAt(xRight, yBottom + 21, "F2", codeFontSize, theme.codeText, codeText));
 
     // Package Name
@@ -307,7 +307,7 @@ function cardCommands(
 
     // Code
     const codeFontSize = 9.5;
-    const codeText = row.code.toUpperCase();
+    const codeText = row.code;
     commands.push(textAt(xLeft, yBottom + 21, "F2", codeFontSize, theme.codeText, codeText));
 
     // Package Name
@@ -350,7 +350,7 @@ function cardCommands(
       commands.push("1.0 1.0 1.0 rg", `${num(boxX)} ${num(boxY)} ${num(boxW)} ${num(boxH)} re f`);
 
       const codeFontSize = 9.5;
-      const codeText = row.code.toUpperCase();
+      const codeText = row.code;
       const codeWidth = estimateWidth(codeText, codeFontSize);
       const codeX = boxX + (boxW - codeWidth) / 2;
       const codeY = boxY + boxH / 2 - codeFontSize * 0.35;
@@ -364,7 +364,7 @@ function cardCommands(
       commands.push("1.0 1.0 1.0 rg", `${num(boxX)} ${num(boxY)} ${num(boxW)} ${num(boxH)} re f`);
 
       const codeFontSize = 11.5;
-      const codeText = row.code.toUpperCase();
+      const codeText = row.code;
       const codeWidth = estimateWidth(codeText, codeFontSize);
       const codeX = boxX + (boxW - codeWidth) / 2;
       const codeY = boxY + boxH / 2 - codeFontSize * 0.35;
