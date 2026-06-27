@@ -59,6 +59,7 @@ import SubscriptionsPage from "./pages/Settings/Subscriptions";
 import TelegramConnectPage from "./pages/Settings/TelegramConnect";
 import AdsMobPage from "./pages/Settings/AdsMob";
 import AdsAnalyticsPage from "./pages/Settings/AdsAnalytics";
+import TrashBucket from "./pages/Settings/TrashBucket";
 import MikrotikManagerPage from "./pages/PlatformAdmin/MikrotikManager";
 import SmsGatewayManagerPage from "./pages/AdminMode/SmsGatewayManager";
 
@@ -199,6 +200,7 @@ const AppRoutes = () => {
         <Route path="/settings/telegram" element={protectedElement(<OwnerRoute permission="settings"><TelegramConnectPage /></OwnerRoute>)} />
         <Route path="/settings/adsmob" element={protectedElement(<OwnerOrPlatformAdminRoute permission="settings" platformPermission="adsmob"><AdsMobPage /></OwnerOrPlatformAdminRoute>)} />
         <Route path="/settings/adsmob/analytics" element={protectedElement(<OwnerOrPlatformAdminRoute permission="settings" platformPermission="ads-analytics"><AdsAnalyticsPage /></OwnerOrPlatformAdminRoute>)} />
+        <Route path="/trash" element={protectedElement(<OwnerRoute permission="settings"><TrashBucket /></OwnerRoute>)} />
         <Route path="/platform-admin/mikrotik-manager" element={protectedElement(<PlatformAdminRoute><MikrotikManagerPage /></PlatformAdminRoute>)} />
         <Route path="/platform-admin/sms-gateways" element={protectedElement(<PlatformAdminRoute><SmsGatewayManagerPage /></PlatformAdminRoute>)} />
         <Route path="/settings/support" element={protectedElement(<OwnerRoute permission="settings"><Campign /></OwnerRoute>)} />

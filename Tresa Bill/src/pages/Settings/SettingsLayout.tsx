@@ -11,7 +11,8 @@ import {
   ScrollText,
   Send,
   User,
-  Network
+  Network,
+  Trash
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -81,6 +82,12 @@ const navItems: SettingsNavItem[] = [
       icon: <Network className="w-5 h-5" />,
       path: "/network",
     },
+    {
+      id: "trash",
+      label: "Trash Bucket",
+      icon: <Trash className="w-5 h-5" />,
+      path: "/trash",
+    }
 ];
 
 interface SettingsLayoutProps {
