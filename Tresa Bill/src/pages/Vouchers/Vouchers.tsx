@@ -19,6 +19,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFo
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   useBranchActiveUsers,
@@ -38,6 +39,7 @@ import { voucherUiStatus } from "@/lib/voucherStatus";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   CalendarIcon,
+  Boxes,
   ChevronLeft,
   ChevronRight,
   Clipboard,
@@ -79,6 +81,21 @@ interface Voucher {
   batchId?: string;
   useCase: "System Generated" | "Admin Generated";
   note: string;
+}
+
+interface VoucherDisplayRow {
+  key: string;
+  kind: "bundle" | "single";
+  title: string;
+  routerName: string;
+  packageName: string;
+  vouchers: Voucher[];
+  amount: number;
+  useCase: Voucher["useCase"];
+  note: string;
+  createdAt: string;
+  expiresAt?: string;
+  batchId?: string;
 }
 
 function registryStatus(status: string): Voucher["status"] {
@@ -220,6 +237,7 @@ export default function Vouchers() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [filterPackage, setFilterPackage] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [showBatchBundles, setShowBatchBundles] = useState(true);
 
   // Selection states
   const [selectedVouchers, setSelectedVouchers] = useState<string[]>([]);
@@ -382,14 +400,72 @@ export default function Vouchers() {
     });
   }, [vouchers, searchQuery, filterPackage, dateRange, activeTab]);
 
+  const bundledVoucherRows = useMemo<VoucherDisplayRow[]>(() => {
+    const grouped = new Map<string, Voucher[]>();
+    filteredVouchers.forEach((voucher) => {
+      const key = voucher.batchId ? `${voucher.routerName}::${voucher.batchId}` : `single::${voucher.id}`;
+      grouped.set(key, [...(grouped.get(key) || []), voucher]);
+    });
+
+    return Array.from(grouped.entries()).map(([key, items]) => {
+      const first = items[0];
+      const uniquePackages = Array.from(new Set(items.map((item) => item.packageName)));
+      const latestCreated = [...items].sort((a, b) => new Date(b.purchaseTime).getTime() - new Date(a.purchaseTime).getTime())[0];
+      const latestExpiry = [...items]
+        .filter((item) => item.expiresAt)
+        .sort((a, b) => new Date(b.expiresAt || "").getTime() - new Date(a.expiresAt || "").getTime())[0];
+      return {
+        key,
+        kind: first.batchId ? "bundle" : "single",
+        title: first.batchId || first.id,
+        routerName: first.routerName,
+        packageName: uniquePackages.length === 1 ? uniquePackages[0] : `${uniquePackages.length} packages`,
+        vouchers: items,
+        amount: items.reduce((sum, item) => sum + item.pricePaid, 0),
+        useCase: first.useCase,
+        note: first.batchId || first.note,
+        createdAt: latestCreated.purchaseTime,
+        expiresAt: latestExpiry?.expiresAt,
+        batchId: first.batchId,
+      };
+    });
+  }, [filteredVouchers]);
+
+  const displayRows = useMemo<VoucherDisplayRow[]>(() => {
+    if (showBatchBundles) return bundledVoucherRows;
+    return filteredVouchers.map((voucher) => ({
+      key: voucher.id,
+      kind: "single",
+      title: voucher.id,
+      routerName: voucher.routerName,
+      packageName: voucher.packageName,
+      vouchers: [voucher],
+      amount: voucher.pricePaid,
+      useCase: voucher.useCase,
+      note: voucher.note,
+      createdAt: voucher.purchaseTime,
+      expiresAt: voucher.expiresAt,
+      batchId: voucher.batchId,
+    }));
+  }, [bundledVoucherRows, filteredVouchers, showBatchBundles]);
+
   // Pagination Logic
   const paginatedVouchers = useMemo(() => {
     const startIndex = (currentPage - 1) * rowsPerPage;
     return filteredVouchers.slice(startIndex, startIndex + rowsPerPage);
   }, [filteredVouchers, currentPage, rowsPerPage]);
 
-  const totalPages = Math.ceil(filteredVouchers.length / rowsPerPage) || 1;
+  const paginatedDisplayRows = useMemo(() => {
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    return displayRows.slice(startIndex, startIndex + rowsPerPage);
+  }, [displayRows, currentPage, rowsPerPage]);
+
+  const totalPages = Math.ceil(displayRows.length / rowsPerPage) || 1;
   const showVoucherSkeleton = vouchersLoading && !branchVouchersResponse?.vouchers?.length;
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   // Handle pagination navigation
   const handlePageChange = (page: number) => {
@@ -401,7 +477,7 @@ export default function Vouchers() {
   // Bulk selector helpers
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedVouchers(paginatedVouchers.map((v) => v.id));
+      setSelectedVouchers(paginatedDisplayRows.flatMap((row) => row.vouchers.map((voucher) => voucher.id)));
     } else {
       setSelectedVouchers([]);
     }
@@ -413,6 +489,26 @@ export default function Vouchers() {
     } else {
       setSelectedVouchers((prev) => prev.filter((item) => item !== id));
     }
+  };
+
+  const handleSelectDisplayRow = (row: VoucherDisplayRow, checked: boolean) => {
+    const ids = row.vouchers.map((voucher) => voucher.id);
+    if (checked) {
+      setSelectedVouchers((prev) => Array.from(new Set([...prev, ...ids])));
+    } else {
+      setSelectedVouchers((prev) => prev.filter((id) => !ids.includes(id)));
+    }
+  };
+
+  const rowIsSelected = (row: VoucherDisplayRow) =>
+    row.vouchers.length > 0 && row.vouchers.every((voucher) => selectedVouchers.includes(voucher.id));
+
+  const bundleStatusCounts = (items: Voucher[]) => {
+    const counts = items.reduce<Record<string, number>>((acc, voucher) => {
+      acc[voucher.status] = (acc[voucher.status] || 0) + 1;
+      return acc;
+    }, {});
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   };
 
   // Actions
@@ -437,6 +533,41 @@ export default function Vouchers() {
     } catch (err: any) {
       toast.error(err.message || "Failed to delete voucher.");
     }
+  };
+
+  const handleDeleteDisplayRow = async (row: VoucherDisplayRow) => {
+    if (row.kind === "single" || !row.batchId) {
+      await handleDeleteSingle(row.vouchers[0]);
+      return;
+    }
+
+    const router = routers.find((r) => r.name.trim().toUpperCase() === row.routerName.trim().toUpperCase());
+    if (!router) {
+      toast.error(`Target router ${row.routerName} not found.`);
+      return;
+    }
+
+    if (!window.confirm(`Delete batch ${row.batchId} with ${row.vouchers.length} voucher(s) from MikroTik and local database? This cannot be undone.`)) return;
+
+    try {
+      await deleteBatchMutation.mutateAsync({ routerId: router.id, batchId: row.batchId });
+      setSelectedVouchers((prev) => prev.filter((id) => !row.vouchers.some((voucher) => voucher.id === id)));
+      toast.success(`Batch ${row.batchId} deleted successfully!`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete voucher batch.");
+    }
+  };
+
+  const handlePrintDisplayRow = (row: VoucherDisplayRow) => {
+    navigate(`/vouchers/create?printCodes=${row.vouchers.map((voucher) => voucher.id).join(",")}`);
+  };
+
+  const handleCopyDisplayRow = (row: VoucherDisplayRow) => {
+    const value = row.kind === "bundle" && row.batchId
+      ? row.batchId
+      : row.vouchers.map((voucher) => voucher.id).join(",");
+    navigator.clipboard.writeText(value);
+    toast.success(row.kind === "bundle" ? `Batch "${value}" copied to clipboard!` : `Voucher code "${value}" copied to clipboard!`);
   };
 
   // Delete multiple selected vouchers
@@ -811,6 +942,21 @@ export default function Vouchers() {
               </Button>
             ) : (
               <>
+                <div className="flex h-9 items-center gap-2 rounded border border-border bg-background px-3">
+                  <Boxes className="h-3.5 w-3.5 text-primary" />
+                  <Label htmlFor="bundle-view" className="text-xs font-medium text-muted-foreground">
+                    Bundle batches
+                  </Label>
+                  <Switch
+                    id="bundle-view"
+                    checked={showBatchBundles}
+                    onCheckedChange={(checked) => {
+                      setShowBatchBundles(checked);
+                      setSelectedVouchers([]);
+                      setCurrentPage(1);
+                    }}
+                  />
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
@@ -887,21 +1033,32 @@ export default function Vouchers() {
                       type="checkbox"
                       checked={
                         !showVoucherSkeleton &&
-                        paginatedVouchers.length > 0 &&
-                        paginatedVouchers.every((v) => selectedVouchers.includes(v.id))
+                        paginatedDisplayRows.length > 0 &&
+                        paginatedDisplayRows.every(rowIsSelected)
                       }
                       disabled={showVoucherSkeleton}
                       onChange={(e) => handleSelectAll(e.target.checked)}
                       className="rounded border-border text-primary focus:ring-primary bg-background w-4 h-4 cursor-pointer"
                     />
                   </TableHead>
-                  <TableHead className="py-3">Username (Code)</TableHead>
+                  <TableHead className="py-3">{showBatchBundles ? "Batch / Voucher" : "Username (Code)"}</TableHead>
                   <TableHead className="py-3">Package</TableHead>
                   <TableHead className="py-3">Status</TableHead>
-                  <TableHead className="py-3">First Login</TableHead>
-                  <TableHead className="py-3">Expires On</TableHead>
-                  <TableHead className="py-3">Use Case</TableHead>
-                  <TableHead className="py-3">Note / Ref</TableHead>
+                  {showBatchBundles ? (
+                    <>
+                      <TableHead className="py-3">Vouchers</TableHead>
+                      <TableHead className="py-3">Amount</TableHead>
+                      <TableHead className="hidden py-3 lg:table-cell">Use Case</TableHead>
+                      <TableHead className="hidden py-3 md:table-cell">Note / Ref</TableHead>
+                    </>
+                  ) : (
+                    <>
+                      <TableHead className="py-3">First Login</TableHead>
+                      <TableHead className="py-3">Expires On</TableHead>
+                      <TableHead className="py-3">Use Case</TableHead>
+                      <TableHead className="py-3">Note / Ref</TableHead>
+                    </>
+                  )}
                   <TableHead className="py-3">Created On</TableHead>
                   <TableHead className="py-3 text-right">Actions</TableHead>
                 </TableRow>
@@ -916,6 +1073,94 @@ export default function Vouchers() {
                       No access vouchers match the current filters.
                     </TableCell>
                   </TableRow>
+                ) : showBatchBundles ? (
+                  paginatedDisplayRows.map((row) => {
+                    const isRowSelected = rowIsSelected(row);
+                    const statusCounts = bundleStatusCounts(row.vouchers);
+                    return (
+                      <TableRow
+                        key={row.key}
+                        className={cn(
+                          "transition-colors hover:bg-muted/30",
+                          isRowSelected && "bg-primary/5 hover:bg-primary/10"
+                        )}
+                      >
+                        <TableCell className="text-center py-3.5">
+                          <input
+                            type="checkbox"
+                            checked={isRowSelected}
+                            onChange={(e) => handleSelectDisplayRow(row, e.target.checked)}
+                            className="rounded border-border text-primary focus:ring-primary bg-background w-4 h-4 cursor-pointer"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-mono font-bold text-foreground tracking-wider">{row.title}</div>
+                            <div className="text-[10px] text-muted-foreground">{row.routerName}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-medium">{row.packageName}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {statusCounts.map(([status, count]) => (
+                              <Badge
+                                key={status}
+                                className={cn(
+                                  "text-[10px] font-bold px-2 py-0.5 border-none tracking-wide rounded-full uppercase",
+                                  status === "Online" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                                  status === "Offline" && "bg-muted text-muted-foreground",
+                                  status === "Unactivated" && "bg-primary/10 text-primary",
+                                  status === "Sync Issue" && "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+                                  status === "Expired" && "bg-destructive/10 text-destructive"
+                                )}
+                              >
+                                {count} {status === "Unactivated" ? "PROVISIONED" : status === "Expired" ? "DEACTIVATED" : status}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-semibold">{row.vouchers.length.toLocaleString()}</TableCell>
+                        <TableCell className="font-bold">UGX {row.amount.toLocaleString()}</TableCell>
+                        <TableCell className="hidden text-muted-foreground lg:table-cell">{row.useCase}</TableCell>
+                        <TableCell className="hidden font-mono text-[10px] text-muted-foreground max-w-[170px] truncate md:table-cell" title={row.note}>
+                          {row.note}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{row.createdAt}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="inline-flex items-center gap-1.5">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleCopyDisplayRow(row)}
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              title={row.kind === "bundle" ? "Copy batch id" : "Copy code"}
+                            >
+                              <Clipboard className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handlePrintDisplayRow(row)}
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              title="Preview & print"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteDisplayRow(row)}
+                              disabled={deleteVoucherMutation.isPending || deleteBatchMutation.isPending}
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              title={row.kind === "bundle" ? "Delete batch" : "Delete voucher"}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   paginatedVouchers.map((voucher) => {
                     const isRowSelected = selectedVouchers.includes(voucher.id);
@@ -1013,7 +1258,7 @@ export default function Vouchers() {
           {/* Table Footer / Pagination */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-border bg-muted/10 text-muted-foreground text-xs">
             <div className="flex items-center gap-2">
-              <span>{selectedVouchers.length} of {filteredVouchers.length} row(s) selected</span>
+              <span>{selectedVouchers.length} voucher(s) selected - {displayRows.length} row(s)</span>
               {vouchersFetching && !showVoucherSkeleton && (
                 <span className="inline-flex items-center gap-1 text-primary">
                   <Loader2 className="h-3 w-3 animate-spin" />
