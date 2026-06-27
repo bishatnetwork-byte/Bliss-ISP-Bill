@@ -62,6 +62,14 @@ import { useBranchVouchers, useRouterActiveUsers, useRouters } from "@/hooks/use
 import { voucherUiStatus } from "@/lib/voucherStatus";
 import { usePhoneVerifed } from "@/hooks/usePhoneVerifed";
 
+function isActivatedVoucher(voucher: { activated_at?: string | null; status: string }) {
+    return Boolean(voucher.activated_at) || ["ACTIVE", "ONLINE", "OFFLINE", "EXPIRED"].includes(voucher.status);
+}
+
+function voucherSoldAt(voucher: { activated_at?: string | null; created_at: string }) {
+    return voucher.activated_at || voucher.created_at;
+}
+
 // ── Ugandan Phone Normalization & Verification Component ───────
 function normalizeUgandanPhone(phone: string): string | null {
     if (!phone) return null;
@@ -190,21 +198,21 @@ export default function SalesIndex() {
     const [sessions, setSessions] = useState<ActiveSession[]>(initialSessions);
 
     const branchId = localStorage.getItem("selected-workspace") || "biltra";
-    const { data: vouchersData, refetch: refetchVouchers, isFetching: vouchersRefreshing } = useBranchVouchers(branchId, { limit: 1000 });
+    const { data: vouchersData, refetch: refetchVouchers, isFetching: vouchersRefreshing } = useBranchVouchers(branchId, { limit: 1000, refresh_router_status: true });
     const { data: routers = [] } = useRouters(branchId);
     const firstRouterId = routers[0]?.id || "";
     const { data: activeUsersData, refetch: refetchActiveUsers } = useRouterActiveUsers(firstRouterId);
 
     useEffect(() => {
         if (vouchersData?.vouchers) {
-            const mappedSales: SalesRecord[] = vouchersData.vouchers.map((voucher) => ({
+            const mappedSales: SalesRecord[] = vouchersData.vouchers.filter(isActivatedVoucher).map((voucher) => ({
                 id: voucher.id,
                 router: voucher.router_name,
                 voucherCode: voucher.voucher_code,
                 profile: `${voucher.speed_type} ${voucher.profile}`,
                 amount: voucher.amount,
-                activatedAt: voucher.status === "ACTIVE" ? voucher.created_at : "N/A",
-                expiresAt: ["EXPIRED", "ROUTER_MISSING"].includes(voucher.status) ? voucher.created_at : "N/A",
+                activatedAt: voucherSoldAt(voucher).replace("T", " ").substring(0, 19),
+                expiresAt: voucher.expires_at?.replace("T", " ").substring(0, 19) || "N/A",
                 status: voucherUiStatus(voucher.status),
                 paymentMode: voucher.phone_number === "BULK" || voucher.payment_reference?.startsWith("BAT-") ? "Voucher Printing" : "Online Payment",
                 paymentMethod: voucher.phone_number === "BULK" || voucher.payment_reference?.startsWith("BAT-") ? "Cash" : "MTN Mobile Money",
@@ -214,7 +222,7 @@ export default function SalesIndex() {
                 transactionId: voucher.payment_reference || voucher.id.slice(0, 10).toUpperCase(),
                 deviceMac: "N/A",
                 bytesUsed: voucher.data || "N/A",
-                createdDate: voucher.created_at.slice(0, 10),
+                createdDate: voucherSoldAt(voucher).slice(0, 10),
             }));
             setSales(mappedSales);
         }

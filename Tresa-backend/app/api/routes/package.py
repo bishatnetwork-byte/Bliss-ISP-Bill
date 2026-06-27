@@ -106,6 +106,10 @@ def branch_router_names(session: SessionDep, branch_id: UUID) -> list[str]:
     return [normalize_router_name(router.name) for router in routers]
 
 
+def branch_routers(session: SessionDep, branch_id: UUID) -> list[Router]:
+    return session.exec(select(Router).where(Router.branch_id == branch_id)).all()
+
+
 def get_owned_package(session: SessionDep, router: Router, package_id: int) -> RouterPackage:
     package = session.get(RouterPackage, package_id)
     if not package or package.router_id != router.id:
@@ -549,13 +553,7 @@ def _record_voucher_lifecycle_audit(
     ))
 
 
-@router.post("/routers/{router_id}/vouchers/fetch", response_model=VoucherRouterSyncResponse)
-def fetch_router_vouchers_into_database(
-    router_id: UUID,
-    user: CurrentUser,
-    session: SessionDep,
-) -> VoucherRouterSyncResponse:
-    db_router = check_router_ownership(session, router_id, user.id)
+def _fetch_router_vouchers_into_database(session: Session, db_router: Router) -> VoucherRouterSyncResponse:
     result = get_hotspot_vouchers(db_router)
     if not result["connected"]:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result["error"] or "Router is unavailable")
@@ -662,6 +660,16 @@ def fetch_router_vouchers_into_database(
         imported=imported,
         updated=updated,
     )
+
+
+@router.post("/routers/{router_id}/vouchers/fetch", response_model=VoucherRouterSyncResponse)
+def fetch_router_vouchers_into_database(
+    router_id: UUID,
+    user: CurrentUser,
+    session: SessionDep,
+) -> VoucherRouterSyncResponse:
+    db_router = check_router_ownership(session, router_id, user.id)
+    return _fetch_router_vouchers_into_database(session, db_router)
 
 
 @router.post("/routers/{router_id}/vouchers/sync", response_model=VoucherRouterSyncResponse)
@@ -865,11 +873,22 @@ def list_branch_vouchers(
     offset: int = Query(default=0, ge=0),
     search: str | None = Query(default=None, max_length=120),
     status_filter: str | None = Query(default=None, max_length=40),
+    refresh_router_status: bool = Query(default=False),
 ) -> VoucherListResponse:
     check_branch_ownership(session, branch_id, user.id)
-    router_names = branch_router_names(session, branch_id)
+    routers = branch_routers(session, branch_id)
+    router_names = [normalize_router_name(router.name) for router in routers]
     if not router_names:
         return VoucherListResponse(success=True, total=0, vouchers=[])
+
+    if refresh_router_status:
+        for db_router in routers:
+            try:
+                _fetch_router_vouchers_into_database(session, db_router)
+            except HTTPException:
+                continue
+            except Exception:
+                continue
 
     branch_filter = col(VoucherPurchase.router_name).in_(router_names)
     for router_name in router_names:

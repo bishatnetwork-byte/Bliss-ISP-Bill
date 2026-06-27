@@ -89,7 +89,11 @@ function LiveBadge() {
 }
 
 function isActivatedVoucher(voucher: { activated_at?: string | null; status: string }) {
-  return Boolean(voucher.activated_at) || voucher.status === "ACTIVE" || voucher.status === "EXPIRED";
+  return Boolean(voucher.activated_at) || ["ACTIVE", "ONLINE", "OFFLINE", "EXPIRED"].includes(voucher.status);
+}
+
+function voucherSoldAt(voucher: { activated_at?: string | null; created_at: string }) {
+  return voucher.activated_at || voucher.created_at;
 }
 
 // Small bar-chart glyph used in place of a static icon on the stat cards.
@@ -187,7 +191,7 @@ export default function Dashboard() {
     queryFn: () => renultApi.subscriptions.list({ limit: 5, active_only: true }),
   });
   // Fetch branch vouchers (up to 1000) for recent purchases and heatmap metrics
-  const { data: vouchersData, isLoading: isVouchersLoading } = useBranchVouchers(branchId, { limit: 1000 });
+  const { data: vouchersData, isLoading: isVouchersLoading } = useBranchVouchers(branchId, { limit: 1000, refresh_router_status: true });
 
   // Active hotspot users and live router status across every router in the branch.
   const activeUsersQueries = useBranchActiveUsers(routers);
@@ -223,13 +227,13 @@ export default function Dashboard() {
   const chartData = useMemo(() => {
     const grouped: Record<string, { sales: number; responses: number; sortKey: string }> = {};
     (vouchersData?.vouchers || []).forEach((voucher) => {
-      const date = new Date(voucher.created_at);
-      const sortKey = voucher.created_at.slice(0, 10);
+      if (!isActivatedVoucher(voucher)) return;
+      const soldAt = voucherSoldAt(voucher);
+      const date = new Date(soldAt);
+      const sortKey = soldAt.slice(0, 10);
       const key = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
       if (!grouped[key]) grouped[key] = { sales: 0, responses: 0, sortKey };
-      if (isActivatedVoucher(voucher)) {
-        grouped[key].sales += voucher.amount;
-      }
+      grouped[key].sales += voucher.amount;
       grouped[key].responses += 1;
     });
     return Object.entries(grouped)
@@ -241,22 +245,26 @@ export default function Dashboard() {
   const todayVoucherSales = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     return (vouchersData?.vouchers || [])
-      .filter((voucher) => voucher.created_at.slice(0, 10) === today)
       .filter(isActivatedVoucher)
+      .filter((voucher) => voucherSoldAt(voucher).slice(0, 10) === today)
       .reduce((sum, voucher) => sum + voucher.amount, 0);
   }, [vouchersData]);
 
   // Derive recent voucher-style rows from real vouchers data
   const recentVouchers = useMemo(() => {
     if (!vouchersData?.vouchers) return [];
-    return vouchersData.vouchers.slice(0, 5).map((v) => ({
+    return vouchersData.vouchers
+      .filter(isActivatedVoucher)
+      .sort((a, b) => voucherSoldAt(b).localeCompare(voucherSoldAt(a)))
+      .slice(0, 5)
+      .map((v) => ({
       id: v.voucher_code,
       buyerName: v.phone_number === "BULK" ? "Bulk Generated" : `Customer (${v.phone_number})`,
       email: v.phone_number === "BULK" ? "bulk@tresa.com" : `${v.phone_number}@tresa.com`,
       phone: v.phone_number === "BULK" ? "N/A" : v.phone_number,
       packageName: `${v.speed_type} ${v.profile}`,
       pricePaid: v.amount,
-      purchaseTime: v.created_at,
+      purchaseTime: voucherSoldAt(v),
       status: voucherUiStatus(v.status),
       paymentMethod: (v.payment_reference?.startsWith("BAT-") ? "M-Pesa" : "Stripe") as any,
     }));
@@ -286,7 +294,8 @@ export default function Dashboard() {
 
     if (vouchersData?.vouchers) {
       vouchersData.vouchers.forEach((v) => {
-        const dateStr = v.created_at.split("T")[0];
+        if (!isActivatedVoucher(v)) return;
+        const dateStr = voucherSoldAt(v).split("T")[0];
         const cell = cells.find((c) => c.dateStr === dateStr);
         if (cell) {
           cell.count += 1;
@@ -340,10 +349,11 @@ export default function Dashboard() {
 
     return rows.map((row) => {
       const vouchers = (vouchersData?.vouchers || []).filter((voucher) => {
-        const createdAt = new Date(voucher.created_at);
-        return createdAt >= row.start && createdAt < row.end;
+        if (!isActivatedVoucher(voucher)) return false;
+        const soldAt = new Date(voucherSoldAt(voucher));
+        return soldAt >= row.start && soldAt < row.end;
       });
-      const activated = vouchers.filter(isActivatedVoucher);
+      const activated = vouchers;
       const cash = activated
         .filter((voucher) => !voucher.payment_reference || voucher.payment_reference.startsWith("BAT-"))
         .reduce((sum, voucher) => sum + voucher.amount, 0);
@@ -367,19 +377,19 @@ export default function Dashboard() {
   const paymentChartData = useMemo(() => {
     const grouped: Record<string, { date: string; sortKey: string; cash: number; mobileMoney: number; total: number; tans: number }> = {};
     (vouchersData?.vouchers || []).forEach((voucher) => {
-      const createdAt = new Date(voucher.created_at);
-      const sortKey = voucher.created_at.slice(0, 10);
+      if (!isActivatedVoucher(voucher)) return;
+      const soldAt = voucherSoldAt(voucher);
+      const createdAt = new Date(soldAt);
+      const sortKey = soldAt.slice(0, 10);
       const date = createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
       if (!grouped[date]) grouped[date] = { date, sortKey, cash: 0, mobileMoney: 0, total: 0, tans: 0 };
-      if (isActivatedVoucher(voucher)) {
-        const amount = voucher.amount ?? 0;
-        if (!voucher.payment_reference || voucher.payment_reference.startsWith("BAT-")) {
-          grouped[date].cash += amount;
-        } else {
-          grouped[date].mobileMoney += amount;
-        }
-        grouped[date].total += amount;
+      const amount = voucher.amount ?? 0;
+      if (!voucher.payment_reference || voucher.payment_reference.startsWith("BAT-")) {
+        grouped[date].cash += amount;
+      } else {
+        grouped[date].mobileMoney += amount;
       }
+      grouped[date].total += amount;
       grouped[date].tans += 1;
     });
     return Object.values(grouped).sort((a, b) => a.sortKey.localeCompare(b.sortKey)).slice(-7);

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import AppHeader from "@/components/Header/AppHeader";
 import SEO from "@/components/SEO";
 import { Badge } from "@/components/ui/badge";
@@ -153,16 +154,16 @@ export default function ActiveUsers() {
       <SEO title="Active Users" />
       <AppHeader onCreateForm={() => { }} />
 
-      <main className="max-w-screen mx-auto px-4 sm:px-6 py-6 space-y-5">
+      <main className="w-full max-w-screen mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-5">
         {/* Page header */}
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-3">
 
-            <div>
-              <h1 className="text-lg font-bold flex items-center gap-2">
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold flex items-center gap-2">
                 Active Hotspot Sessions
               </h1>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
                 Devices currently connected via vouchers, across every router in this branch.
               </p>
             </div>
@@ -170,7 +171,7 @@ export default function ActiveUsers() {
 
           <Badge
             variant="outline"
-            className="bg-primary/5 text-primary border-primary/20 font-bold text-sm px-3 py-1"
+            className="bg-primary/5 text-primary border-primary/20 font-bold text-sm px-3 py-1 w-fit"
           >
             {activeUsersLoading ? "..." : `${activeUsers.length} Online`}
           </Badge>
@@ -178,13 +179,13 @@ export default function ActiveUsers() {
 
         {/* Sessions table */}
         <Card className="border border-border/30 shadow-sm bg-card rounded-none">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between text-sm font-bold tracking-tight text-foreground">
-              Live Sessions
+          <CardHeader className="pb-3 px-3 sm:px-6">
+            <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm font-bold tracking-tight text-foreground">
+              <span>Live Sessions</span>
               <Button
                 variant="default"
                 size="sm"
-                className="h-9"
+                className="h-9 w-full sm:w-auto"
                 onClick={handleRefresh}
                 disabled={activeUsersRefreshing}
               >
@@ -196,8 +197,8 @@ export default function ActiveUsers() {
               Real-time view, refreshes automatically when data changes.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto border border-border/20 rounded-md">
+          <CardContent className="px-3 sm:px-6">
+            <div className="hidden md:block overflow-x-auto border border-border/20 rounded-md">
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow>
@@ -279,6 +280,77 @@ export default function ActiveUsers() {
                   )}
                 </TableBody>
               </Table>
+            </div>
+
+            <div className="md:hidden">
+              {activeUsersLoading ? (
+                <div className="h-52 border border-border/20 rounded-md flex flex-col items-center justify-center text-muted-foreground">
+                  <Loader2 className="w-6 h-6 mb-2 animate-spin" />
+                  <span className="text-sm font-semibold">Loading active sessions…</span>
+                </div>
+              ) : activeUsers.length === 0 ? (
+                <div className="h-52 border border-border/20 rounded-md flex flex-col items-center justify-center text-center text-muted-foreground px-4">
+                  <WifiOff className="w-10 h-10 mb-2 stroke-[1.5] text-muted-foreground/60" />
+                  <span className="text-sm font-semibold">No active sessions</span>
+                  <span className="text-xs mt-0.5">
+                    Connected hotspot clients will appear here in real time.
+                  </span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activeUsers.map((session) => (
+                    <div
+                      key={session.id}
+                      className="border border-border/20 rounded-md bg-background p-3 space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-foreground truncate">{session.device}</p>
+                          <p className="text-[11px] font-mono text-muted-foreground truncate">{session.ip}</p>
+                        </div>
+                        <Badge variant="outline" className="shrink-0 max-w-[45%] truncate text-[10px]">
+                          {session.routerName}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold text-muted-foreground">Voucher</p>
+                          <p className="font-mono font-semibold text-primary truncate">{session.user}</p>
+                        </div>
+                        <div className="min-w-0 text-right">
+                          <p className="text-[10px] font-semibold text-muted-foreground">Uptime</p>
+                          <p className="font-mono text-muted-foreground truncate">{session.uptime}</p>
+                        </div>
+                        <div className="col-span-2 min-w-0">
+                          <p className="text-[10px] font-semibold text-muted-foreground">MAC Address</p>
+                          <p className="font-mono text-muted-foreground truncate">{session.mac}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 rounded-md bg-muted/30 px-3 py-2 text-xs">
+                        <span className="font-bold text-emerald-600 truncate">↑ {session.uploaded}</span>
+                        <span className="font-bold text-blue-600 truncate">↓ {session.downloaded}</span>
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 w-full gap-1.5 text-xs text-destructive hover:text-destructive"
+                        onClick={() => handleKickOut(session)}
+                        disabled={kickActiveUser.isPending}
+                      >
+                        {kickActiveUser.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <UserX className="h-3.5 w-3.5" />
+                        )}
+                        Kick out
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

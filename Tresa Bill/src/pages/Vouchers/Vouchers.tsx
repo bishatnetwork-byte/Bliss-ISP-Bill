@@ -26,7 +26,6 @@ import {
   useDeleteRouterVoucherBatch,
   useFetchRouterVouchers,
   useRouters,
-  useSyncRouterVouchers,
   useQueueRouterVouchers,
   useVoucherJob,
   useRouterPackages,
@@ -122,7 +121,7 @@ export default function Vouchers() {
 
   // API Hooks
   const { data: routers = [], isLoading: routersLoading } = useRouters(branchId);
-  const { data: branchVouchersResponse, isLoading: vouchersLoading } = useBranchVouchers(branchId, { limit: 1000 });
+  const { data: branchVouchersResponse, isLoading: vouchersLoading } = useBranchVouchers(branchId, { limit: 1000, refresh_router_status: true });
   const [selectedRouterId, setSelectedRouterId] = useState<string>("");
   const selectedRouter = routers.find((router) => router.id === selectedRouterId);
 
@@ -149,7 +148,7 @@ export default function Vouchers() {
   // Mutations
   const deleteVoucherMutation = useDeleteRouterVoucher(branchId);
   const deleteBatchMutation = useDeleteRouterVoucherBatch(branchId);
-  const syncRouterVouchers = useSyncRouterVouchers(selectedRouterId, branchId);
+  const fetchRouterVouchers = useFetchRouterVouchers(selectedRouterId, branchId);
   const checkExpiredVouchers = useCheckExpiredRouterVouchers(selectedRouterId, branchId);
   const deleteExpiredVouchers = useDeleteExpiredRouterVouchers(selectedRouterId, branchId);
   const queueVouchersMutation = useQueueRouterVouchers(selectedRouterId);
@@ -418,10 +417,10 @@ export default function Vouchers() {
       toast.error("Please select a target router first.");
       return;
     }
-    toast.promise(syncRouterVouchers.mutateAsync(), {
-      loading: "Synchronizing vouchers with MikroTik...",
-      success: "Vouchers successfully synchronized!",
-      error: "Failed to sync vouchers.",
+    toast.promise(fetchRouterVouchers.mutateAsync(), {
+      loading: "Checking MikroTik for used and activated vouchers...",
+      success: (result) => `Recorded voucher activity from ${result.router_name}: ${result.updated} updated, ${result.imported} imported.`,
+      error: "Failed to check voucher activity.",
     });
   };
 
@@ -648,15 +647,15 @@ export default function Vouchers() {
               variant="outline"
               size="sm"
               onClick={handleSyncVouchers}
-              disabled={syncRouterVouchers.isPending || !selectedRouterId}
+              disabled={fetchRouterVouchers.isPending || !selectedRouterId}
               className="h-9 gap-1.5 text-xs"
             >
-              {syncRouterVouchers.isPending ? (
+              {fetchRouterVouchers.isPending ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <RefreshCw className="w-3.5 h-3.5" />
               )}
-              Sync Router
+              Verify Activity
             </Button>
 
             <Button

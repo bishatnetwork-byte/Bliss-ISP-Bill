@@ -1798,7 +1798,7 @@ export const renultApi = {
       apiRequest<VoucherDeleteResponse>(`/routers/${routerId}/vouchers/${encodeURIComponent(voucherCode)}`, { method: "DELETE" }),
     deleteVoucherBatch: (routerId: string, batchId: string) =>
       apiRequest<VoucherDeleteResponse>(`/routers/${routerId}/voucher-batches/${encodeURIComponent(batchId)}`, { method: "DELETE" }),
-    branchVouchers: (branchId: string, query?: { limit?: number; offset?: number; search?: string; status_filter?: string }) =>
+    branchVouchers: (branchId: string, query?: { limit?: number; offset?: number; search?: string; status_filter?: string; refresh_router_status?: boolean }) =>
       apiRequest<VoucherListResponse>(`/branches/${branchId}/vouchers`, { query }),
     supportSummary: (branchId: string) =>
       apiRequest<VoucherSupportSummaryResponse>(`/branches/${branchId}/voucher-support-summary`),

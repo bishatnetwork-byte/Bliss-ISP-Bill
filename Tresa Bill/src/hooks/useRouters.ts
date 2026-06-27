@@ -428,7 +428,7 @@ export function useDeleteRouterVoucherBatch(branchId: string) {
   });
 }
 
-export function useBranchVouchers(branchId: string, query?: { limit?: number; offset?: number; search?: string; status_filter?: string }) {
+export function useBranchVouchers(branchId: string, query?: { limit?: number; offset?: number; search?: string; status_filter?: string; refresh_router_status?: boolean }) {
   return useQuery({
     queryKey: ["branchVouchers", branchId, query],
     queryFn: () => renultApi.packages.branchVouchers(branchId, query),

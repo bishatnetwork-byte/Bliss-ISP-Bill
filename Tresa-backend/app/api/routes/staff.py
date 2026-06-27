@@ -139,6 +139,10 @@ def branch_revenue_share(
         voucher_sales = int(session.exec(
             select(func.coalesce(func.sum(VoucherPurchase.amount), 0))
             .where(col(VoucherPurchase.router_name).in_(normalized_names))
+            .where(
+                (VoucherPurchase.activated_at.is_not(None))
+                | (col(VoucherPurchase.status).in_(["ACTIVE", "ONLINE", "OFFLINE", "EXPIRED"]))
+            )
         ).one())
     gross_sales = voucher_sales
     staff_rows = session.exec(
