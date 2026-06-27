@@ -428,7 +428,11 @@ export function useDeleteRouterVoucherBatch(branchId: string) {
   });
 }
 
-export function useBranchVouchers(branchId: string, query?: { limit?: number; offset?: number; search?: string; status_filter?: string; refresh_router_status?: boolean }) {
+export function useBranchVouchers(
+  branchId: string,
+  query?: { limit?: number; offset?: number; search?: string; status_filter?: string; refresh_router_status?: boolean },
+  options?: { staleTime?: number; gcTime?: number; refetchInterval?: number | false; refetchOnWindowFocus?: boolean }
+) {
   return useQuery({
     queryKey: ["branchVouchers", branchId, query],
     queryFn: async () => {
@@ -441,7 +445,10 @@ export function useBranchVouchers(branchId: string, query?: { limit?: number; of
     },
     enabled: !!branchId,
     retry: 1,
-    refetchInterval: 30000,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+    refetchInterval: options?.refetchInterval ?? 30000,
+    refetchOnWindowFocus: options?.refetchOnWindowFocus,
   });
 }
 

@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   useBranchActiveUsers,
@@ -102,6 +103,35 @@ function useIsMobile() {
   return isMobile;
 }
 
+function VoucherTableSkeleton({ rows = 10 }: { rows?: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }).map((_, index) => (
+        <TableRow key={index} className="border-b border-border/70">
+          <TableCell className="text-center py-3.5">
+            <Skeleton className="mx-auto h-4 w-4 rounded" />
+          </TableCell>
+          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+          <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-36" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+          <TableCell>
+            <div className="flex justify-end gap-1.5">
+              <Skeleton className="h-8 w-8 rounded" />
+              <Skeleton className="h-8 w-8 rounded" />
+              <Skeleton className="h-8 w-8 rounded" />
+            </div>
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+}
+
 export default function Vouchers() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -127,7 +157,20 @@ export default function Vouchers() {
 
   // API Hooks
   const { data: routers = [], isLoading: routersLoading } = useRouters(branchId);
-  const { data: branchVouchersResponse, isLoading: vouchersLoading } = useBranchVouchers(branchId, { limit: 1000, refresh_router_status: true });
+  const {
+    data: branchVouchersResponse,
+    isLoading: vouchersLoading,
+    isFetching: vouchersFetching,
+  } = useBranchVouchers(
+    branchId,
+    { limit: 1000 },
+    {
+      staleTime: 2 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+      refetchInterval: false,
+      refetchOnWindowFocus: false,
+    },
+  );
   const activeUsersQueries = useBranchActiveUsers(routers);
   const [selectedRouterId, setSelectedRouterId] = useState<string>("");
   const selectedRouter = routers.find((router) => router.id === selectedRouterId);
@@ -346,6 +389,7 @@ export default function Vouchers() {
   }, [filteredVouchers, currentPage, rowsPerPage]);
 
   const totalPages = Math.ceil(filteredVouchers.length / rowsPerPage) || 1;
+  const showVoucherSkeleton = vouchersLoading && !branchVouchersResponse?.vouchers?.length;
 
   // Handle pagination navigation
   const handlePageChange = (page: number) => {
@@ -842,9 +886,11 @@ export default function Vouchers() {
                     <input
                       type="checkbox"
                       checked={
+                        !showVoucherSkeleton &&
                         paginatedVouchers.length > 0 &&
                         paginatedVouchers.every((v) => selectedVouchers.includes(v.id))
                       }
+                      disabled={showVoucherSkeleton}
                       onChange={(e) => handleSelectAll(e.target.checked)}
                       className="rounded border-border text-primary focus:ring-primary bg-background w-4 h-4 cursor-pointer"
                     />
@@ -861,13 +907,8 @@ export default function Vouchers() {
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-border text-xs text-foreground/95">
-                {vouchersLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={10} className="py-12 text-center text-muted-foreground font-semibold">
-                      <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-primary" />
-                      Loading vouchers registry...
-                    </TableCell>
-                  </TableRow>
+                {showVoucherSkeleton ? (
+                  <VoucherTableSkeleton rows={rowsPerPage} />
                 ) : filteredVouchers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={10} className="py-12 text-center text-muted-foreground font-medium">
@@ -971,8 +1012,14 @@ export default function Vouchers() {
 
           {/* Table Footer / Pagination */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-border bg-muted/10 text-muted-foreground text-xs">
-            <div>
-              {selectedVouchers.length} of {filteredVouchers.length} row(s) selected
+            <div className="flex items-center gap-2">
+              <span>{selectedVouchers.length} of {filteredVouchers.length} row(s) selected</span>
+              {vouchersFetching && !showVoucherSkeleton && (
+                <span className="inline-flex items-center gap-1 text-primary">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Refreshing cache
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-6">

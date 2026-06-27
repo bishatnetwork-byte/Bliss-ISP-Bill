@@ -68,8 +68,8 @@ function formatMoney(value: number) {
 }
 
 function batchId(voucher: VoucherBatchItemResponse) {
-  const ref = voucher.payment_reference || "";
-  return ref.startsWith("BAT-") ? ref : "";
+  const ref = String(voucher.payment_reference || "").trim();
+  return ref.toUpperCase().startsWith("BAT-") ? ref : "";
 }
 
 function findRouter(routers: RouterResponse[], routerName: string) {
@@ -118,7 +118,13 @@ export default function TrashBucket() {
 
   const vouchersQuery = useQuery({
     queryKey: ["trashVouchers", branchId],
-    queryFn: () => renultApi.packages.branchVouchers(branchId, { limit: 3000 }),
+    queryFn: async () => {
+      try {
+        return await renultApi.packages.branchVouchers(branchId, { limit: 1000, refresh_router_status: true });
+      } catch {
+        return renultApi.packages.branchVouchers(branchId, { limit: 1000 });
+      }
+    },
     enabled: !!branchId,
     staleTime: STALE_TIME,
     gcTime: CACHE_TIME,
@@ -361,6 +367,10 @@ export default function TrashBucket() {
           <CardContent className="p-0">
             {isLoading ? (
               <TrashSkeleton mode={mode} />
+            ) : vouchersQuery.isError ? (
+              <div className="flex h-36 items-center justify-center px-4 text-center text-sm text-destructive">
+                Could not load vouchers for this branch. Try refreshing the Trash Bucket.
+              </div>
             ) : mode === "batches" ? (
               <div className="overflow-x-auto">
                 <Table>
