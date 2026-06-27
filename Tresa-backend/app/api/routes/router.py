@@ -71,6 +71,7 @@ from app.services.routers.routeros import (
     get_router_logs,
     get_router_features,
     get_router_status,
+    kick_active_hotspot_user,
     create_hotspot_ip_binding,
     delete_hotspot_ip_binding,
     ping_tcp,
@@ -453,6 +454,23 @@ def router_active_users(
         router_name=db_router.name,
         **result,
     )
+
+
+@router.delete("/routers/{router_id}/active-users/{active_id}", response_model=MessageResponse)
+def router_kick_active_user(
+    router_id: UUID,
+    active_id: str,
+    user: CurrentUser,
+    session: SessionDep,
+) -> MessageResponse:
+    db_router = get_router_with_ownership(session, router_id, user.id)
+    result = kick_active_hotspot_user(db_router, active_id)
+    if not result["connected"]:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=result["error"] or "Failed to kick out hotspot session",
+        )
+    return MessageResponse(message=result["message"])
 
 
 @router.get("/routers/{router_id}/vouchers", response_model=RouterVouchersResponse)

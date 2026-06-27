@@ -4,14 +4,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useBranchActiveUsers, useRouters } from "@/hooks/useRouters";
+import { useBranchActiveUsers, useKickActiveUser, useRouters } from "@/hooks/useRouters";
 import { cn } from "@/lib/utils";
-import { Activity, ArrowLeft, Loader2, RefreshCw, WifiOff } from "lucide-react";
+import { Loader2, RefreshCw, UserX, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 interface ActiveSession {
   id: string;
+  activeId: string;
+  routerId: string;
   routerName: string;
   device: string;
   ip: string;
@@ -20,6 +23,47 @@ interface ActiveSession {
   uptime: string;
   uploaded: string;
   downloaded: string;
+}
+
+function parseRouterBytes(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const raw = String(value ?? "0").trim();
+  const numeric = Number(raw.replace(/[^0-9.]/g, ""));
+  if (!Number.isFinite(numeric)) return 0;
+
+  const unit = raw.replace(/[0-9.,\s]/g, "").toLowerCase();
+  if (unit.startsWith("g")) return numeric * 1024 * 1024 * 1024;
+  if (unit.startsWith("m")) return numeric * 1024 * 1024;
+  if (unit.startsWith("k")) return numeric * 1024;
+  return numeric;
+}
+
+function formatDataUsage(value: unknown): string {
+  const bytes = parseRouterBytes(value);
+  const gb = bytes / (1024 * 1024 * 1024);
+  const mb = bytes / (1024 * 1024);
+
+  if (gb >= 1) return `${gb.toFixed(gb >= 10 ? 1 : 2)} GB`;
+  if (mb >= 1) return `${mb.toFixed(mb >= 10 ? 1 : 2)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${Math.round(bytes)} B`;
+}
+
+function getDeviceName(item: Record<string, any>): string {
+  const name =
+    item["device-name"] ||
+    item["host-name"] ||
+    item["dhcp-host-name"] ||
+    item.hostname ||
+    item["dhcp-comment"] ||
+    item.comment;
+
+  if (name) return String(name);
+  return "Unknown phone";
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 export default function ActiveUsers() {
@@ -50,26 +94,54 @@ export default function ActiveUsers() {
   const { data: routers = [] } = useRouters(branchId);
 
   const activeUsersQueries = useBranchActiveUsers(routers);
+  const kickActiveUser = useKickActiveUser();
   const activeUsersLoading =
     routers.length > 0 && activeUsersQueries.some((q) => q.isLoading);
+  const activeUsersRefreshing = activeUsersQueries.some((q) => q.isFetching);
 
   const activeUsers: ActiveSession[] = useMemo(() => {
     return activeUsersQueries.flatMap((query, index) => {
       const router = routers[index];
       const items = query.data?.active_users || [];
-      return items.map((item, itemIndex) => ({
-        id: `${router.id}-${item[".id"] || item.id || itemIndex}`,
-        routerName: router.name,
-        device: String(item["login-by"] || item["server"] || "Hotspot client"),
-        ip: String(item.address || "N/A"),
-        mac: String(item["mac-address"] || "N/A"),
-        user: String(item.user || item.name || "N/A"),
-        uptime: String(item.uptime || "N/A"),
-        uploaded: String(item["bytes-in"] || "0 B"),
-        downloaded: String(item["bytes-out"] || "0 B"),
-      }));
+      return items.map((item, itemIndex) => {
+        const activeId = String(item[".id"] || item.id || itemIndex);
+        return {
+          id: `${router.id}-${activeId}`,
+          activeId,
+          routerId: router.id,
+          routerName: router.name,
+          device: getDeviceName(item),
+          ip: String(item.address || "N/A"),
+          mac: String(item["mac-address"] || "N/A"),
+          user: String(item.user || item.name || "N/A"),
+          uptime: String(item.uptime || "N/A"),
+          uploaded: formatDataUsage(item["bytes-in"]),
+          downloaded: formatDataUsage(item["bytes-out"]),
+        };
+      });
     });
   }, [activeUsersQueries, routers]);
+
+  const handleRefresh = () => {
+    activeUsersQueries.forEach((query) => query.refetch());
+  };
+
+  const handleKickOut = async (session: ActiveSession) => {
+    const confirmed = window.confirm(
+      `Kick out ${session.user} from ${session.routerName}?\n\nThis will immediately remove the active hotspot session for ${session.mac}.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await kickActiveUser.mutateAsync({
+        routerId: session.routerId,
+        activeId: session.activeId,
+      });
+      toast.success(`${session.user} kicked out successfully.`);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to kick out session."));
+    }
+  };
 
   return (
     <div
@@ -113,8 +185,10 @@ export default function ActiveUsers() {
                 variant="default"
                 size="sm"
                 className="h-9"
+                onClick={handleRefresh}
+                disabled={activeUsersRefreshing}
               >
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className={cn("h-4 w-4", activeUsersRefreshing && "animate-spin")} />
                 Refresh
               </Button>
             </CardTitle>
@@ -133,12 +207,13 @@ export default function ActiveUsers() {
                     <TableHead className="font-bold text-xs  text-foreground">Voucher Code</TableHead>
                     <TableHead className="font-bold text-xs  text-foreground">TX / RX</TableHead>
                     <TableHead className="font-bold text-xs  text-foreground text-right">Uptime</TableHead>
+                    <TableHead className="font-bold text-xs  text-foreground text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {activeUsersLoading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-52 text-center">
+                      <TableCell colSpan={7} className="h-52 text-center">
                         <div className="flex flex-col items-center justify-center text-muted-foreground">
                           <Loader2 className="w-6 h-6 mb-2 animate-spin" />
                           <span className="text-sm font-semibold">Loading active sessions…</span>
@@ -147,7 +222,7 @@ export default function ActiveUsers() {
                     </TableRow>
                   ) : activeUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-52 text-center">
+                      <TableCell colSpan={7} className="h-52 text-center">
                         <div className="flex flex-col items-center justify-center text-muted-foreground">
                           <WifiOff className="w-10 h-10 mb-2 stroke-[1.5] text-muted-foreground/60" />
                           <span className="text-sm font-semibold">No active sessions</span>
@@ -182,6 +257,22 @@ export default function ActiveUsers() {
                         </TableCell>
                         <TableCell className="text-right text-xs font-mono text-muted-foreground">
                           {session.uptime}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1.5 text-xs text-destructive hover:text-destructive"
+                            onClick={() => handleKickOut(session)}
+                            disabled={kickActiveUser.isPending}
+                          >
+                            {kickActiveUser.isPending ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <UserX className="h-3.5 w-3.5" />
+                            )}
+                            Kick out
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))

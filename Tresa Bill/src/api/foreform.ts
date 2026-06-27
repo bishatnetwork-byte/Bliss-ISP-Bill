@@ -1679,6 +1679,8 @@ export const renultApi = {
       apiRequest<RouterFeaturesResponse>(`/routers/${routerId}/features`),
     activeUsers: (routerId: string) =>
       apiRequest<RouterActiveUsersResponse>(`/routers/${routerId}/active-users`),
+    kickActiveUser: (routerId: string, activeId: string) =>
+      apiRequest<{ message: string }>(`/routers/${routerId}/active-users/${encodeURIComponent(activeId)}`, { method: "DELETE" }),
     vouchers: (routerId: string) =>
       apiRequest<RouterVouchersResponse>(`/routers/${routerId}/vouchers`),
     ipBindings: (routerId: string) =>

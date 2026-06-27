@@ -122,6 +122,17 @@ export function useBranchActiveUsers(routers: RouterResponse[]) {
   });
 }
 
+export function useKickActiveUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ routerId, activeId }: { routerId: string; activeId: string }) =>
+      renultApi.routers.kickActiveUser(routerId, activeId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["routerActiveUsers", variables.routerId] });
+    },
+  });
+}
+
 // Aggregates live router status (interfaces, dhcp leases, etc.) across every router in a branch.
 export function useBranchRouterStatus(routers: RouterResponse[]) {
   return useQueries({

@@ -114,6 +114,10 @@ def _safe_resource_list(api: Any, path: str) -> dict[str, Any]:
         return {"items": [], "error": str(exc)}
 
 
+def _clean_router_value(value: Any) -> str:
+    return str(value or "").strip()
+
+
 def enable_snmp(router: Router) -> None:
     """Enable restricted SNMP v2c monitoring and its tunnel firewall rule."""
     with router_connection(router) as api:
@@ -227,6 +231,29 @@ def get_active_hotspot_users(router: Router) -> dict[str, Any]:
     try:
         with router_connection(router) as api:
             active_users = _resource_list(api, "/ip/hotspot/active")
+            dhcp_leases = _safe_resource_list(api, "/ip/dhcp-server/lease")["items"]
+            leases_by_mac = {
+                _clean_router_value(item.get("mac-address")).lower(): item
+                for item in dhcp_leases
+                if _clean_router_value(item.get("mac-address"))
+            }
+            leases_by_address = {
+                _clean_router_value(item.get("address")): item
+                for item in dhcp_leases
+                if _clean_router_value(item.get("address"))
+            }
+
+            for user in active_users:
+                mac = _clean_router_value(user.get("mac-address")).lower()
+                address = _clean_router_value(user.get("address"))
+                lease = leases_by_mac.get(mac) or leases_by_address.get(address)
+                if lease:
+                    host_name = _clean_router_value(lease.get("host-name"))
+                    comment = _clean_router_value(lease.get("comment"))
+                    user["dhcp-host-name"] = host_name
+                    user["dhcp-comment"] = comment
+                    user["device-name"] = host_name or comment
+
             return {
                 "connected": True,
                 "count": len(active_users),
@@ -240,6 +267,16 @@ def get_active_hotspot_users(router: Router) -> dict[str, Any]:
             "active_users": [],
             "error": str(exc),
         }
+
+
+def kick_active_hotspot_user(router: Router, active_id: str) -> dict[str, Any]:
+    try:
+        with router_connection(router) as api:
+            active_resource = api.get_resource("/ip/hotspot/active")
+            active_resource.remove(id=active_id)
+            return {"connected": True, "message": "Hotspot session kicked out.", "error": None}
+    except Exception as exc:
+        return {"connected": False, "message": "Failed to kick out hotspot session.", "error": str(exc)}
 
 
 def get_hotspot_vouchers(router: Router) -> dict[str, Any]:
