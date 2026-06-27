@@ -88,12 +88,26 @@ function LiveBadge() {
   );
 }
 
-function isActivatedVoucher(voucher: { activated_at?: string | null; status: string }) {
-  return Boolean(voucher.activated_at) || ["ACTIVE", "ONLINE", "OFFLINE", "EXPIRED"].includes(voucher.status);
+function normalizedVoucherCode(value: unknown) {
+  return String(value || "").trim().toUpperCase();
 }
 
-function voucherSoldAt(voucher: { activated_at?: string | null; created_at: string }) {
-  return voucher.activated_at || voucher.created_at;
+function isActivatedVoucher(
+  voucher: { activated_at?: string | null; status: string; voucher_code?: string | null },
+  activeVoucherCodes?: Set<string>,
+) {
+  return Boolean(voucher.activated_at)
+    || ["ACTIVE", "ONLINE", "OFFLINE", "EXPIRED"].includes(voucher.status)
+    || Boolean(activeVoucherCodes?.has(normalizedVoucherCode(voucher.voucher_code)));
+}
+
+function voucherSoldAt(
+  voucher: { activated_at?: string | null; created_at: string; voucher_code?: string | null },
+  activeVoucherCodes?: Set<string>,
+) {
+  if (voucher.activated_at) return voucher.activated_at;
+  if (activeVoucherCodes?.has(normalizedVoucherCode(voucher.voucher_code))) return new Date().toISOString();
+  return voucher.created_at;
 }
 
 // Small bar-chart glyph used in place of a static icon on the stat cards.
@@ -196,6 +210,16 @@ export default function Dashboard() {
   // Active hotspot users and live router status across every router in the branch.
   const activeUsersQueries = useBranchActiveUsers(routers);
   const routerStatusQueries = useBranchRouterStatus(routers);
+  const activeVoucherCodes = useMemo(() => {
+    const codes = new Set<string>();
+    activeUsersQueries.forEach((query) => {
+      (query.data?.active_users || []).forEach((item) => {
+        const code = normalizedVoucherCode(item.user || item.name);
+        if (code) codes.add(code);
+      });
+    });
+    return codes;
+  }, [activeUsersQueries]);
 
   const onlineUsersCount = activeUsersQueries.reduce((sum, query) => sum + (query.data?.count ?? 0), 0);
   // A DHCP lease still bound to a device counts as an active session even after
@@ -227,8 +251,8 @@ export default function Dashboard() {
   const chartData = useMemo(() => {
     const grouped: Record<string, { sales: number; responses: number; sortKey: string }> = {};
     (vouchersData?.vouchers || []).forEach((voucher) => {
-      if (!isActivatedVoucher(voucher)) return;
-      const soldAt = voucherSoldAt(voucher);
+      if (!isActivatedVoucher(voucher, activeVoucherCodes)) return;
+      const soldAt = voucherSoldAt(voucher, activeVoucherCodes);
       const date = new Date(soldAt);
       const sortKey = soldAt.slice(0, 10);
       const key = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -240,22 +264,22 @@ export default function Dashboard() {
       .map(([date, values]) => ({ date, ...values }))
       .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
       .slice(-7);
-  }, [vouchersData]);
+  }, [activeVoucherCodes, vouchersData]);
 
   const todayVoucherSales = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     return (vouchersData?.vouchers || [])
-      .filter(isActivatedVoucher)
-      .filter((voucher) => voucherSoldAt(voucher).slice(0, 10) === today)
+      .filter((voucher) => isActivatedVoucher(voucher, activeVoucherCodes))
+      .filter((voucher) => voucherSoldAt(voucher, activeVoucherCodes).slice(0, 10) === today)
       .reduce((sum, voucher) => sum + voucher.amount, 0);
-  }, [vouchersData]);
+  }, [activeVoucherCodes, vouchersData]);
 
   // Derive recent voucher-style rows from real vouchers data
   const recentVouchers = useMemo(() => {
     if (!vouchersData?.vouchers) return [];
     return vouchersData.vouchers
-      .filter(isActivatedVoucher)
-      .sort((a, b) => voucherSoldAt(b).localeCompare(voucherSoldAt(a)))
+      .filter((voucher) => isActivatedVoucher(voucher, activeVoucherCodes))
+      .sort((a, b) => voucherSoldAt(b, activeVoucherCodes).localeCompare(voucherSoldAt(a, activeVoucherCodes)))
       .slice(0, 5)
       .map((v) => ({
       id: v.voucher_code,
@@ -264,11 +288,11 @@ export default function Dashboard() {
       phone: v.phone_number === "BULK" ? "N/A" : v.phone_number,
       packageName: `${v.speed_type} ${v.profile}`,
       pricePaid: v.amount,
-      purchaseTime: voucherSoldAt(v),
+      purchaseTime: voucherSoldAt(v, activeVoucherCodes),
       status: voucherUiStatus(v.status),
-      paymentMethod: (v.payment_reference?.startsWith("BAT-") ? "M-Pesa" : "Stripe") as any,
+      paymentMethod: (v.payment_reference?.startsWith("BAT-") ? "Cash" : "Mobile Money") as any,
     }));
-  }, [vouchersData]);
+  }, [activeVoucherCodes, vouchersData]);
 
   const isOnline = statusData?.connected ?? false;
   const selectedRouterName = routers[0]?.name || "Router";
@@ -294,8 +318,8 @@ export default function Dashboard() {
 
     if (vouchersData?.vouchers) {
       vouchersData.vouchers.forEach((v) => {
-        if (!isActivatedVoucher(v)) return;
-        const dateStr = voucherSoldAt(v).split("T")[0];
+        if (!isActivatedVoucher(v, activeVoucherCodes)) return;
+        const dateStr = voucherSoldAt(v, activeVoucherCodes).split("T")[0];
         const cell = cells.find((c) => c.dateStr === dateStr);
         if (cell) {
           cell.count += 1;
@@ -312,7 +336,7 @@ export default function Dashboard() {
     });
 
     return cells;
-  }, [vouchersData]);
+  }, [activeVoucherCodes, vouchersData]);
 
   const periodSummary = useMemo(() => {
     const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -349,8 +373,8 @@ export default function Dashboard() {
 
     return rows.map((row) => {
       const vouchers = (vouchersData?.vouchers || []).filter((voucher) => {
-        if (!isActivatedVoucher(voucher)) return false;
-        const soldAt = new Date(voucherSoldAt(voucher));
+        if (!isActivatedVoucher(voucher, activeVoucherCodes)) return false;
+        const soldAt = new Date(voucherSoldAt(voucher, activeVoucherCodes));
         return soldAt >= row.start && soldAt < row.end;
       });
       const activated = vouchers;
@@ -372,13 +396,13 @@ export default function Dashboard() {
         mobileItems: activated.filter((voucher) => voucher.payment_reference && !voucher.payment_reference.startsWith("BAT-")).length,
       };
     });
-  }, [vouchersData]);
+  }, [activeVoucherCodes, vouchersData]);
 
   const paymentChartData = useMemo(() => {
     const grouped: Record<string, { date: string; sortKey: string; cash: number; mobileMoney: number; total: number; tans: number }> = {};
     (vouchersData?.vouchers || []).forEach((voucher) => {
-      if (!isActivatedVoucher(voucher)) return;
-      const soldAt = voucherSoldAt(voucher);
+      if (!isActivatedVoucher(voucher, activeVoucherCodes)) return;
+      const soldAt = voucherSoldAt(voucher, activeVoucherCodes);
       const createdAt = new Date(soldAt);
       const sortKey = soldAt.slice(0, 10);
       const date = createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -393,7 +417,7 @@ export default function Dashboard() {
       grouped[date].tans += 1;
     });
     return Object.values(grouped).sort((a, b) => a.sortKey.localeCompare(b.sortKey)).slice(-7);
-  }, [vouchersData]);
+  }, [activeVoucherCodes, vouchersData]);
 
   const todaysTransactions = periodSummary[0]?.totalItems ?? 0;
   const todaysRevenue = periodSummary[0]?.total ?? todayVoucherSales;
