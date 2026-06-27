@@ -115,7 +115,7 @@ export default function SupportsIndex() {
     <div className={cn("min-h-screen bg-background transition-all duration-300", sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[280px]")}>
       <SEO title="Voucher Help Desk" />
       <AppHeader />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-5">
+      <main className="max-w-8xl mx-auto px-4 sm:px-6 py-4 space-y-5">
         <div>
           <h1 className="text-xl font-bold">Voucher Help Desk</h1>
           <p className="text-sm text-muted-foreground mt-1">Find purchased vouchers by code, phone number, or payment reference.</p>

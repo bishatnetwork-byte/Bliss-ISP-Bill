@@ -158,7 +158,7 @@ export default function Withdrawal() {
     <div className={cn("min-h-screen bg-background transition-all duration-300", sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[280px]")}>
       <SEO title="Withdraw Funds" />
       <AppHeader />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 print:p-0">
+      <main className="max-w-8xl mx-auto px-4 sm:px-6 py-6 print:p-0">
         <div className="grid lg:grid-cols-[1fr_340px] gap-6 items-start">
           <Card className="print:hidden rounded border border-border/10 shadow-none">
             <CardHeader>

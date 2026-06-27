@@ -136,13 +136,13 @@ export default function WalletTopup({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-hidden p-0 sm:max-w-3xl">
+      <DialogContent className="max-h-[98vh] overflow-hidden p-0 sm:max-w-6xl">
         <DialogHeader className="border-b px-6 py-5">
           <DialogTitle>SMS Wallet Top-up</DialogTitle>
           <DialogDescription>Keep SMS funds separate from the main branch wallet.</DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-0 md:grid-cols-[1fr_320px]">
+        <div className="grid gap-0 md:grid-cols-[1fr_580px]">
           <div className="space-y-5 px-6 py-5">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded border bg-muted/20 p-3">
@@ -231,11 +231,11 @@ export default function WalletTopup({
           </div>
 
           <div className="border-t bg-muted/20 md:border-l md:border-t-0">
-            <div className="border-b px-4 py-3">
+            <div className="border-b px-4 py-4">
               <p className="text-sm font-medium">SMS wallet ledger</p>
               <p className="text-xs text-muted-foreground">Top-ups, transfers, and SMS charges.</p>
             </div>
-            <ScrollArea className="h-[420px]">
+            <ScrollArea className="h-[480px]">
               {isLoadingTransactions ? (
                 <div className="space-y-3 p-4">
                   {Array.from({ length: 5 }).map((_, index) => (

@@ -365,7 +365,7 @@ export default function TransactionsPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
 
             {/* Total Deposited */}
-            <Card className="rounded-lg bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
+            <Card className="rounded bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
               <CardHeader className="pb-1 pt-3 px-3 sm:px-4 sm:pt-4">
                 <span className="text-[12px] sm:text-xs font-bold text-muted-foreground">Total Deposited</span>
                 <CardTitle className="text-lg sm:text-2xl font-black mt-0.5 text-foreground leading-tight">
@@ -387,7 +387,7 @@ export default function TransactionsPage() {
             </Card>
 
             {/* Total Withdrawn */}
-            <Card className="rounded-lg bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
+            <Card className="rounded bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
               <CardHeader className="pb-1 pt-3 px-3 sm:px-4 sm:pt-4">
                 <span className="text-[12px] sm:text-xs font-bold text-muted-foreground">Total Withdrawn</span>
                 <CardTitle className="text-lg sm:text-2xl font-black mt-0.5 text-foreground leading-tight">
@@ -409,7 +409,7 @@ export default function TransactionsPage() {
             </Card>
 
             {/* Net Balance */}
-            <Card className="rounded-lg bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
+            <Card className="rounded bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
               <CardHeader className="pb-1 pt-3 px-3 sm:px-4 sm:pt-4">
                 <span className="text-[12px] sm:text-xs font-bold text-muted-foreground">Net Balance</span>
                 <CardTitle className="text-lg sm:text-2xl font-black mt-0.5 text-foreground leading-tight">
@@ -431,7 +431,7 @@ export default function TransactionsPage() {
             </Card>
 
             {/* This Month */}
-            <Card className="rounded-lg bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
+            <Card className="rounded bg-card border border-border/80 shadow-sm relative overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[140px]">
               <CardHeader className="pb-1 pt-3 px-3 sm:px-4 sm:pt-4">
                 <span className="text-[12px] sm:text-xs font-bold text-muted-foreground">This Month</span>
                 <CardTitle className="text-lg sm:text-2xl font-black mt-0.5 text-foreground leading-tight">

@@ -70,11 +70,11 @@ export default function WithdrawalHistory() {
     <div className={cn("min-h-screen bg-background transition-all duration-300", sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[280px]")}>
       <SEO title="Withdrawal History" />
       <AppHeader />
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+      <main className="max-w-8xl mx-auto px-4 sm:px-6 py-6">
         {/* Page header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => navigate(-1)}>
+            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground border border-muted-foreground rounded-full" onClick={() => navigate(-1)}>
               <ArrowLeft className="w-4 h-4" /> Back
             </Button>
             <div>

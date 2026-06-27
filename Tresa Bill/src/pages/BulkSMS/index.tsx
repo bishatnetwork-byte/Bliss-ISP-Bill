@@ -276,7 +276,7 @@ export default function BulkSMSPage() {
     <div className={cn("min-h-screen bg-background transition-all duration-300", sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[280px]")}>
       <SEO title="Bulk SMS" />
       <AppHeader />
-      <main className="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6">
+      <main className="mx-auto max-w-8xl space-y-5 px-4 py-5 sm:px-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-xl font-bold">Bulk SMS</h1>
@@ -299,7 +299,7 @@ export default function BulkSMSPage() {
         </div>
 
         {isWalletLow && (
-          <Alert className="border-red-200 bg-red-50 text-red-900">
+          <Alert className="border-red-200 bg-red-50 text-red-900 rounded">
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>SMS wallet balance is low</AlertTitle>
             <AlertDescription>
@@ -308,17 +308,11 @@ export default function BulkSMSPage() {
           </Alert>
         )}
 
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
           <Card className="rounded border-primary/10 shadow-none">
             <CardContent className="flex items-center justify-between p-4">
               <div><p className="text-xs text-muted-foreground">SMS wallet</p><p className="mt-1 text-2xl font-bold">UGX {walletBalance.toLocaleString()}</p></div>
               <Wallet className={cn("h-7 w-7", isWalletLow ? "text-red-500" : "text-primary/40")} />
-            </CardContent>
-          </Card>
-          <Card className="rounded border-primary/10 shadow-none">
-            <CardContent className="flex items-center justify-between p-4">
-              <div><p className="text-xs text-muted-foreground">Main wallet</p><p className="mt-1 text-2xl font-bold">UGX {mainWalletBalance.toLocaleString()}</p></div>
-              <CreditCard className="h-7 w-7 text-primary/40" />
             </CardContent>
           </Card>
           <Card className="rounded border-primary/10 shadow-none">
