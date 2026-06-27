@@ -19,6 +19,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
+  useBranchActiveUsers,
   useBranchVouchers,
   useCheckExpiredRouterVouchers,
   useDeleteExpiredRouterVouchers,
@@ -84,6 +85,10 @@ function registryStatus(status: string): Voucher["status"] {
   return voucherUiStatus(status) as Exclude<Voucher["status"], "Online" | "Offline">;
 }
 
+function normalizedVoucherCode(value: unknown) {
+  return String(value || "").trim().toUpperCase();
+}
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -122,8 +127,19 @@ export default function Vouchers() {
   // API Hooks
   const { data: routers = [], isLoading: routersLoading } = useRouters(branchId);
   const { data: branchVouchersResponse, isLoading: vouchersLoading } = useBranchVouchers(branchId, { limit: 1000, refresh_router_status: true });
+  const activeUsersQueries = useBranchActiveUsers(routers);
   const [selectedRouterId, setSelectedRouterId] = useState<string>("");
   const selectedRouter = routers.find((router) => router.id === selectedRouterId);
+  const activeVoucherCodes = useMemo(() => {
+    const codes = new Set<string>();
+    activeUsersQueries.forEach((query) => {
+      (query.data?.active_users || []).forEach((item) => {
+        const code = normalizedVoucherCode(item.user || item.name);
+        if (code) codes.add(code);
+      });
+    });
+    return codes;
+  }, [activeUsersQueries]);
 
   // Router Packages Selection
   const { data: routerPackagesResponse, isLoading: packagesLoading } = useRouterPackages(selectedRouterId);
@@ -237,6 +253,8 @@ export default function Vouchers() {
       .map((voucher) => {
         const isBulk = voucher.payment_reference?.startsWith("BAT-");
         const isSystemGenerated = !isBulk;
+        const isLiveOnline = activeVoucherCodes.has(normalizedVoucherCode(voucher.voucher_code));
+        const firstLogin = voucher.activated_at || (isLiveOnline ? new Date().toISOString() : null);
         return {
           id: voucher.voucher_code,
           phone: (voucher.phone_number === "BULK" || !voucher.phone_number) ? undefined : voucher.phone_number,
@@ -245,8 +263,8 @@ export default function Vouchers() {
           duration: voucher.profile,
           pricePaid: voucher.amount,
           purchaseTime: voucher.created_at.replace("T", " ").substring(0, 19),
-          status: registryStatus(voucher.status),
-          activatedAt: voucher.activated_at?.replace("T", " ").substring(0, 19),
+          status: isLiveOnline ? "Online" : registryStatus(voucher.status),
+          activatedAt: firstLogin?.replace("T", " ").substring(0, 19),
           expiresAt: voucher.expires_at?.replace("T", " ").substring(0, 19),
           type: isBulk ? "Bulk" : "Single",
           batchId: isBulk ? voucher.payment_reference : undefined,
@@ -254,7 +272,7 @@ export default function Vouchers() {
           note: voucher.payment_reference || "N/A",
         };
       });
-  }, [branchVouchersResponse]);
+  }, [activeVoucherCodes, branchVouchersResponse]);
 
   // Unique notes/comments for DownloadByComment
   const uniqueNotes = useMemo(() => {

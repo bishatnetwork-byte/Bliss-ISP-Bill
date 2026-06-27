@@ -584,9 +584,9 @@ def _fetch_router_vouchers_into_database(session: Session, db_router: Router) ->
         package = packages_by_profile.get(profile)
         phone, comment_package_id, payment_reference = _router_comment_metadata(str(item.get("comment", "")))
         is_online = code in active_codes
-        uptime = router_uptime_duration(
-            item.get("uptime") or active_users.get(code, {}).get("uptime")
-        )
+        user_uptime = router_uptime_duration(item.get("uptime"))
+        active_uptime = router_uptime_duration(active_users.get(code, {}).get("uptime"))
+        uptime = user_uptime or active_uptime
         has_router_usage = uptime is not None
         existing = session.exec(select(VoucherPurchase).where(VoucherPurchase.voucher_code == code)).first()
         if existing:
