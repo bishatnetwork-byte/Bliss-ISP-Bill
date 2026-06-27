@@ -22,36 +22,36 @@ export default function AuthShell({ title, subtitle, seoTitle, path, children, f
   return (
     <div className="min-h-screen flex bg-white font-sans">
       <Helmet>
-        <link rel="preload" as="image" href="/bg/bg.png" />
+        <link rel="preload" as="image" href="/bg/cover.jpeg" />
       </Helmet>
       <SEO title={seoTitle} path={path} />
 
       {/* Left branding panel */}
       <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-primary/30 p-12 text-white">
         <img
-          src="/icons/mini.png"
+          src="/bg/cover.jpeg"
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm pointer-events-none select-none"
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/60 to-slate-900/30" />
 
         <div className="relative z-10">
           <Link to="/" className="inline-flex items-center ">
-            <img src="/icons/logo_2.png" alt="Renult" className="h-16 w-auto object-contain" />
+            <img src="/icons/logo_3.png" alt="Renult" className="h-16 w-auto object-contain" />
           </Link>
         </div>
 
-        <div className="relative z-10 max-w-md">
+        {/* <div className="relative z-10 max-w-full mt-40">
           <h2 className="text-3xl leading-tight mb-3 black-ops-one-regular">
             Run your ISP business from one dashboard.
           </h2>
           <p className="text-sm text-slate-300 mb-8 orbitron-400">
             Manage routers, hotspot vouchers, and customer billing, <br /> all in real time, from anywhere.
           </p>
-        </div>
+        </div> */}
 
-        <div className="relative z-10 text-[11px] text-slate-400 font-medium black-ops-one-regular">
-          Renult © {new Date().getFullYear()}
+        <div className="relative z-10 text-[14px] text-slate-400 font-medium black-ops-one-regular">
+          Bliss ISP © {new Date().getFullYear()}
         </div>
       </div>
 
