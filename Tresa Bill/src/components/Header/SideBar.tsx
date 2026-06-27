@@ -715,9 +715,9 @@ export default function SideBar({ isOpen, onClose }: SideBarProps) {
       >
         <div className="flex items-center justify-center p-3">
           {isCollapsed === false ? (
-            <img src="/icons/logo_2.png" alt="Logo" className="h-12" />
+            <img src="/icons/logo_3.png" alt="Logo" className="h-12" />
           ) : (
-            <img src="/icons/mini.png" alt="Logo" className="" />
+            <img src="/logo.png" alt="Logo" className="" />
           )}
         </div>
 

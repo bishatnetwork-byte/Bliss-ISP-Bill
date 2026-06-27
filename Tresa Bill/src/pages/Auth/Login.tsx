@@ -95,7 +95,7 @@ export default function Login() {
       </div>
       <div className="mt-8 text-center">
         <p className="text-[13px] text-slate-600 font-medium black-ops-one-regular">
-          New to Renult? <Link to="/signup" className="text-slate-900 hover:underline">Create an account</Link>
+          New to Bliss ISP? <Link to="/signup" className="text-slate-900 hover:underline">Create an account</Link>
         </p>
       </div>
     </AuthShell>
