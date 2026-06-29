@@ -106,8 +106,10 @@ export default function BulkSMSPage() {
   const walletBalance = bulkSms.wallet.data?.balance || 0;
   const mainWalletBalance = bulkSms.mainWallet.data?.balance || 0;
   const smsCost = bulkSms.settings.data?.sms_cost_ugx || 0;
+  const smsRemaining = bulkSms.wallet.data?.sms_remaining ?? Math.floor(walletBalance / Math.max(1, smsCost || 1));
   const lowBalanceThreshold = bulkSms.settings.data?.low_balance_threshold || LOW_BALANCE_THRESHOLD;
-  const isWalletLow = Boolean(branchId) && !bulkSms.wallet.isLoading && walletBalance < lowBalanceThreshold;
+  const lowSmsThreshold = Math.ceil(lowBalanceThreshold / Math.max(1, smsCost || 1));
+  const isWalletLow = Boolean(branchId) && !bulkSms.wallet.isLoading && smsRemaining < lowSmsThreshold;
 
   useEffect(() => {
     const collapseHandler = (event: Event) => {
@@ -223,6 +225,7 @@ export default function BulkSMSPage() {
 
   const hasVoucherCodePlaceholder = message.includes("{code}") || message.includes("{}");
   const estimatedCost = (smsCost || 0) * selectedNumbers.length;
+  const estimatedSms = selectedNumbers.length;
   const canSend =
     Boolean(branchId) &&
     selectedNumbers.length > 0 &&
@@ -242,7 +245,7 @@ export default function BulkSMSPage() {
       setComposerOpen(false);
       setSelectedNumbers([]);
       const note = response.total_charged
-        ? ` UGX ${response.total_charged.toLocaleString()} deducted.`
+        ? ` ${Math.ceil(response.total_charged / Math.max(1, smsCost || 1)).toLocaleString()} SMS deducted.`
         : "";
       if (response.failed) toast.warning(`${response.sent} sent, ${response.failed} failed.${note}`);
       else toast.success(`Bulk SMS sent to ${response.sent} recipient${response.sent === 1 ? "" : "s"}.${note}`);
@@ -303,7 +306,7 @@ export default function BulkSMSPage() {
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>SMS wallet balance is low</AlertTitle>
             <AlertDescription>
-              This branch has UGX {walletBalance.toLocaleString()}. The sidebar Bulk SMS icon flashes until the balance is at least UGX {lowBalanceThreshold.toLocaleString()}.
+              This branch has {smsRemaining.toLocaleString()} SMS left. The sidebar Bulk SMS icon flashes until the balance is at least {lowSmsThreshold.toLocaleString()} SMS.
             </AlertDescription>
           </Alert>
         )}
@@ -311,7 +314,7 @@ export default function BulkSMSPage() {
         <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
           <Card className="rounded border-primary/10 shadow-none">
             <CardContent className="flex items-center justify-between p-4">
-              <div><p className="text-xs text-muted-foreground">SMS wallet</p><p className="mt-1 text-2xl font-bold">UGX {walletBalance.toLocaleString()}</p></div>
+              <div><p className="text-xs text-muted-foreground">SMS left</p><p className="mt-1 text-2xl font-bold">{smsRemaining.toLocaleString()}</p></div>
               <Wallet className={cn("h-7 w-7", isWalletLow ? "text-red-500" : "text-primary/40")} />
             </CardContent>
           </Card>
@@ -375,7 +378,7 @@ export default function BulkSMSPage() {
                             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                               <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {activity.recipients.length} recipients</span>
                               <span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> {new Date(activity.created_at).toLocaleString()}</span>
-                              <span>UGX {activity.total_charged.toLocaleString()} charged</span>
+                              <span>{Math.ceil(activity.total_charged / Math.max(1, smsCost || 1)).toLocaleString()} SMS charged</span>
                             </div>
                           </div>
                           <div className="flex gap-4 text-xs">
@@ -486,12 +489,12 @@ export default function BulkSMSPage() {
               </div>
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>{message.length}/1000 characters</span>
-                <span>Est. UGX {estimatedCost.toLocaleString()}</span>
+                <span>Est. {estimatedSms.toLocaleString()} SMS</span>
               </div>
             </div>
           </div>
           <div className="border-t bg-background px-6 py-4">
-            {walletBalance < estimatedCost && <p className="mb-2 text-center text-xs text-destructive">Wallet balance is too low for this send.</p>}
+            {walletBalance < estimatedCost && <p className="mb-2 text-center text-xs text-destructive">Not enough SMS left for this send.</p>}
             <Button className="h-11 w-full gap-2" disabled={!canSend} onClick={handleSend}>
               {bulkSms.send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Send to {selectedNumbers.length} number{selectedNumbers.length === 1 ? "" : "s"}
@@ -519,9 +522,9 @@ export default function BulkSMSPage() {
             ) : (
               <div className="space-y-6">
                 <div className="rounded border bg-muted/20 p-4">
-                  <p className="text-xs text-muted-foreground">Current SMS wallet</p>
-                  <p className="mt-1 text-2xl font-bold">UGX {walletBalance.toLocaleString()}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Each SMS costs UGX {(smsCost || 0).toLocaleString()}.</p>
+                  <p className="text-xs text-muted-foreground">Current SMS left</p>
+                  <p className="mt-1 text-2xl font-bold">{smsRemaining.toLocaleString()}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Admin controls the SMS unit value.</p>
                 </div>
 
                 <div className="flex items-start justify-between gap-4 rounded border p-4">

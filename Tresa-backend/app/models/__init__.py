@@ -17,6 +17,7 @@ from app.models.withdrawal_challenge import WithdrawalChallenge
 from app.models.wallet import Wallet, WalletTransaction
 from app.models.branch_wallet import BranchWallet, BranchWalletTransaction, SmsWallet, SmsWalletTransaction
 from app.models.platform_ledger import PlatformLedgerEntry
+from app.models.platform_sms import PlatformSmsTransaction
 from app.models.telegram_connection import TelegramConnection
 from app.models.portal_ad import PortalAd
 from app.models.portal_ad_event import PortalAdEvent
@@ -51,6 +52,7 @@ __all__ = [
     "SmsWallet",
     "SmsWalletTransaction",
     "PlatformLedgerEntry",
+    "PlatformSmsTransaction",
     "TelegramConnection",
     "PortalAd",
     "PortalAdEvent",

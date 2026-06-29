@@ -34,7 +34,7 @@ export const PLATFORM_ADMIN_SECTIONS = [
   { id: "broadcasts", label: "Broadcasts", icon: Mail },
   { id: "voucher_audit", label: "Voucher Audit", icon: FileClock },
   { id: "message_diagnostics", label: "Message Control", icon: MessageSquareWarning },
-  { id: "sms_gateways", label: "SMS Gateways", icon: MessageSquare, path: "/platform-admin/sms-gateways" },
+  { id: "sms_gateways", label: "SMS Finance", icon: MessageSquare, path: "/platform-admin/sms-gateways" },
   { id: "tunnels", label: "Tunnels Control", icon: Network },
   { id: "mikrotik_manager", label: "MikroTik Manager", icon: ServerCog, path: "/platform-admin/mikrotik-manager" },
   { id: "adsmob", label: "AdsMob", icon: BadgeDollarSign, path: "/settings/adsmob" },

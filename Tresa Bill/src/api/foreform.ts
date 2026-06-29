@@ -202,6 +202,7 @@ export interface PlatformSettingsResponse {
   withdrawal_fee_fixed_amount: number;
   withdrawal_min_amount: number;
   withdrawal_max_amount: number;
+  sms_cost_ugx: number;
   voucher_prefix: string;
   voucher_prefix_order: "prefix-first" | "prefix-last";
   telegram_access_alerts: boolean;
@@ -1231,6 +1232,8 @@ export interface SmsWalletResponse {
   branch_id: string;
   branch_name: string;
   balance: number;
+  sms_cost_ugx: number;
+  sms_remaining: number;
   total_deposited: number;
   total_spent: number;
   is_frozen: boolean;
@@ -1258,6 +1261,42 @@ export interface SmsWalletTransactionResponse {
 export interface SmsWalletMutationResponse {
   transaction: SmsWalletTransactionResponse;
   wallet: SmsWalletResponse;
+}
+
+export interface PlatformSmsTransactionResponse {
+  id: string;
+  amount: number;
+  transaction_type: string;
+  reference: string | null;
+  note: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface PlatformSmsWalletTransactionResponse {
+  id: string;
+  branch_id: string;
+  branch_name: string;
+  owner_name: string;
+  amount: number;
+  transaction_type: string;
+  reference: string | null;
+  status: string;
+  phone_number: string | null;
+  created_at: string;
+}
+
+export interface PlatformSmsFinanceResponse {
+  sms_cost_ugx: number;
+  total_topups: number;
+  total_sms_revenue: number;
+  provider_payouts: number;
+  available_sms_balance: number;
+  total_sms_sent: number;
+  estimated_provider_cost: number;
+  estimated_profit: number;
+  wallet_transactions: PlatformSmsWalletTransactionResponse[];
+  admin_transactions: PlatformSmsTransactionResponse[];
 }
 
 export interface VoucherRouterSyncResponse {
@@ -1872,6 +1911,10 @@ export const renultApi = {
       apiRequest<SmsGatewayResponse[]>(`/platform-admin/sms-gateways/${provider}/default`, { method: "POST" }),
     smsGatewayBalance: (provider: string) =>
       apiRequest<SmsGatewayBalanceResponse>(`/platform-admin/sms-gateways/${provider}/balance`),
+    smsFinance: () =>
+      apiRequest<PlatformSmsFinanceResponse>("/platform-admin/sms-finance"),
+    createSmsProviderPayout: (payload: { amount: number; reference?: string | null; note?: string | null }) =>
+      apiRequest<PlatformSmsTransactionResponse>("/platform-admin/sms-finance/withdrawals", { method: "POST", body: JSON.stringify(payload) }),
     audit: () => apiRequest<PlatformAuditResponse[]>("/platform-admin/audit", { query: { limit: 500 } }),
     storage: (prefix = "") =>
       apiRequest<PlatformStorageObjectResponse[]>("/platform-admin/storage", { query: { prefix } }),

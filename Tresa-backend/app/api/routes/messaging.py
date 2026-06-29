@@ -43,6 +43,7 @@ from app.services.messaging import (
     sms_was_accepted,
 )
 from app.services import sms_wallet as sms_wallet_svc
+from app.services.platform_admin import get_setting
 
 router = APIRouter(tags=["Messaging"])
 
@@ -77,12 +78,15 @@ def _fail_log(session: SessionDep, row: MessageLog, error: str) -> None:
     session.commit()
 
 
-def _sms_wallet_response(wallet, branch_name: str) -> SmsWalletResponse:
+def _sms_wallet_response(session: SessionDep, wallet, branch_name: str) -> SmsWalletResponse:
+    sms_cost = int(get_setting(session, "sms_cost_ugx", settings.sms_notification_cost))
     return SmsWalletResponse(
         id=str(wallet.id),
         branch_id=str(wallet.branch_id),
         branch_name=branch_name,
         balance=wallet.balance,
+        sms_cost_ugx=sms_cost,
+        sms_remaining=wallet.balance // max(1, sms_cost),
         total_deposited=wallet.total_deposited,
         total_spent=wallet.total_spent,
         is_frozen=wallet.is_frozen,
@@ -263,13 +267,13 @@ def save_message_draft(
     )
 
 
-def _bulk_sms_settings_response(preferences) -> BulkSmsSettingsResponse:
+def _bulk_sms_settings_response(session: SessionDep, preferences) -> BulkSmsSettingsResponse:
     return BulkSmsSettingsResponse(
         voucher_sms_enabled=preferences.bulk_sms_voucher_enabled,
         low_balance_sms_enabled=preferences.bulk_sms_low_balance_enabled,
         low_balance_threshold=preferences.bulk_sms_low_balance_threshold,
         admin_buy_for_sms_enabled=preferences.bulk_sms_admin_buy_for_enabled,
-        sms_cost_ugx=settings.sms_notification_cost,
+        sms_cost_ugx=int(get_setting(session, "sms_cost_ugx", settings.sms_notification_cost)),
     )
 
 
@@ -285,7 +289,7 @@ def get_bulk_sms_settings(
     branch, _staff = require_branch_access(session, branch_id, user, "support")
     owner = session.get(User, branch.user_id) or user
     preferences = get_or_create_preferences(session, owner)
-    return _bulk_sms_settings_response(preferences)
+    return _bulk_sms_settings_response(session, preferences)
 
 
 @router.put(
@@ -309,7 +313,7 @@ def update_bulk_sms_settings(
     session.add(preferences)
     session.commit()
     session.refresh(preferences)
-    return _bulk_sms_settings_response(preferences)
+    return _bulk_sms_settings_response(session, preferences)
 
 
 @router.get(
@@ -323,7 +327,7 @@ def get_sms_wallet(
 ) -> SmsWalletResponse:
     branch, _staff = require_branch_access(session, branch_id, user, "support")
     wallet = sms_wallet_svc.get_sms_wallet_for_branch(session, branch_id)
-    return _sms_wallet_response(wallet, branch.name)
+    return _sms_wallet_response(session, wallet, branch.name)
 
 
 @router.get(
@@ -368,7 +372,7 @@ def transfer_to_sms_wallet(
     )
     return SmsWalletMutationResponse(
         transaction=_sms_txn_response(txn),
-        wallet=_sms_wallet_response(updated_wallet, branch.name),
+        wallet=_sms_wallet_response(session, updated_wallet, branch.name),
     )
 
 
@@ -394,7 +398,7 @@ def initiate_sms_wallet_mobile_money_topup(
     )
     return SmsWalletMutationResponse(
         transaction=_sms_txn_response(txn),
-        wallet=_sms_wallet_response(updated_wallet, branch.name),
+        wallet=_sms_wallet_response(session, updated_wallet, branch.name),
     )
 
 
@@ -414,7 +418,7 @@ def verify_sms_wallet_mobile_money_topup(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "SMS wallet transaction not found")
     return SmsWalletMutationResponse(
         transaction=_sms_txn_response(txn),
-        wallet=_sms_wallet_response(updated_wallet, branch.name),
+        wallet=_sms_wallet_response(session, updated_wallet, branch.name),
     )
 
 
@@ -436,7 +440,7 @@ def send_bulk_message(
         message=payload.message.strip(),
         message_type="voucher" if payload.use_voucher_template else "custom",
         recipients=list(payload.phone_numbers),
-        cost_per_sms=settings.sms_notification_cost,
+        cost_per_sms=int(get_setting(session, "sms_cost_ugx", settings.sms_notification_cost)),
     )
     session.add(activity)
     session.commit()
@@ -468,7 +472,7 @@ def send_bulk_message(
             detail=error,
         )
 
-    cost_per_sms = settings.sms_notification_cost
+    cost_per_sms = int(get_setting(session, "sms_cost_ugx", settings.sms_notification_cost))
     estimated_cost = cost_per_sms * len(requested_numbers)
     sms_wallet = sms_wallet_svc.get_sms_wallet_for_branch(session, branch.id)
     if sms_wallet.is_frozen or sms_wallet.balance < max(cost_per_sms, estimated_cost):

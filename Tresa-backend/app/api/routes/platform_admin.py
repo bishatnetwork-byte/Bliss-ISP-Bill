@@ -15,12 +15,13 @@ from app.services.avatar import get_branch_avatar
 from app.core.config import settings
 from app.db.session import SessionDep
 from app.models.branch import Branch
-from app.models.branch_wallet import BranchWallet, BranchWalletTransaction
+from app.models.branch_wallet import BranchWallet, BranchWalletTransaction, SmsWalletTransaction
 from app.models.captive_portal import CaptivePortal
 from app.models.login_attempt import LoginAttempt
 from app.models.notification import Notification
 from app.models.platform_admin import PlatformAuditLog, VoucherActivationAudit
 from app.models.platform_ledger import PlatformLedgerEntry
+from app.models.platform_sms import PlatformSmsTransaction
 from app.models.message import MessageLog
 from app.models.portal_ad import PortalAd
 from app.models.router import Router
@@ -56,6 +57,10 @@ from app.schemas.platform_admin import (
     SmsGatewayBalanceResponse,
     SmsGatewayResponse,
     SmsGatewayUpdate,
+    PlatformSmsFinanceResponse,
+    PlatformSmsTransactionResponse,
+    PlatformSmsWalletTransactionResponse,
+    PlatformSmsWithdrawalRequest,
     PlatformStorageObjectResponse,
     PlatformSubadminUpdate,
     PlatformTunnelResponse,
@@ -1046,6 +1051,101 @@ def sms_gateway_balance(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     balance = raw.get("balance") or raw.get("units") or raw.get("credit") or raw.get("data") or raw
     return SmsGatewayBalanceResponse(provider=provider, balance=balance, raw=raw)
+
+
+@router.get("/sms-finance", response_model=PlatformSmsFinanceResponse)
+def sms_finance(
+    session: SessionDep,
+    limit: int = Query(default=100, ge=1, le=500),
+    admin: User = _admin("sms_gateways"),
+) -> PlatformSmsFinanceResponse:
+    del admin
+    sms_cost = int(get_setting(session, "sms_cost_ugx", settings.sms_notification_cost))
+    wallet_rows = session.exec(
+        select(SmsWalletTransaction, Branch, User)
+        .join(Branch, SmsWalletTransaction.branch_id == Branch.id)
+        .join(User, Branch.user_id == User.id)
+        .order_by(SmsWalletTransaction.created_at.desc())
+        .limit(limit)
+    ).all()
+    all_sms_txns = session.exec(select(SmsWalletTransaction)).all()
+    admin_txns = session.exec(
+        select(PlatformSmsTransaction)
+        .order_by(PlatformSmsTransaction.created_at.desc())
+        .limit(limit)
+    ).all()
+    total_topups = sum(txn.amount for txn in all_sms_txns if txn.status == "COMPLETED" and txn.transaction_type in {"MOBILE_MONEY_TOPUP", "TRANSFER_IN"})
+    total_sms_revenue = sum(txn.amount for txn in all_sms_txns if txn.transaction_type == "SMS_CHARGE")
+    provider_payouts = sum(txn.amount for txn in admin_txns if txn.status == "COMPLETED" and txn.transaction_type == "PROVIDER_PAYOUT")
+    total_sms_sent = total_sms_revenue // max(1, sms_cost)
+    return PlatformSmsFinanceResponse(
+        sms_cost_ugx=sms_cost,
+        total_topups=total_topups,
+        total_sms_revenue=total_sms_revenue,
+        provider_payouts=provider_payouts,
+        available_sms_balance=max(0, total_sms_revenue - provider_payouts),
+        total_sms_sent=total_sms_sent,
+        estimated_provider_cost=provider_payouts,
+        estimated_profit=max(0, total_sms_revenue - provider_payouts),
+        wallet_transactions=[
+            PlatformSmsWalletTransactionResponse(
+                id=txn.id,
+                branch_id=branch.id,
+                branch_name=branch.name,
+                owner_name=user.full_name,
+                amount=txn.amount,
+                transaction_type=txn.transaction_type.lower(),
+                reference=txn.reference,
+                status=txn.status,
+                phone_number=txn.phone_number,
+                created_at=txn.created_at,
+            )
+            for txn, branch, user in wallet_rows
+        ],
+        admin_transactions=[
+            PlatformSmsTransactionResponse(
+                id=txn.id,
+                amount=txn.amount,
+                transaction_type=txn.transaction_type.lower(),
+                reference=txn.reference,
+                note=txn.note,
+                status=txn.status,
+                created_at=txn.created_at,
+            )
+            for txn in admin_txns
+        ],
+    )
+
+
+@router.post("/sms-finance/withdrawals", response_model=PlatformSmsTransactionResponse, status_code=status.HTTP_201_CREATED)
+def create_sms_provider_payout(
+    payload: PlatformSmsWithdrawalRequest,
+    session: SessionDep,
+    admin: User = _admin("sms_gateways"),
+) -> PlatformSmsTransactionResponse:
+    summary = sms_finance(session, admin=admin)
+    if payload.amount > summary.available_sms_balance:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "SMS platform balance is too low for this payout")
+    txn = PlatformSmsTransaction(
+        admin_id=admin.id,
+        amount=payload.amount,
+        transaction_type="PROVIDER_PAYOUT",
+        reference=payload.reference,
+        note=payload.note,
+    )
+    session.add(txn)
+    session.commit()
+    session.refresh(txn)
+    audit(session, admin, "sms_provider_payout_recorded", "platform_sms", str(txn.id), {"amount": payload.amount, "reference": payload.reference})
+    return PlatformSmsTransactionResponse(
+        id=txn.id,
+        amount=txn.amount,
+        transaction_type=txn.transaction_type.lower(),
+        reference=txn.reference,
+        note=txn.note,
+        status=txn.status,
+        created_at=txn.created_at,
+    )
 
 
 @router.get("/wallets", response_model=list[PlatformWalletResponse])

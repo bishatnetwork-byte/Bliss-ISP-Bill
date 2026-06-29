@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, RefreshCw, Save, Signal, Star } from "lucide-react";
+import { Banknote, CheckCircle2, Copy, Loader2, RefreshCw, Save, Signal, Star } from "lucide-react";
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import PlatformAdminLayout from "../PlatformAdmin/PlatformAdminLayout";
 
@@ -48,14 +49,31 @@ export function SmsGatewayManagerContent() {
   const [drafts, setDrafts] = useState<GatewayDraft>({});
   const [balanceProvider, setBalanceProvider] = useState<string | null>(null);
   const [balanceResult, setBalanceResult] = useState<Record<string, unknown>>({});
+  const [smsCost, setSmsCost] = useState("");
+  const [payoutAmount, setPayoutAmount] = useState("");
+  const [payoutReference, setPayoutReference] = useState("");
+  const [payoutNote, setPayoutNote] = useState("");
 
   const gatewaysQuery = useQuery({
     queryKey: ["platformAdmin", "smsGateways"],
     queryFn: renultApi.platformAdmin.smsGateways,
   });
+  const settingsQuery = useQuery({
+    queryKey: ["platformAdmin", "settings"],
+    queryFn: renultApi.platformAdmin.settings,
+  });
+  const smsFinanceQuery = useQuery({
+    queryKey: ["platformAdmin", "smsFinance"],
+    queryFn: renultApi.platformAdmin.smsFinance,
+  });
 
   const gateways = gatewaysQuery.data || [];
   const defaultGateway = useMemo(() => gateways.find((gateway) => gateway.is_default), [gateways]);
+  const finance = smsFinanceQuery.data;
+
+  useEffect(() => {
+    if (settingsQuery.data?.sms_cost_ugx) setSmsCost(String(settingsQuery.data.sms_cost_ugx));
+  }, [settingsQuery.data?.sms_cost_ugx]);
 
   const saveGateway = useMutation({
     mutationFn: ({ gateway, enabled }: { gateway: SmsGatewayResponse; enabled: boolean }) => {
@@ -96,6 +114,35 @@ export function SmsGatewayManagerContent() {
     onError: (error) => toast.error(errorMessage(error, "Could not check gateway balance.")),
     onSettled: () => setBalanceProvider(null),
   });
+  const saveSmsCost = useMutation({
+    mutationFn: () => {
+      if (!settingsQuery.data) throw new Error("Settings are still loading.");
+      const next = Number(smsCost);
+      if (!next || next < 1) throw new Error("Enter a valid SMS value.");
+      return renultApi.platformAdmin.updateSettings({ ...settingsQuery.data, sms_cost_ugx: next });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "settings"] });
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "smsFinance"] });
+      toast.success("SMS value updated.");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Could not update SMS value.")),
+  });
+  const createPayout = useMutation({
+    mutationFn: () => renultApi.platformAdmin.createSmsProviderPayout({
+      amount: Number(payoutAmount.replace(/\D/g, "")),
+      reference: payoutReference || null,
+      note: payoutNote || null,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "smsFinance"] });
+      setPayoutAmount("");
+      setPayoutReference("");
+      setPayoutNote("");
+      toast.success("SMS provider payout recorded.");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Could not record SMS payout.")),
+  });
 
   const updateDraft = (provider: string, field: string, value: string) => {
     setDrafts((current) => ({
@@ -111,9 +158,9 @@ export function SmsGatewayManagerContent() {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-foreground">SMS Gateway Manager</h1>
+            <h1 className="text-xl font-semibold text-foreground">SMS Finance & Gateway Manager</h1>
             <p className="text-sm text-muted-foreground">
-              Manage provider credentials, active status, and the system default SMS route.
+              Track SMS topups, provider payouts, profit, unit pricing, and active gateway routing.
             </p>
           </div>
           <Button
@@ -127,10 +174,92 @@ export function SmsGatewayManagerContent() {
           </Button>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <Metric label="Gateways" value={gateways.length || 0} />
           <Metric label="Enabled" value={gateways.filter((gateway) => gateway.enabled).length} />
           <Metric label="Default" value={defaultGateway?.label || "None"} />
+          <Metric label="SMS value" value={`UGX ${(finance?.sms_cost_ugx || settingsQuery.data?.sms_cost_ugx || 0).toLocaleString()}`} />
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
+          <Card className="rounded border border-border/30 shadow-none">
+            <CardHeader className="border-b pb-4">
+              <CardTitle className="flex items-center gap-2 text-base"><Banknote className="h-4 w-4 text-primary" /> SMS cash and profit</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 p-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Metric label="Client topups" value={`UGX ${(finance?.total_topups || 0).toLocaleString()}`} />
+                <Metric label="SMS charged" value={`UGX ${(finance?.total_sms_revenue || 0).toLocaleString()}`} />
+                <Metric label="Provider paid" value={`UGX ${(finance?.provider_payouts || 0).toLocaleString()}`} />
+                <Metric label="Available" value={`UGX ${(finance?.available_sms_balance || 0).toLocaleString()}`} />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="SMS value charged to clients">
+                  <Input inputMode="numeric" value={smsCost} onChange={(event) => setSmsCost(event.target.value.replace(/\D/g, ""))} placeholder="29" />
+                </Field>
+                <div className="sm:col-span-2 flex items-end">
+                  <Button className="h-10 gap-2" onClick={() => saveSmsCost.mutate()} disabled={saveSmsCost.isPending || !settingsQuery.data}>
+                    {saveSmsCost.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Save SMS value
+                  </Button>
+                </div>
+              </div>
+              <ScrollArea className="h-[260px] rounded border">
+                {(finance?.wallet_transactions || []).length === 0 ? (
+                  <div className="p-4 text-sm text-muted-foreground">No SMS wallet transactions yet.</div>
+                ) : (
+                  <div className="divide-y">
+                    {finance?.wallet_transactions.map((txn) => (
+                      <div key={txn.id} className="flex items-start justify-between gap-3 p-3 text-xs">
+                        <div className="min-w-0">
+                          <p className="font-semibold">{txn.transaction_type.replace(/_/g, " ")} · {txn.branch_name}</p>
+                          <p className="text-muted-foreground">{txn.owner_name} · {new Date(txn.created_at).toLocaleString()}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="font-bold">UGX {txn.amount.toLocaleString()}</span>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigator.clipboard.writeText(JSON.stringify(txn)).then(() => toast.success("Transaction copied."))}>
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded border border-border/30 shadow-none">
+            <CardHeader className="border-b pb-4">
+              <CardTitle className="text-base">Provider payout / admin withdraw</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 p-4">
+              <Field label="Amount paid to SMS provider">
+                <Input inputMode="numeric" value={payoutAmount} onChange={(event) => setPayoutAmount(event.target.value.replace(/\D/g, ""))} placeholder="50000" />
+              </Field>
+              <Field label="Reference">
+                <Input value={payoutReference} onChange={(event) => setPayoutReference(event.target.value)} placeholder="Provider receipt or cash ref" />
+              </Field>
+              <Field label="Note">
+                <Textarea value={payoutNote} onChange={(event) => setPayoutNote(event.target.value)} placeholder="Cash paid, bank transfer, staff name..." />
+              </Field>
+              <Button className="w-full gap-2" onClick={() => createPayout.mutate()} disabled={createPayout.isPending || !Number(payoutAmount)}>
+                {createPayout.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
+                Record SMS payout
+              </Button>
+              <div className="space-y-2">
+                {(finance?.admin_transactions || []).map((txn) => (
+                  <div key={txn.id} className="rounded border p-3 text-xs">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-semibold">{txn.transaction_type.replace(/_/g, " ")}</span>
+                      <span className="font-bold">UGX {txn.amount.toLocaleString()}</span>
+                    </div>
+                    <p className="mt-1 text-muted-foreground">{txn.reference || "No reference"} · {new Date(txn.created_at).toLocaleString()}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-2">

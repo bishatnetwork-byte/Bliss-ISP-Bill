@@ -19,6 +19,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "withdrawal_fee_fixed_amount": 0,
     "withdrawal_min_amount": 500,
     "withdrawal_max_amount": 10_000_000,
+    "sms_cost_ugx": 29,
     "voucher_prefix": "",
     "voucher_prefix_order": "prefix-first",
     "telegram_access_alerts": False,

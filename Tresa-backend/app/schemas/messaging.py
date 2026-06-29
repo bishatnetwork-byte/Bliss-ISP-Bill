@@ -93,6 +93,8 @@ class SmsWalletResponse(BaseModel):
     branch_id: str
     branch_name: str
     balance: int
+    sms_cost_ugx: int
+    sms_remaining: int
     total_deposited: int
     total_spent: int
     is_frozen: bool

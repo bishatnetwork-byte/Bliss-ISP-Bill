@@ -39,6 +39,11 @@ function formatUgx(amount?: number) {
   return `UGX ${(amount || 0).toLocaleString()}`;
 }
 
+function smsLeft(wallet?: SmsWalletResponse) {
+  if (!wallet) return 0;
+  return wallet.sms_remaining ?? Math.floor(wallet.balance / Math.max(1, wallet.sms_cost_ugx || 1));
+}
+
 function transactionLabel(type: string) {
   return type
     .split("_")
@@ -146,8 +151,8 @@ export default function WalletTopup({
           <div className="space-y-5 px-6 py-5">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded border bg-muted/20 p-3">
-                <p className="flex items-center gap-2 text-xs text-muted-foreground"><Wallet className="h-3.5 w-3.5" /> SMS wallet</p>
-                <p className="mt-1 text-xl font-semibold">{formatUgx(smsWallet?.balance)}</p>
+                <p className="flex items-center gap-2 text-xs text-muted-foreground"><Wallet className="h-3.5 w-3.5" /> SMS left</p>
+                <p className="mt-1 text-xl font-semibold">{smsLeft(smsWallet).toLocaleString()}</p>
               </div>
               <div className="rounded border bg-muted/20 p-3">
                 <p className="flex items-center gap-2 text-xs text-muted-foreground"><ArrowRightLeft className="h-3.5 w-3.5" /> Main wallet</p>

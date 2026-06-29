@@ -125,6 +125,7 @@ class PlatformSettingsResponse(BaseModel):
     withdrawal_fee_fixed_amount: float = 0
     withdrawal_min_amount: int
     withdrawal_max_amount: int
+    sms_cost_ugx: int
     voucher_prefix: str
     voucher_prefix_order: str
     telegram_access_alerts: bool
@@ -141,6 +142,7 @@ class PlatformSettingsUpdate(BaseModel):
     withdrawal_fee_fixed_amount: float = Field(default=0, ge=0)
     withdrawal_min_amount: int = Field(ge=1)
     withdrawal_max_amount: int = Field(ge=1)
+    sms_cost_ugx: int = Field(default=29, ge=1, le=10_000)
     voucher_prefix: str = Field(min_length=0, max_length=20)
     voucher_prefix_order: str = Field(pattern="^(prefix-first|prefix-last)$")
     telegram_access_alerts: bool = False
@@ -176,6 +178,48 @@ class SmsGatewayBalanceResponse(BaseModel):
     provider: str
     balance: Any
     raw: Any
+
+
+class PlatformSmsTransactionResponse(BaseModel):
+    id: UUID
+    amount: int
+    transaction_type: str
+    reference: Optional[str] = None
+    note: Optional[str] = None
+    status: str
+    created_at: datetime
+
+
+class PlatformSmsWalletTransactionResponse(BaseModel):
+    id: UUID
+    branch_id: UUID
+    branch_name: str
+    owner_name: str
+    amount: int
+    transaction_type: str
+    reference: Optional[str] = None
+    status: str
+    phone_number: Optional[str] = None
+    created_at: datetime
+
+
+class PlatformSmsFinanceResponse(BaseModel):
+    sms_cost_ugx: int
+    total_topups: int
+    total_sms_revenue: int
+    provider_payouts: int
+    available_sms_balance: int
+    total_sms_sent: int
+    estimated_provider_cost: int
+    estimated_profit: int
+    wallet_transactions: list[PlatformSmsWalletTransactionResponse]
+    admin_transactions: list[PlatformSmsTransactionResponse]
+
+
+class PlatformSmsWithdrawalRequest(BaseModel):
+    amount: int = Field(gt=0, le=100_000_000)
+    reference: Optional[str] = Field(default=None, max_length=120)
+    note: Optional[str] = Field(default=None, max_length=300)
 
 
 class PlatformWalletResponse(BaseModel):
