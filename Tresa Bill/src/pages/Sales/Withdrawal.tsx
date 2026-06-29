@@ -246,7 +246,7 @@ export default function Withdrawal() {
       setEmailHint(challenge.email_hint);
       setResetCode("");
       setPasscodeStep("reset-code");
-      toast.success(`Reset code sent to ${challenge.email_hint}.`);
+      toast.warning(`Passcode reset code sent to ${challenge.email_hint}. Your old passcode will be removed after verification.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not send reset code.");
     }
@@ -440,6 +440,10 @@ export default function Withdrawal() {
               <DialogTitle className="flex items-center gap-2"><MailCheck className="w-5 h-5 text-primary" /> Reset passcode</DialogTitle>
               <DialogDescription>Enter the six-digit reset code sent to {emailHint}. After verification you can set a new passcode.</DialogDescription>
             </DialogHeader>
+            <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>Verifying this reset code removes the current passcode and switches withdrawals back to email until you save a new 4-digit passcode.</span>
+            </div>
             <div className="space-y-2"><Label htmlFor="reset-token">Reset code</Label><Input id="reset-token" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={resetCode} onChange={(event) => setResetCode(event.target.value.replace(/\D/g, ""))} className="text-center font-mono text-2xl tracking-[0.45em]" /></div>
             <DialogFooter><Button variant="outline" onClick={() => setPasscodeStep("closed")}>Cancel</Button><Button onClick={finishPasscodeReset} disabled={resetCode.length !== 6 || confirmPasscodeReset.isPending}>{confirmPasscodeReset.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />} Verify reset</Button></DialogFooter>
           </>}

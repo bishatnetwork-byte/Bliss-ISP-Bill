@@ -39,7 +39,7 @@ from app.schemas.wallet import (
 )
 from app.services import renult_pay
 from app.services import wallet as wallet_svc
-from app.services.email import send_withdrawal_code_email, send_withdrawal_receipt_email
+from app.services.email import send_withdrawal_code_email, send_withdrawal_passcode_reset_email, send_withdrawal_receipt_email
 from app.services.portal import gateway_phone
 from app.services.security import hash_code
 from app.services.telegram import send_user_event
@@ -238,7 +238,7 @@ def request_withdrawal_passcode_reset(
     session.flush()
     code = f"{secrets.randbelow(1_000_000):06d}"
     challenge.code_hash = hash_code(_challenge_hash_key(user.email, challenge.id), code)
-    send_withdrawal_code_email(user.email, user.full_name, code, 0, "withdrawal passcode reset")
+    send_withdrawal_passcode_reset_email(user.email, user.full_name, code)
     session.add(challenge)
     session.commit()
     return WithdrawalChallengeResponse(

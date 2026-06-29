@@ -78,6 +78,17 @@ def send_withdrawal_code_email(email: str, full_name: str, code: str, amount: in
     send_email(email, "Your withdrawal verification code", html)
 
 
+def send_withdrawal_passcode_reset_email(email: str, full_name: str, code: str) -> None:
+    html = render_email_template(
+        "withdrawal_passcode_reset.html",
+        title="Reset your withdrawal passcode",
+        preview="Your withdrawal passcode reset code is ready.",
+        full_name=full_name,
+        code=code,
+    )
+    send_email(email, "Reset your Renult withdrawal passcode", html)
+
+
 def send_withdrawal_receipt_email(
     email: str,
     transaction_id: str,
