@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse, PlainTextResponse
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.api.deps import CurrentUser
 from app.core.config import settings
@@ -12,8 +12,11 @@ from app.db.session import engine
 from app.models.branch import Branch
 from app.models.captive_portal import CaptivePortal
 from app.models.router import Router
+from app.models.router_package import RouterPackage
 from app.models.staff import Staff
 from app.models.user import User
+from app.models.voucher_purchase import VoucherPurchase
+from app.models.platform_admin import VoucherActivationAudit
 from app.schemas.auth import MessageResponse
 from app.schemas.hotspot_provision import (
     HotspotProvisionConfig,
@@ -93,6 +96,7 @@ from app.services.routers.security import (
     validate_api_port,
 )
 from app.services.storage import STORAGE_ERRORS, object_url, upload_bytes
+from app.services.voucher_lifecycle import router_uptime_duration, update_voucher_lifecycle
 from app.services.routers.concentrator import (
     confirm_router,
     delete_router_from_chr,
@@ -441,6 +445,72 @@ def router_features(
     )
 
 
+def _persist_active_hotspot_user_lifecycle(session: Session, db_router: Router, active_users: list[dict]) -> None:
+    active_by_code = {
+        str(item.get("user") or item.get("name") or "").strip(): item
+        for item in active_users
+        if item.get("user") or item.get("name")
+    }
+    if not active_by_code:
+        return
+
+    router_name = normalize_router_name(db_router.name)
+    vouchers = session.exec(
+        select(VoucherPurchase)
+        .where(VoucherPurchase.router_name == router_name)
+        .where(col(VoucherPurchase.voucher_code).in_(list(active_by_code)))
+    ).all()
+    if not vouchers:
+        return
+
+    packages = session.exec(select(RouterPackage).where(RouterPackage.router_id == db_router.id)).all()
+    packages_by_id = {package.package_id: package for package in packages}
+    packages_by_profile = {package.profile: package for package in packages}
+    changed = False
+
+    for voucher in vouchers:
+        active = active_by_code.get(voucher.voucher_code)
+        if not active:
+            continue
+
+        package = packages_by_id.get(voucher.package_id) or packages_by_profile.get(voucher.profile)
+        previous_status = voucher.status
+        was_activated = voucher.activated_at is not None
+        previous_activated_at = voucher.activated_at
+        previous_expires_at = voucher.expires_at
+        uptime = router_uptime_duration(active.get("uptime"))
+        update_voucher_lifecycle(
+            voucher,
+            package_limit=package.limit if package else None,
+            is_online=True,
+            has_router_usage=True,
+            router_uptime=uptime,
+        )
+        lifecycle_changed = (
+            previous_status != voucher.status
+            or previous_activated_at != voucher.activated_at
+            or previous_expires_at != voucher.expires_at
+        )
+        if lifecycle_changed:
+            event = "ACTIVATED" if not was_activated and voucher.activated_at is not None else "SESSION_ONLINE"
+            session.add(VoucherActivationAudit(
+                voucher_id=voucher.id,
+                voucher_code=voucher.voucher_code,
+                router_name=voucher.router_name,
+                event=event,
+                previous_status=previous_status,
+                new_status=voucher.status,
+                activated_at=voucher.activated_at,
+                expires_at=voucher.expires_at,
+                metadata_json={"source": "active_users_poll", "router_uptime": str(active.get("uptime") or "")},
+            ))
+            changed = True
+        session.add(voucher)
+
+    if changed:
+        session.commit()
+
+
 @router.get("/routers/{router_id}/active-users", response_model=RouterActiveUsersResponse)
 def router_active_users(
     router_id: UUID,
@@ -449,6 +519,8 @@ def router_active_users(
 ) -> RouterActiveUsersResponse:
     db_router = get_router_with_ownership(session, router_id, user.id)
     result = get_active_hotspot_users(db_router)
+    if result.get("connected"):
+        _persist_active_hotspot_user_lifecycle(session, db_router, result.get("active_users", []))
     return RouterActiveUsersResponse(
         router_id=db_router.id,
         router_name=db_router.name,

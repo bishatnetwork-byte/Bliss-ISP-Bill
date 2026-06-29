@@ -900,7 +900,7 @@ def list_branch_vouchers(
     branch_id: UUID,
     user: CurrentUser,
     session: SessionDep,
-    limit: int = Query(default=100, ge=1, le=1000),
+    limit: int = Query(default=100, ge=1, le=5000),
     offset: int = Query(default=0, ge=0),
     search: str | None = Query(default=None, max_length=120),
     status_filter: str | None = Query(default=None, max_length=40),

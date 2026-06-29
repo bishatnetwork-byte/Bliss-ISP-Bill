@@ -58,29 +58,14 @@ import {
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { useBranchActiveUsers, useBranchVouchers, useRouterActiveUsers, useRouters } from "@/hooks/useRouters";
+import { useBranchVouchers, useRouterActiveUsers, useRouters } from "@/hooks/useRouters";
 import { voucherUiStatus } from "@/lib/voucherStatus";
 import { usePhoneVerifed } from "@/hooks/usePhoneVerifed";
 
-function normalizedVoucherCode(value: unknown) {
-    return String(value || "").trim().toUpperCase();
-}
-
-function isActivatedVoucher(
-    voucher: { activated_at?: string | null; status: string; voucher_code?: string | null },
-    activeVoucherCodes?: Set<string>,
-) {
-    return Boolean(voucher.activated_at)
-        || ["ACTIVE", "ONLINE", "OFFLINE", "EXPIRED"].includes(voucher.status)
-        || Boolean(activeVoucherCodes?.has(normalizedVoucherCode(voucher.voucher_code)));
-}
-
 function voucherSoldAt(
-    voucher: { activated_at?: string | null; created_at: string; voucher_code?: string | null },
-    activeVoucherCodes?: Set<string>,
+    voucher: { activated_at?: string | null; created_at: string },
 ) {
     if (voucher.activated_at) return voucher.activated_at;
-    if (activeVoucherCodes?.has(normalizedVoucherCode(voucher.voucher_code))) return new Date().toISOString();
     return voucher.created_at;
 }
 
@@ -212,37 +197,21 @@ export default function SalesIndex() {
     const [sessions, setSessions] = useState<ActiveSession[]>(initialSessions);
 
     const branchId = localStorage.getItem("selected-workspace") || "biltra";
-    const { data: vouchersData, refetch: refetchVouchers, isFetching: vouchersRefreshing } = useBranchVouchers(branchId, { limit: 1000, refresh_router_status: true });
+    const { data: vouchersData, refetch: refetchVouchers, isFetching: vouchersRefreshing } = useBranchVouchers(branchId, { limit: 5000, refresh_router_status: true });
     const { data: routers = [] } = useRouters(branchId);
     const firstRouterId = routers[0]?.id || "";
     const { data: activeUsersData, refetch: refetchActiveUsers } = useRouterActiveUsers(firstRouterId);
-    const activeUsersQueries = useBranchActiveUsers(routers);
-    const activeVoucherCodeKey = React.useMemo(() => {
-        const codes = new Set<string>();
-        activeUsersQueries.forEach((query) => {
-            (query.data?.active_users || []).forEach((item) => {
-                const code = normalizedVoucherCode(item.user || item.name);
-                if (code) codes.add(code);
-            });
-        });
-        return Array.from(codes).sort().join("|");
-    }, [activeUsersQueries]);
-    const activeVoucherCodes = React.useMemo(
-        () => new Set(activeVoucherCodeKey.split("|").filter(Boolean)),
-        [activeVoucherCodeKey],
-    );
 
     useEffect(() => {
         if (vouchersData?.vouchers) {
             const mappedSales: SalesRecord[] = vouchersData.vouchers
-              .filter((voucher) => isActivatedVoucher(voucher, activeVoucherCodes))
               .map((voucher) => ({
                 id: voucher.id,
                 router: voucher.router_name,
                 voucherCode: voucher.voucher_code,
                 profile: `${voucher.speed_type} ${voucher.profile}`,
                 amount: voucher.amount,
-                activatedAt: voucherSoldAt(voucher, activeVoucherCodes).replace("T", " ").substring(0, 19),
+                activatedAt: voucher.activated_at?.replace("T", " ").substring(0, 19) || "N/A",
                 expiresAt: voucher.expires_at?.replace("T", " ").substring(0, 19) || "N/A",
                 status: voucherUiStatus(voucher.status),
                 paymentMode: voucher.phone_number === "BULK" || voucher.payment_reference?.startsWith("BAT-") ? "Voucher Printing" : "Online Payment",
@@ -253,11 +222,11 @@ export default function SalesIndex() {
                 transactionId: voucher.payment_reference || voucher.id.slice(0, 10).toUpperCase(),
                 deviceMac: "N/A",
                 bytesUsed: voucher.data || "N/A",
-                createdDate: voucherSoldAt(voucher, activeVoucherCodes).slice(0, 10),
+                createdDate: voucherSoldAt(voucher).slice(0, 10),
             }));
             setSales(mappedSales);
         }
-    }, [activeVoucherCodes, vouchersData]);
+    }, [vouchersData]);
 
     useEffect(() => {
         if (!activeUsersData?.active_users) return;
