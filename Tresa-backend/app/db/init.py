@@ -87,6 +87,7 @@ def init_db() -> None:
     _ensure_notification_preference_columns()
     _ensure_voucher_purchase_columns()
     _ensure_portal_ad_columns()
+    _ensure_branch_wallet_columns()
     _ensure_branch_wallet_transaction_columns()
     _ensure_sms_wallet_transaction_columns()
     _ensure_telegram_connection_columns()
@@ -350,6 +351,21 @@ def _ensure_branch_wallet_transaction_columns() -> None:
             "CREATE INDEX IF NOT EXISTS ix_branchwallettransaction_gateway_reference "
             "ON branchwallettransaction (gateway_reference)"
         ))
+
+
+def _ensure_branch_wallet_columns() -> None:
+    inspector = sa.inspect(engine)
+    if not inspector.has_table("branchwallet"):
+        return
+    columns = {column["name"] for column in inspector.get_columns("branchwallet")}
+    column_types = {
+        "withdrawal_passcode_hash": "VARCHAR",
+        "withdrawal_method": "VARCHAR DEFAULT 'email' NOT NULL",
+    }
+    with engine.begin() as conn:
+        for name, sql_type in column_types.items():
+            if name not in columns:
+                conn.execute(sa.text(f"ALTER TABLE branchwallet ADD COLUMN {name} {sql_type}"))
 
 
 def _ensure_sms_wallet_transaction_columns() -> None:

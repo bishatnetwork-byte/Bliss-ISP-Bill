@@ -1457,6 +1457,16 @@ export interface WithdrawalConfirmRequest {
   code: string;
 }
 
+export interface WithdrawalPasscodeConfirmRequest extends WithdrawalChallengeRequest {
+  passcode: string;
+}
+
+export interface WithdrawalSecurityResponse {
+  passcode_enabled: boolean;
+  preferred_method: "email" | "passcode";
+  email_hint: string;
+}
+
 export interface DepositWithdrawResponse {
   transaction: WalletTransactionResponse;
   wallet: BranchWalletResponse;
@@ -1984,6 +1994,18 @@ export const renultApi = {
       apiRequest<WithdrawalChallengeResponse>(`/wallets/branch/${branchId}/withdrawal-challenges`, { method: "POST", body: JSON.stringify(payload) }),
     confirmWithdrawal: (branchId: string, payload: WithdrawalConfirmRequest) =>
       apiRequest<WithdrawalConfirmResponse>(`/wallets/branch/${branchId}/withdrawal-confirmations`, { method: "POST", body: JSON.stringify(payload) }),
+    withdrawalSecurity: (branchId: string) =>
+      apiRequest<WithdrawalSecurityResponse>(`/wallets/branch/${branchId}/withdrawal-security`),
+    setWithdrawalPasscode: (branchId: string, passcode: string) =>
+      apiRequest<WithdrawalSecurityResponse>(`/wallets/branch/${branchId}/withdrawal-passcode`, { method: "POST", body: JSON.stringify({ passcode }) }),
+    requestWithdrawalPasscodeReset: (branchId: string) =>
+      apiRequest<WithdrawalChallengeResponse>(`/wallets/branch/${branchId}/withdrawal-passcode`, { method: "DELETE" }),
+    confirmWithdrawalPasscodeReset: (branchId: string, payload: WithdrawalConfirmRequest) =>
+      apiRequest<WithdrawalSecurityResponse>(`/wallets/branch/${branchId}/withdrawal-passcode/reset`, { method: "POST", body: JSON.stringify(payload) }),
+    setWithdrawalMethod: (branchId: string, method: "email" | "passcode") =>
+      apiRequest<WithdrawalSecurityResponse>(`/wallets/branch/${branchId}/withdrawal-method`, { method: "PUT", body: JSON.stringify({ method }) }),
+    confirmWithdrawalWithPasscode: (branchId: string, payload: WithdrawalPasscodeConfirmRequest) =>
+      apiRequest<WithdrawalConfirmResponse>(`/wallets/branch/${branchId}/withdrawal-passcode-confirmations`, { method: "POST", body: JSON.stringify(payload) }),
     checkWithdrawalStatus: (branchId: string, transactionId: string) =>
       apiRequest<WalletTransactionResponse>(`/wallets/branch/${branchId}/withdrawals/${transactionId}/status`),
     platformLedger: (limit = 200) =>

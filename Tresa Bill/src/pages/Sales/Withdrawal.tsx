@@ -5,11 +5,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { usePhoneVerifed } from "@/hooks/usePhoneVerifed";
-import { useBranchWallet, useConfirmWithdrawal, useRequestWithdrawal, useWithdrawalConfig } from "@/hooks/useWallet";
+import {
+  useBranchWallet,
+  useConfirmWithdrawal,
+  useConfirmWithdrawalPasscodeReset,
+  useConfirmWithdrawalWithPasscode,
+  useRequestWithdrawal,
+  useRequestWithdrawalPasscodeReset,
+  useSetWithdrawalMethod,
+  useSetWithdrawalPasscode,
+  useWithdrawalConfig,
+  useWithdrawalSecurity,
+} from "@/hooks/useWallet";
 import type { WithdrawalConfirmResponse } from "@/api/foreform";
 import { cn } from "@/lib/utils";
-import { AlertCircle, CheckCircle2, Clock, Copy, Loader2, MailCheck, Printer, ShieldCheck, Verified, Wallet2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Copy, KeyRound, Loader2, MailCheck, Printer, ShieldCheck, Verified, Wallet2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -30,7 +42,8 @@ function providerFor(phone: string): string {
   return "Mobile Money";
 }
 
-type FlowStep = "closed" | "review" | "code" | "processing" | "success";
+type FlowStep = "closed" | "review" | "code" | "passcode" | "processing" | "success";
+type PasscodeStep = "closed" | "set" | "reset-code";
 
 export default function Withdrawal() {
   const navigate = useNavigate();
@@ -42,6 +55,12 @@ export default function Withdrawal() {
   const [challengeId, setChallengeId] = useState("");
   const [emailHint, setEmailHint] = useState("");
   const [code, setCode] = useState("");
+  const [passcode, setPasscode] = useState("");
+  const [newPasscode, setNewPasscode] = useState("");
+  const [confirmPasscode, setConfirmPasscode] = useState("");
+  const [passcodeStep, setPasscodeStep] = useState<PasscodeStep>("closed");
+  const [resetChallengeId, setResetChallengeId] = useState("");
+  const [resetCode, setResetCode] = useState("");
   const [receipt, setReceipt] = useState<WithdrawalConfirmResponse | null>(null);
 
   useEffect(() => {
@@ -62,9 +81,18 @@ export default function Withdrawal() {
   const recipientName = phoneVerification.data?.success ? phoneVerification.data.identityname.trim() : "";
   const { data: wallet } = useBranchWallet(branchId);
   const { data: wdConfig } = useWithdrawalConfig();
+  const { data: withdrawalSecurity } = useWithdrawalSecurity(branchId);
   const requestWithdrawal = useRequestWithdrawal(branchId);
   const confirmWithdrawal = useConfirmWithdrawal(branchId);
+  const confirmWithdrawalWithPasscode = useConfirmWithdrawalWithPasscode(branchId);
+  const setWithdrawalPasscode = useSetWithdrawalPasscode(branchId);
+  const setWithdrawalMethod = useSetWithdrawalMethod(branchId);
+  const requestPasscodeReset = useRequestWithdrawalPasscodeReset(branchId);
+  const confirmPasscodeReset = useConfirmWithdrawalPasscodeReset(branchId);
   const availableBalance = wallet?.balance || 0;
+  const passcodeEnabled = Boolean(withdrawalSecurity?.passcode_enabled);
+  const preferredMethod = withdrawalSecurity?.preferred_method || "email";
+  const usePasscode = passcodeEnabled && preferredMethod === "passcode";
   const feeRate = wdConfig?.fee_rate ?? 0.02;
   const minAmount = wdConfig?.min_amount ?? 5000;
   const feePercent = Math.round(feeRate * 100);
@@ -127,6 +155,32 @@ export default function Withdrawal() {
     }
   };
 
+  const confirmWithPasscode = async () => {
+    if (!normalizedPhone) return;
+    if (!/^\d{4}$/.test(passcode)) {
+      toast.error("Enter your four-digit withdrawal passcode.");
+      return;
+    }
+    setStep("processing");
+    try {
+      const result = await confirmWithdrawalWithPasscode.mutateAsync({
+        amount: numericAmount,
+        recipient_phone: normalizedPhone,
+        recipient_name: recipientName,
+        provider,
+        passcode,
+      });
+      setReceipt(result);
+      setPasscode("");
+      setStep("success");
+      if (result.receipt_email_sent) toast.success("Withdrawal complete. A receipt is on its way to your email.");
+      else toast.success("Withdrawal complete.");
+    } catch (error) {
+      setStep("passcode");
+      toast.error(error instanceof Error ? error.message : "Withdrawal passcode verification failed.");
+    }
+  };
+
   const verifyAndWithdraw = async () => {
     if (!/^\d{6}$/.test(code)) {
       toast.error("Enter the six-digit verification code.");
@@ -150,8 +204,68 @@ export default function Withdrawal() {
     setPhone("");
     setAmount("");
     setCode("");
+    setPasscode("");
     setChallengeId("");
     setReceipt(null);
+  };
+
+  const savePasscode = async () => {
+    if (!/^\d{4}$/.test(newPasscode)) {
+      toast.error("Enter a four-digit passcode.");
+      return;
+    }
+    if (newPasscode !== confirmPasscode) {
+      toast.error("Passcodes do not match.");
+      return;
+    }
+    try {
+      await setWithdrawalPasscode.mutateAsync(newPasscode);
+      setNewPasscode("");
+      setConfirmPasscode("");
+      setPasscodeStep("closed");
+      toast.success("Withdrawal passcode saved. Quick withdraw is now the default.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save withdrawal passcode.");
+    }
+  };
+
+  const toggleWithdrawalMethod = async (checked: boolean) => {
+    const method = checked ? "passcode" : "email";
+    try {
+      await setWithdrawalMethod.mutateAsync(method);
+      toast.success(method === "passcode" ? "Passcode withdrawals enabled." : "Email verification enabled.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update withdrawal method.");
+    }
+  };
+
+  const startPasscodeReset = async () => {
+    try {
+      const challenge = await requestPasscodeReset.mutateAsync();
+      setResetChallengeId(challenge.challenge_id);
+      setEmailHint(challenge.email_hint);
+      setResetCode("");
+      setPasscodeStep("reset-code");
+      toast.success(`Reset code sent to ${challenge.email_hint}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not send reset code.");
+    }
+  };
+
+  const finishPasscodeReset = async () => {
+    if (!/^\d{6}$/.test(resetCode)) {
+      toast.error("Enter the six-digit reset code.");
+      return;
+    }
+    try {
+      await confirmPasscodeReset.mutateAsync({ challenge_id: resetChallengeId, code: resetCode });
+      setResetCode("");
+      setResetChallengeId("");
+      setPasscodeStep("set");
+      toast.success("Passcode reset verified. Set a new four-digit passcode.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not verify reset code.");
+    }
   };
 
   return (
@@ -173,6 +287,42 @@ export default function Withdrawal() {
               <div className="rounded border border-primary/30 p-4">
                 <p className="text-[12px] font-bold text-gray-500">Available balance</p>
                 <p className="text-2xl text-emerald-600 mt-1">UGX {availableBalance.toLocaleString()}</p>
+              </div>
+              <div className="rounded border p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold flex items-center gap-2"><KeyRound className="w-4 h-4 text-primary" /> Quick withdrawal passcode</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {passcodeEnabled
+                        ? "Use your four-digit passcode for faster withdrawals, or switch back to email verification."
+                        : "No passcode is set. Withdrawals will use email verification until you create one."}
+                    </p>
+                  </div>
+                  <BadgePill enabled={passcodeEnabled} />
+                </div>
+                <div className="flex items-center justify-between rounded bg-muted/40 px-3 py-2">
+                  <Label htmlFor="passcode-default" className="text-xs font-semibold">
+                    Use passcode by default
+                  </Label>
+                  <Switch
+                    id="passcode-default"
+                    checked={usePasscode}
+                    disabled={!passcodeEnabled || setWithdrawalMethod.isPending}
+                    onCheckedChange={toggleWithdrawalMethod}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {passcodeEnabled ? (
+                    <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={startPasscodeReset} disabled={requestPasscodeReset.isPending}>
+                      {requestPasscodeReset.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />}
+                      Change or reset by email
+                    </Button>
+                  ) : (
+                    <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => setPasscodeStep("set")}>
+                      Set passcode
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Mobile Money Number</Label>
@@ -233,14 +383,29 @@ export default function Withdrawal() {
       <Dialog open={step !== "closed"} onOpenChange={(open) => !open && step !== "processing" && setStep("closed")}>
         <DialogContent className="sm:max-w-md" onEscapeKeyDown={(event) => step === "processing" && event.preventDefault()} onInteractOutside={(event) => step === "processing" && event.preventDefault()}>
           {step === "review" && <>
-            <DialogHeader><DialogTitle>Confirm withdrawal</DialogTitle><DialogDescription>Review the recipient before requesting an email verification code.</DialogDescription></DialogHeader>
+            <DialogHeader><DialogTitle>Confirm withdrawal</DialogTitle><DialogDescription>Review the recipient before {usePasscode ? "entering your passcode." : "requesting an email verification code."}</DialogDescription></DialogHeader>
             <div className="rounded border p-4 space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Recipient</span><strong>{recipientName}</strong></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Phone</span><strong>{normalizedPhone}</strong></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Debit</span><strong>UGX {numericAmount.toLocaleString()}</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Verification</span><strong>{usePasscode ? "4-digit passcode" : "Email code"}</strong></div>
               <div className="flex items-start gap-2 border-t pt-3 text-xs text-amber-700"><AlertCircle className="w-4 h-4 shrink-0" /> Transfers are irreversible after token verification.</div>
             </div>
-            <DialogFooter><Button variant="outline" onClick={() => setStep("closed")}>Cancel</Button><Button onClick={sendCode} disabled={requestWithdrawal.isPending}>{requestWithdrawal.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />} Email verification code</Button></DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setStep("closed")}>Cancel</Button>
+              {usePasscode ? (
+                <Button onClick={() => { setPasscode(""); setStep("passcode"); }}>
+                  Continue with passcode
+                </Button>
+              ) : (
+                <Button onClick={sendCode} disabled={requestWithdrawal.isPending}>{requestWithdrawal.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />} Email verification code</Button>
+              )}
+            </DialogFooter>
+          </>}
+          {step === "passcode" && <>
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><KeyRound className="w-5 h-5 text-primary" /> Quick withdraw</DialogTitle><DialogDescription>Enter your four-digit withdrawal passcode.</DialogDescription></DialogHeader>
+            <div className="space-y-2"><Label htmlFor="withdraw-passcode">Passcode</Label><Input id="withdraw-passcode" type="password" inputMode="numeric" autoComplete="current-password" maxLength={4} value={passcode} onChange={(event) => setPasscode(event.target.value.replace(/\D/g, ""))} className="text-center font-mono text-2xl tracking-[0.45em]" /></div>
+            <DialogFooter><Button variant="outline" onClick={() => setStep("review")}>Back</Button><Button onClick={confirmWithPasscode} disabled={passcode.length !== 4 || confirmWithdrawalWithPasscode.isPending}>{confirmWithdrawalWithPasscode.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />} Verify and withdraw</Button></DialogFooter>
           </>}
           {step === "code" && <>
             <DialogHeader><DialogTitle className="flex items-center gap-2"><MailCheck className="w-5 h-5 text-primary" /> Verify transaction</DialogTitle><DialogDescription>Enter the six-digit code sent to {emailHint}. It expires in 10 minutes.</DialogDescription></DialogHeader>
@@ -251,6 +416,46 @@ export default function Withdrawal() {
           {step === "success" && <div className="py-6 text-center space-y-5"><CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" /><div><h3 className="text-lg font-bold">Withdrawal complete</h3><p className="text-xs text-muted-foreground mt-1">{receipt?.receipt_email_sent ? "A receipt is on its way to your account email." : "The transaction succeeded. Email receipts are not configured for this account."}</p></div><Button className="w-full" onClick={reset}>Done</Button></div>}
         </DialogContent>
       </Dialog>
+      <Dialog open={passcodeStep !== "closed"} onOpenChange={(open) => !open && setPasscodeStep("closed")}>
+        <DialogContent className="sm:max-w-md">
+          {passcodeStep === "set" && <>
+            <DialogHeader>
+              <DialogTitle>{passcodeEnabled ? "Set new passcode" : "Set withdrawal passcode"}</DialogTitle>
+              <DialogDescription>Use exactly four digits. This becomes the default withdrawal verification method.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="new-passcode">New passcode</Label>
+                <Input id="new-passcode" type="password" inputMode="numeric" maxLength={4} value={newPasscode} onChange={(event) => setNewPasscode(event.target.value.replace(/\D/g, ""))} className="text-center font-mono text-2xl tracking-[0.45em]" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-passcode">Confirm passcode</Label>
+                <Input id="confirm-passcode" type="password" inputMode="numeric" maxLength={4} value={confirmPasscode} onChange={(event) => setConfirmPasscode(event.target.value.replace(/\D/g, ""))} className="text-center font-mono text-2xl tracking-[0.45em]" />
+              </div>
+            </div>
+            <DialogFooter><Button variant="outline" onClick={() => setPasscodeStep("closed")}>Cancel</Button><Button onClick={savePasscode} disabled={setWithdrawalPasscode.isPending}>{setWithdrawalPasscode.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />} Save passcode</Button></DialogFooter>
+          </>}
+          {passcodeStep === "reset-code" && <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><MailCheck className="w-5 h-5 text-primary" /> Reset passcode</DialogTitle>
+              <DialogDescription>Enter the six-digit reset code sent to {emailHint}. After verification you can set a new passcode.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2"><Label htmlFor="reset-token">Reset code</Label><Input id="reset-token" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={resetCode} onChange={(event) => setResetCode(event.target.value.replace(/\D/g, ""))} className="text-center font-mono text-2xl tracking-[0.45em]" /></div>
+            <DialogFooter><Button variant="outline" onClick={() => setPasscodeStep("closed")}>Cancel</Button><Button onClick={finishPasscodeReset} disabled={resetCode.length !== 6 || confirmPasscodeReset.isPending}>{confirmPasscodeReset.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />} Verify reset</Button></DialogFooter>
+          </>}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function BadgePill({ enabled }: { enabled: boolean }) {
+  return (
+    <span className={cn(
+      "shrink-0 rounded-full px-2 py-1 text-[11px] font-bold",
+      enabled ? "bg-emerald-500/10 text-emerald-600" : "bg-slate-500/10 text-slate-500",
+    )}>
+      {enabled ? "Enabled" : "Email only"}
+    </span>
   );
 }

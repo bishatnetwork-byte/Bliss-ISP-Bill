@@ -6,6 +6,7 @@ import {
   DepositRequest,
   WithdrawalChallengeRequest,
   WithdrawalConfirmRequest,
+  WithdrawalPasscodeConfirmRequest,
   DepositWithdrawResponse,
   PlatformSummaryResponse,
   ClientWalletSummary
@@ -72,6 +73,67 @@ export function useConfirmWithdrawal(branchId: string) {
     },
   });
 }
+
+export function useWithdrawalSecurity(branchId: string) {
+  return useQuery({
+    queryKey: ["withdrawalSecurity", branchId],
+    queryFn: () => renultApi.wallets.withdrawalSecurity(branchId),
+    enabled: !!branchId,
+    retry: 1,
+  });
+}
+
+export function useSetWithdrawalPasscode(branchId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (passcode: string) => renultApi.wallets.setWithdrawalPasscode(branchId, passcode),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["withdrawalSecurity", branchId] });
+      queryClient.invalidateQueries({ queryKey: ["branchWallet", branchId] });
+    },
+  });
+}
+
+export function useSetWithdrawalMethod(branchId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (method: "email" | "passcode") => renultApi.wallets.setWithdrawalMethod(branchId, method),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["withdrawalSecurity", branchId] });
+    },
+  });
+}
+
+export function useRequestWithdrawalPasscodeReset(branchId: string) {
+  return useMutation({
+    mutationFn: () => renultApi.wallets.requestWithdrawalPasscodeReset(branchId),
+  });
+}
+
+export function useConfirmWithdrawalPasscodeReset(branchId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: WithdrawalConfirmRequest) => renultApi.wallets.confirmWithdrawalPasscodeReset(branchId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["withdrawalSecurity", branchId] });
+      queryClient.invalidateQueries({ queryKey: ["branchWallet", branchId] });
+    },
+  });
+}
+
+export function useConfirmWithdrawalWithPasscode(branchId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: WithdrawalPasscodeConfirmRequest) => renultApi.wallets.confirmWithdrawalWithPasscode(branchId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["branchWallet", branchId] });
+      queryClient.invalidateQueries({ queryKey: ["branchTransactions", branchId] });
+      queryClient.invalidateQueries({ queryKey: ["myWallets"] });
+      queryClient.invalidateQueries({ queryKey: ["platformSummary"] });
+    },
+  });
+}
+
 export function useWithdrawalConfig() {
   return useQuery({
     queryKey: ["withdrawalConfig"],

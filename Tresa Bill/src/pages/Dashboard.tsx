@@ -5,6 +5,7 @@ import AppHeader from "@/components/Header/AppHeader";
 import SEO from "@/components/SEO";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -29,6 +30,7 @@ import {
   User
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { DateRange } from "react-day-picker";
 import { useNavigate } from "react-router-dom";
 import { useRouters, useRouterStatus, useBranchVouchers, useBranchActiveUsers, useBranchRouterStatus } from "@/hooks/useRouters";
 import { voucherUiStatus } from "@/lib/voucherStatus";
@@ -38,13 +40,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
@@ -88,26 +83,52 @@ function LiveBadge() {
   );
 }
 
-function normalizedVoucherCode(value: unknown) {
-  return String(value || "").trim().toUpperCase();
-}
-
-function isActivatedVoucher(
-  voucher: { activated_at?: string | null; status: string; voucher_code?: string | null },
-  activeVoucherCodes?: Set<string>,
-) {
-  return Boolean(voucher.activated_at)
-    || ["ACTIVE", "ONLINE", "OFFLINE", "EXPIRED"].includes(voucher.status)
-    || Boolean(activeVoucherCodes?.has(normalizedVoucherCode(voucher.voucher_code)));
-}
-
 function voucherSoldAt(
-  voucher: { activated_at?: string | null; created_at: string; voucher_code?: string | null },
-  activeVoucherCodes?: Set<string>,
+  voucher: { activated_at?: string | null; created_at: string },
 ) {
   if (voucher.activated_at) return voucher.activated_at;
-  if (activeVoucherCodes?.has(normalizedVoucherCode(voucher.voucher_code))) return new Date().toISOString();
   return voucher.created_at;
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function endOfDay(date: Date) {
+  const end = startOfDay(date);
+  end.setDate(end.getDate() + 1);
+  end.setMilliseconds(end.getMilliseconds() - 1);
+  return end;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function defaultDashboardRange(): DateRange {
+  const today = startOfDay(new Date());
+  return { from: addDays(today, -29), to: today };
+}
+
+function formatShortDate(date: Date) {
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatDateRangeLabel(range: DateRange | undefined) {
+  if (!range?.from) return "All Time";
+  if (!range.to || range.from.toDateString() === range.to.toDateString()) return formatShortDate(range.from);
+  return `${formatShortDate(range.from)} - ${formatShortDate(range.to)}`;
+}
+
+function dateInRange(dateValue: string, range: DateRange | undefined) {
+  if (!range?.from) return true;
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return false;
+  const from = startOfDay(range.from);
+  const to = endOfDay(range.to || range.from);
+  return date >= from && date <= to;
 }
 
 // Small bar-chart glyph used in place of a static icon on the stat cards.
@@ -133,6 +154,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [chartType, setChartType] = useState<"area" | "bar">("area");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => defaultDashboardRange());
   const { user } = useAuth();
 
   const getVoucherStatusBadgeClass = (status: string) => {
@@ -158,10 +180,16 @@ export default function Dashboard() {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      queryClient.invalidateQueries({ queryKey: ["branchWallet"] });
-      queryClient.invalidateQueries({ queryKey: ["branchVouchers", branchId] });
-      queryClient.invalidateQueries({ queryKey: ["revenueShare", branchId] });
-      queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["branchWallet"] }),
+        refetchRouters(),
+        refetchVouchers(),
+        refetchRevenueShare(),
+        refetchSubscriptions(),
+        firstRouterId ? refetchStatus() : Promise.resolve(),
+        ...activeUsersQueries.map((query) => query.refetch()),
+        ...routerStatusQueries.map((query) => query.refetch()),
+      ]);
       toast.success("Dashboard data updated!");
     } catch (err) {
       toast.error("Failed to refresh dashboard data");
@@ -192,34 +220,24 @@ export default function Dashboard() {
 
   // Fetch real router status for the first configured router
   const branchId = localStorage.getItem("selected-workspace") || "biltra";
-  const { data: routers = [], isLoading: isRoutersLoading } = useRouters(branchId);
+  const { data: routers = [], isLoading: isRoutersLoading, refetch: refetchRouters } = useRouters(branchId);
   const firstRouterId = routers[0]?.id || "";
   const { data: statusData, refetch: refetchStatus } = useRouterStatus(firstRouterId);
-  const { data: revenueShare } = useQuery({
+  const { data: revenueShare, refetch: refetchRevenueShare } = useQuery({
     queryKey: ["revenueShare", branchId],
     queryFn: () => renultApi.staff.revenueShare(branchId),
     enabled: Boolean(branchId),
   });
-  const { data: subscriptions = [], isLoading: isSubscriptionsLoading } = useQuery({
+  const { data: subscriptions = [], isLoading: isSubscriptionsLoading, refetch: refetchSubscriptions } = useQuery({
     queryKey: ["subscriptions", "dashboard"],
     queryFn: () => renultApi.subscriptions.list({ limit: 5, active_only: true }),
   });
-  // Fetch branch vouchers (up to 1000) for recent purchases and heatmap metrics
-  const { data: vouchersData, isLoading: isVouchersLoading } = useBranchVouchers(branchId, { limit: 1000, refresh_router_status: true });
+  // Fetch branch vouchers for recent purchases and historical metrics.
+  const { data: vouchersData, isLoading: isVouchersLoading, refetch: refetchVouchers } = useBranchVouchers(branchId, { limit: 5000, refresh_router_status: true });
 
   // Active hotspot users and live router status across every router in the branch.
   const activeUsersQueries = useBranchActiveUsers(routers);
   const routerStatusQueries = useBranchRouterStatus(routers);
-  const activeVoucherCodes = useMemo(() => {
-    const codes = new Set<string>();
-    activeUsersQueries.forEach((query) => {
-      (query.data?.active_users || []).forEach((item) => {
-        const code = normalizedVoucherCode(item.user || item.name);
-        if (code) codes.add(code);
-      });
-    });
-    return codes;
-  }, [activeUsersQueries]);
 
   const onlineUsersCount = activeUsersQueries.reduce((sum, query) => sum + (query.data?.count ?? 0), 0);
   // A DHCP lease still bound to a device counts as an active session even after
@@ -248,11 +266,14 @@ export default function Dashboard() {
   const dataUsageTotal = dataUsageTotals.rx + dataUsageTotals.tx;
   const isDataUsageLoading = isRoutersLoading || routerStatusQueries.some((query) => query.isLoading);
 
+  const rangedVouchers = useMemo(() => {
+    return (vouchersData?.vouchers || []).filter((voucher) => dateInRange(voucherSoldAt(voucher), dateRange));
+  }, [dateRange, vouchersData]);
+
   const chartData = useMemo(() => {
     const grouped: Record<string, { sales: number; responses: number; sortKey: string }> = {};
-    (vouchersData?.vouchers || []).forEach((voucher) => {
-      if (!isActivatedVoucher(voucher, activeVoucherCodes)) return;
-      const soldAt = voucherSoldAt(voucher, activeVoucherCodes);
+    rangedVouchers.forEach((voucher) => {
+      const soldAt = voucherSoldAt(voucher);
       const date = new Date(soldAt);
       const sortKey = soldAt.slice(0, 10);
       const key = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -264,22 +285,19 @@ export default function Dashboard() {
       .map(([date, values]) => ({ date, ...values }))
       .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
       .slice(-7);
-  }, [activeVoucherCodes, vouchersData]);
+  }, [rangedVouchers]);
 
   const todayVoucherSales = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     return (vouchersData?.vouchers || [])
-      .filter((voucher) => isActivatedVoucher(voucher, activeVoucherCodes))
-      .filter((voucher) => voucherSoldAt(voucher, activeVoucherCodes).slice(0, 10) === today)
+      .filter((voucher) => voucherSoldAt(voucher).slice(0, 10) === today)
       .reduce((sum, voucher) => sum + voucher.amount, 0);
-  }, [activeVoucherCodes, vouchersData]);
+  }, [vouchersData]);
 
   // Derive recent voucher-style rows from real vouchers data
   const recentVouchers = useMemo(() => {
-    if (!vouchersData?.vouchers) return [];
-    return vouchersData.vouchers
-      .filter((voucher) => isActivatedVoucher(voucher, activeVoucherCodes))
-      .sort((a, b) => voucherSoldAt(b, activeVoucherCodes).localeCompare(voucherSoldAt(a, activeVoucherCodes)))
+    return [...rangedVouchers]
+      .sort((a, b) => voucherSoldAt(b).localeCompare(voucherSoldAt(a)))
       .slice(0, 5)
       .map((v) => ({
       id: v.voucher_code,
@@ -288,11 +306,11 @@ export default function Dashboard() {
       phone: v.phone_number === "BULK" ? "N/A" : v.phone_number,
       packageName: `${v.speed_type} ${v.profile}`,
       pricePaid: v.amount,
-      purchaseTime: voucherSoldAt(v, activeVoucherCodes),
+      purchaseTime: voucherSoldAt(v),
       status: voucherUiStatus(v.status),
       paymentMethod: (v.payment_reference?.startsWith("BAT-") ? "Cash" : "Mobile Money") as any,
     }));
-  }, [activeVoucherCodes, vouchersData]);
+  }, [rangedVouchers]);
 
   const isOnline = statusData?.connected ?? false;
   const selectedRouterName = routers[0]?.name || "Router";
@@ -316,16 +334,13 @@ export default function Dashboard() {
       };
     });
 
-    if (vouchersData?.vouchers) {
-      vouchersData.vouchers.forEach((v) => {
-        if (!isActivatedVoucher(v, activeVoucherCodes)) return;
-        const dateStr = voucherSoldAt(v, activeVoucherCodes).split("T")[0];
-        const cell = cells.find((c) => c.dateStr === dateStr);
-        if (cell) {
-          cell.count += 1;
-        }
-      });
-    }
+    rangedVouchers.forEach((v) => {
+      const dateStr = voucherSoldAt(v).split("T")[0];
+      const cell = cells.find((c) => c.dateStr === dateStr);
+      if (cell) {
+        cell.count += 1;
+      }
+    });
 
     cells.forEach((cell) => {
       if (cell.count === 0) cell.level = 0;
@@ -336,7 +351,7 @@ export default function Dashboard() {
     });
 
     return cells;
-  }, [activeVoucherCodes, vouchersData]);
+  }, [rangedVouchers]);
 
   const periodSummary = useMemo(() => {
     const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -373,15 +388,13 @@ export default function Dashboard() {
 
     return rows.map((row) => {
       const vouchers = (vouchersData?.vouchers || []).filter((voucher) => {
-        if (!isActivatedVoucher(voucher, activeVoucherCodes)) return false;
-        const soldAt = new Date(voucherSoldAt(voucher, activeVoucherCodes));
+        const soldAt = new Date(voucherSoldAt(voucher));
         return soldAt >= row.start && soldAt < row.end;
       });
-      const activated = vouchers;
-      const cash = activated
+      const cash = vouchers
         .filter((voucher) => !voucher.payment_reference || voucher.payment_reference.startsWith("BAT-"))
         .reduce((sum, voucher) => sum + voucher.amount, 0);
-      const mobileMoney = activated
+      const mobileMoney = vouchers
         .filter((voucher) => voucher.payment_reference && !voucher.payment_reference.startsWith("BAT-"))
         .reduce((sum, voucher) => sum + voucher.amount, 0);
       const total = cash + mobileMoney;
@@ -391,18 +404,17 @@ export default function Dashboard() {
         cash,
         mobileMoney,
         total,
-        totalItems: activated.length,
-        cashItems: activated.filter((voucher) => !voucher.payment_reference || voucher.payment_reference.startsWith("BAT-")).length,
-        mobileItems: activated.filter((voucher) => voucher.payment_reference && !voucher.payment_reference.startsWith("BAT-")).length,
+        totalItems: vouchers.length,
+        cashItems: vouchers.filter((voucher) => !voucher.payment_reference || voucher.payment_reference.startsWith("BAT-")).length,
+        mobileItems: vouchers.filter((voucher) => voucher.payment_reference && !voucher.payment_reference.startsWith("BAT-")).length,
       };
     });
-  }, [activeVoucherCodes, vouchersData]);
+  }, [vouchersData]);
 
   const paymentChartData = useMemo(() => {
     const grouped: Record<string, { date: string; sortKey: string; cash: number; mobileMoney: number; total: number; tans: number }> = {};
-    (vouchersData?.vouchers || []).forEach((voucher) => {
-      if (!isActivatedVoucher(voucher, activeVoucherCodes)) return;
-      const soldAt = voucherSoldAt(voucher, activeVoucherCodes);
+    rangedVouchers.forEach((voucher) => {
+      const soldAt = voucherSoldAt(voucher);
       const createdAt = new Date(soldAt);
       const sortKey = soldAt.slice(0, 10);
       const date = createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -417,7 +429,7 @@ export default function Dashboard() {
       grouped[date].tans += 1;
     });
     return Object.values(grouped).sort((a, b) => a.sortKey.localeCompare(b.sortKey)).slice(-7);
-  }, [activeVoucherCodes, vouchersData]);
+  }, [rangedVouchers]);
 
   const todaysTransactions = periodSummary[0]?.totalItems ?? 0;
   const todaysRevenue = periodSummary[0]?.total ?? todayVoucherSales;
@@ -482,26 +494,53 @@ export default function Dashboard() {
           <div className="mb-2 flex items-center justify-between">
             <div>
               <h2 className="text-base font-black tracking-tight">Analytics</h2>
-              <p className="text-[12px] text-slate-500">Revenue trends and payment breakdowns</p>
+              <p className="text-[12px] text-slate-500">{formatDateRangeLabel(dateRange)} · {rangedVouchers.length} vouchers</p>
             </div>
             <div className="flex items-center gap-2">
-              <Select defaultValue="today">
-                <SelectTrigger className="h-9 w-[118px] rounded border-border bg-card text-xs">
-                  <SelectValue placeholder="Date Range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="week">This Week</SelectItem>
-                  <SelectItem value="month">This Month</SelectItem>
-                  <SelectItem value="year">This Year</SelectItem>
-                </SelectContent>
-              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="h-9 max-w-[210px] justify-start gap-2 rounded border-border bg-card px-3 text-left text-xs font-bold"
+                  >
+                    <CalendarClock className="h-3.5 w-3.5 shrink-0 text-[#6c5ce7]" />
+                    <span className="truncate">{formatDateRangeLabel(dateRange)}</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto rounded border-border bg-card p-0" align="end">
+                  <Calendar
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                    className="hidden sm:block"
+                  />
+                  <Calendar
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={1}
+                    className="sm:hidden"
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border p-3">
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="h-8 rounded text-xs" onClick={() => setDateRange({ from: startOfDay(new Date()), to: startOfDay(new Date()) })}>
+                        Today
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-8 rounded text-xs" onClick={() => setDateRange(defaultDashboardRange())}>
+                        30 Days
+                      </Button>
+                    </div>
+                    <Button variant="ghost" size="sm" className="h-8 rounded text-xs" onClick={() => setDateRange(undefined)}>
+                      All Time
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
               <Button
                 size="sm"
-                onClick={() => {
-                  handleRefresh();
-                  if (firstRouterId) refetchStatus();
-                }}
+                onClick={handleRefresh}
+                disabled={isRefreshing}
                 className="h-9 gap-1.5 rounded bg-[#6c5ce7] px-3 text-xs font-bold hover:bg-[#5b4ad1]"
               >
                 <RotateCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
@@ -566,7 +605,7 @@ export default function Dashboard() {
                 <h3 className="text-sm font-black">Period Summary</h3>
                 <p className="text-[12px] text-slate-500">Updated {updatedAt}</p>
               </div>
-              <Button variant="outline" size="icon" className="h-8 w-8 rounded border-border bg-card">
+              <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefreshing} className="h-8 w-8 rounded border-border bg-card">
                 <RotateCw className="h-3.5 w-3.5" />
               </Button>
             </div>

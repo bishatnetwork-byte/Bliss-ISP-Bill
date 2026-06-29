@@ -30,6 +30,8 @@ class BranchWallet(SQLModel, table=True):
     total_withdrawn: int = Field(default=0)
     total_fees_paid: int = Field(default=0)
     is_frozen: bool = Field(default=False)
+    withdrawal_passcode_hash: Optional[str] = Field(default=None)
+    withdrawal_method: str = Field(default="email", index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

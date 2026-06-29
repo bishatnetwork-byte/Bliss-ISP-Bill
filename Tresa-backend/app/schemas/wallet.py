@@ -30,6 +30,22 @@ class WithdrawalConfirmRequest(BaseModel):
     code: str = Field(pattern=r"^\d{6}$")
 
 
+class WithdrawalPasscodeConfirmRequest(BaseModel):
+    amount: int = Field(gt=0)
+    recipient_phone: str = Field(min_length=10, max_length=20)
+    recipient_name: str = Field(min_length=1, max_length=150)
+    provider: str = Field(min_length=1, max_length=80)
+    passcode: str = Field(pattern=r"^\d{4}$")
+
+
+class WithdrawalPasscodeSetRequest(BaseModel):
+    passcode: str = Field(pattern=r"^\d{4}$")
+
+
+class WithdrawalMethodRequest(BaseModel):
+    method: str = Field(pattern=r"^(email|passcode)$")
+
+
 # ── Responses ─────────────────────────────────────────────────────────
 
 class BranchWalletResponse(BaseModel):
@@ -74,6 +90,12 @@ class WithdrawalConfigResponse(BaseModel):
     fee_rate: float
     min_amount: int
     max_amount: int
+
+
+class WithdrawalSecurityResponse(BaseModel):
+    passcode_enabled: bool
+    preferred_method: str
+    email_hint: str
 
 
 class PlatformLedgerEntryResponse(BaseModel):
