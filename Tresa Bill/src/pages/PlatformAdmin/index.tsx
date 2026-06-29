@@ -61,7 +61,7 @@ import PlatformAdminLayout, { PlatformAdminSection } from "./PlatformAdminLayout
 const ADMIN_TABS = [
   ["overview", "Overview"],
   ["users", "Users"],
-  ["finance", "Fees"],
+  ["finance", "Finance"],
   ["admin_shares", "Admin Shares"],
   ["broadcasts", "Broadcasts"],
   ["voucher_audit", "Voucher Audit"],
@@ -135,8 +135,8 @@ export default function PlatformAdminPage() {
   const usersQuery = useQuery({
     queryKey: ["platformAdmin", "users", userSearch],
     queryFn: () => renultApi.platformAdmin.users(userSearch),
-    enabled: (activeTab === "users" || activeTab === "subadmins" || activeTab === "admin_shares" || activeTab === "broadcasts" || activeTab === "reports")
-      && (permissions.has("users") || permissions.has("subadmins") || permissions.has("admin_shares") || permissions.has("broadcasts") || permissions.has("reports")),
+    enabled: (activeTab === "users" || activeTab === "subadmins" || activeTab === "admin_shares" || activeTab === "broadcasts" || activeTab === "reports" || activeTab === "finance")
+      && (permissions.has("users") || permissions.has("subadmins") || permissions.has("admin_shares") || permissions.has("broadcasts") || permissions.has("reports") || permissions.has("finance")),
     staleTime: 30 * 1000,
   });
   const settingsQuery = useQuery({
@@ -161,6 +161,12 @@ export default function PlatformAdminPage() {
     queryKey: ["platformAdmin", "allTransactions"],
     queryFn: () => renultApi.wallets.platformAllTransactions(),
     enabled: (activeTab === "finance" && permissions.has("finance")) || (activeTab === "reports" && permissions.has("reports")),
+    staleTime: 30 * 1000,
+  });
+  const smsFinanceQuery = useQuery({
+    queryKey: ["platformAdmin", "smsFinance"],
+    queryFn: renultApi.platformAdmin.smsFinance,
+    enabled: activeTab === "finance" && permissions.has("finance"),
     staleTime: 30 * 1000,
   });
   const tunnels = useQuery({
@@ -400,7 +406,9 @@ export default function PlatformAdminPage() {
             wallets={walletsQuery.data || []}
             ledger={ledgerQuery.data || []}
             allTransactions={allTxnsQuery.data || []}
-            loading={settingsQuery.isLoading || ledgerQuery.isLoading || allTxnsQuery.isLoading}
+            users={usersQuery.data || []}
+            smsFinance={smsFinanceQuery.data}
+            loading={settingsQuery.isLoading || ledgerQuery.isLoading || allTxnsQuery.isLoading || usersQuery.isLoading || smsFinanceQuery.isLoading}
             onSaved={() => queryClient.invalidateQueries({ queryKey: ["platformAdmin", "settings"] })}
             onFreeze={(id, frozen) => freezeWallet.mutate({ id, frozen })}
           />
@@ -799,16 +807,19 @@ function dayStr(daysAgo: number) {
 
 const FEE_PAGE = 5;
 
-function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSaved, onFreeze }: {
+function FinancePanel({ initial, wallets, ledger, allTransactions, users, smsFinance, loading, onSaved, onFreeze }: {
   initial?: PlatformSettingsResponse;
   wallets: Awaited<ReturnType<typeof renultApi.platformAdmin.wallets>>;
   ledger: PlatformLedgerEntryFullResponse[];
   allTransactions: PlatformAllTransactionResponse[];
+  users: PlatformUserResponse[];
+  smsFinance?: Awaited<ReturnType<typeof renultApi.platformAdmin.smsFinance>>;
   loading: boolean;
   onSaved: () => void;
   onFreeze: (id: string, frozen: boolean) => void;
 }) {
-  type Tab = "overview" | "ledger" | "transactions" | "calculator" | "wallets" | "settings";
+  type Tab = "overview" | "ledger" | "transactions" | "sms" | "calculator" | "wallets" | "settings";
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
   const [form, setForm] = useState<PlatformSettingsResponse | null>(null);
   const [calcAmount, setCalcAmount] = useState(100000);
@@ -817,13 +828,62 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
   const [txnPage, setTxnPage] = useState(1);
   const [txnTypeFilter, setTxnTypeFilter] = useState("all");
   const [txnStatusFilter, setTxnStatusFilter] = useState("all");
+  const [smsCost, setSmsCost] = useState("");
+  const [payoutAmount, setPayoutAmount] = useState("");
+  const [payoutPhone, setPayoutPhone] = useState("");
+  const [payoutReference, setPayoutReference] = useState("");
+  const [payoutNote, setPayoutNote] = useState("");
 
-  useEffect(() => { if (initial) setForm(initial); }, [initial]);
+  useEffect(() => {
+    if (initial) {
+      setForm(initial);
+      setSmsCost(String(initial.sms_cost_ugx || ""));
+    }
+  }, [initial]);
 
   const save = useMutation({
     mutationFn: renultApi.platformAdmin.updateSettings,
     onSuccess: () => { toast.success("Platform fee settings saved."); onSaved(); },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not save settings."),
+  });
+  const saveSmsCost = useMutation({
+    mutationFn: () => {
+      if (!form) throw new Error("Settings are still loading.");
+      const next = Number(smsCost);
+      if (!next || next < 1) throw new Error("Enter a valid SMS value.");
+      return renultApi.platformAdmin.updateSettings({ ...form, sms_cost_ugx: next });
+    },
+    onSuccess: () => {
+      toast.success("SMS value saved.");
+      onSaved();
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "smsFinance"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not save SMS value."),
+  });
+  const createSmsPayout = useMutation({
+    mutationFn: () => renultApi.platformAdmin.createSmsProviderPayout({
+      amount: Number(payoutAmount.replace(/\D/g, "")),
+      recipient_phone: payoutPhone,
+      reference: payoutReference || null,
+      note: payoutNote || null,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "smsFinance"] });
+      setPayoutAmount("");
+      setPayoutPhone("");
+      setPayoutReference("");
+      setPayoutNote("");
+      toast.success("SMS payout sent for processing.");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not record payout."),
+  });
+  const checkSmsPayoutStatus = useMutation({
+    mutationFn: renultApi.platformAdmin.smsProviderPayoutStatus,
+    onSuccess: (txn) => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "smsFinance"] });
+      toast.success(`SMS payout status: ${txn.status}`);
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not check payout status."),
   });
 
   // ── KPI computations ────────────────────────────────────────────
@@ -836,8 +896,18 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
     const activeWallets = wallets.filter(w => !w.is_frozen).length;
     const frozenWallets = wallets.filter(w => w.is_frozen).length;
     const totalClientBalance = wallets.reduce((s, w) => s + w.balance, 0);
-    return { totalFees, depositFees, withdrawalFees, totalDeposited, totalWithdrawn, activeWallets, frozenWallets, totalClientBalance };
-  }, [ledger, allTransactions, wallets]);
+    const adminShareReady = users
+      .filter((item) => item.platform_role === "subadmin" || item.platform_role === "superadmin")
+      .reduce((s, item) => s + Number(item.platform_fee_share_amount || 0), 0);
+    return { totalFees, depositFees, withdrawalFees, totalDeposited, totalWithdrawn, activeWallets, frozenWallets, totalClientBalance, adminShareReady };
+  }, [ledger, allTransactions, wallets, users]);
+
+  const adminShareRows = useMemo(
+    () => users
+      .filter((item) => (item.platform_role === "subadmin" || item.platform_role === "superadmin") && Number(item.platform_fee_share_amount || 0) > 0)
+      .sort((a, b) => Number(b.platform_fee_share_amount || 0) - Number(a.platform_fee_share_amount || 0)),
+    [users],
+  );
 
   // Sparklines daily fee totals last 7 days
   const feeSparkline = useMemo(() =>
@@ -885,6 +955,7 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
     { key: "overview", label: "Overview" },
     { key: "ledger", label: "Fee Ledger" },
     { key: "transactions", label: "All Transactions" },
+    { key: "sms", label: "SMS Cash" },
     { key: "calculator", label: "Fee Calculator" },
     { key: "wallets", label: "Wallet Control" },
     { key: "settings", label: "Settings" },
@@ -913,7 +984,7 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
       {/* ── Overview ────────────────────────────────────────────── */}
       {tab === "overview" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             {/* Total Fees */}
             <Card className="rounded border border-border/20 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
               <CardHeader className="pb-1 pt-3 px-4">
@@ -973,10 +1044,24 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
                 </div>
               </CardContent>
             </Card>
+
+            <Card className="rounded border border-border/20 shadow-sm overflow-hidden group hover:shadow-md hover:scale-[1.01] transition-all flex flex-col min-h-[130px]">
+              <CardHeader className="pb-1 pt-3 px-4">
+                <span className="text-[11px] font-bold text-muted-foreground ">Admin Share Ready</span>
+                <CardTitle className="text-xl font-black mt-0.5 leading-tight">{money(kpi.adminShareReady)}</CardTitle>
+              </CardHeader>
+              <div className="px-4 mt-auto"><Sparkline data={Array.from({ length: 7 }, (_, i) => kpi.adminShareReady / (i + 1))} color="#0ea5e9" /></div>
+              <CardContent className="pb-3 pt-0 px-4">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
+                  <span>{adminShareRows.length} admins with share balance</span>
+                  <div className="p-1 rounded bg-sky-500/10 text-sky-600"><Users className="w-3.5 h-3.5" /></div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Fee type breakdown */}
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid sm:grid-cols-3 gap-3">
             <Card className="shadow-none border border-border/20 rounded">
               <CardHeader className="pb-2"><CardTitle className="text-sm font-bold flex items-center gap-2">Fee Breakdown</CardTitle></CardHeader>
               <CardContent className="space-y-3">
@@ -1021,6 +1106,135 @@ function FinancePanel({ initial, wallets, ledger, allTransactions, loading, onSa
                     </Button>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-none border border-border/20 rounded">
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-bold flex items-center gap-2">Admin Share Withdraw</CardTitle></CardHeader>
+              <CardContent>
+                {adminShareRows.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-muted-foreground">No admin share is ready for withdrawal yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {adminShareRows.slice(0, 5).map((admin) => (
+                      <div key={admin.id} className="flex items-center justify-between gap-3 border-b border-border/30 pb-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-bold">{admin.full_name}</p>
+                          <p className="truncate text-[10px] text-muted-foreground">{admin.email}</p>
+                        </div>
+                        <span className="shrink-0 text-xs font-black font-mono">{money(admin.platform_fee_share_amount)}</span>
+                      </div>
+                    ))}
+                    <Button size="sm" variant="outline" className="w-full mt-2 text-xs gap-1.5 h-8" onClick={() => setTab("ledger")}>
+                      <Database className="w-3.5 h-3.5" /> View fee source
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {tab === "sms" && (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="rounded border border-border/20 shadow-sm"><CardContent className="p-4"><p className="text-[10px] font-black uppercase text-muted-foreground">Client SMS Topups</p><p className="mt-1 text-xl font-black">{money(smsFinance?.total_topups)}</p></CardContent></Card>
+            <Card className="rounded border border-border/20 shadow-sm"><CardContent className="p-4"><p className="text-[10px] font-black uppercase text-muted-foreground">SMS Charged</p><p className="mt-1 text-xl font-black">{money(smsFinance?.total_sms_revenue)}</p></CardContent></Card>
+            <Card className="rounded border border-border/20 shadow-sm"><CardContent className="p-4"><p className="text-[10px] font-black uppercase text-muted-foreground">Provider Paid</p><p className="mt-1 text-xl font-black">{money(smsFinance?.provider_payouts)}</p></CardContent></Card>
+            <Card className="rounded border border-border/20 shadow-sm"><CardContent className="p-4"><p className="text-[10px] font-black uppercase text-muted-foreground">Ready For Withdraw</p><p className="mt-1 text-xl font-black">{money(smsFinance?.available_sms_balance)}</p></CardContent></Card>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+            <Card className="shadow-none border border-border/20 rounded">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-bold">SMS cash ledger</CardTitle>
+                <CardDescription className="text-xs">Topups, SMS usage value, provider payments, and profit are recorded here for admin finance.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded border border-border/30 p-3"><p className="text-[10px] font-black uppercase text-muted-foreground">SMS Value</p><p className="mt-1 text-lg font-black">{money(smsFinance?.sms_cost_ugx || form?.sms_cost_ugx)}</p></div>
+                  <div className="rounded border border-border/30 p-3"><p className="text-[10px] font-black uppercase text-muted-foreground">SMS Sent</p><p className="mt-1 text-lg font-black">{Number(smsFinance?.total_sms_sent || 0).toLocaleString()}</p></div>
+                  <div className="rounded border border-border/30 p-3"><p className="text-[10px] font-black uppercase text-muted-foreground">Estimated Profit</p><p className="mt-1 text-lg font-black">{money(smsFinance?.estimated_profit)}</p></div>
+                </div>
+
+                <div className="max-h-[340px] overflow-y-auto rounded border border-border/20">
+                  {(smsFinance?.wallet_transactions || []).length === 0 ? (
+                    <div className="p-8 text-center text-sm text-muted-foreground">No SMS wallet transactions yet.</div>
+                  ) : (
+                    <Table>
+                      <TableHeader className="bg-muted/30">
+                        <TableRow>
+                          {["Date", "Owner", "Branch", "Type", "Amount", "Ref"].map((h) => <TableHead key={h} className="text-[11px] font-bold uppercase text-foreground">{h}</TableHead>)}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {smsFinance?.wallet_transactions.map((txn) => (
+                          <TableRow key={txn.id}>
+                            <TableCell className="text-xs whitespace-nowrap">{formatDate(txn.created_at)}</TableCell>
+                            <TableCell className="text-xs font-semibold">{txn.owner_name}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{txn.branch_name}</TableCell>
+                            <TableCell className="text-xs font-bold">{txn.transaction_type.replace(/_/g, " ")}</TableCell>
+                            <TableCell className="text-xs font-mono font-black text-right">{money(txn.amount)}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{txn.reference || "N/A"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-none border border-border/20 rounded">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-bold">SMS provider withdraw</CardTitle>
+                <CardDescription className="text-xs">Record cash removed from SMS funds for provider payments or admin settlement.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Field label="SMS value charged to users">
+                  <Input inputMode="numeric" value={smsCost} onChange={(event) => setSmsCost(event.target.value.replace(/\D/g, ""))} placeholder="29" />
+                </Field>
+                <Button className="w-full gap-2" onClick={() => saveSmsCost.mutate()} disabled={saveSmsCost.isPending || !form}>
+                  {saveSmsCost.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save SMS value
+                </Button>
+                <div className="border-t border-border/30 pt-3 space-y-3">
+                  <Field label="Amount to withdraw/pay provider">
+                    <Input inputMode="numeric" value={payoutAmount} onChange={(event) => setPayoutAmount(event.target.value.replace(/\D/g, ""))} placeholder="50000" />
+                  </Field>
+                  <Field label="Admin/staff phone number">
+                    <Input inputMode="tel" value={payoutPhone} onChange={(event) => setPayoutPhone(event.target.value)} placeholder="0700000000 or +256700000000" />
+                  </Field>
+                  <Field label="Reference">
+                    <Input value={payoutReference} onChange={(event) => setPayoutReference(event.target.value)} placeholder="Receipt, cash ref, bank ref" />
+                  </Field>
+                  <Field label="Note">
+                    <textarea className="min-h-24 w-full rounded border bg-background p-3 text-sm" value={payoutNote} onChange={(event) => setPayoutNote(event.target.value)} placeholder="Provider name, staff, reason..." />
+                  </Field>
+                  <Button className="w-full gap-2" onClick={() => createSmsPayout.mutate()} disabled={createSmsPayout.isPending || !Number(payoutAmount) || !payoutPhone.trim()}>
+                    {createSmsPayout.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CircleDollarSign className="h-4 w-4" />} Record withdraw
+                  </Button>
+                </div>
+                <div className="space-y-2 pt-2">
+                  {(smsFinance?.admin_transactions || []).slice(0, 5).map((txn) => (
+                    <div key={txn.id} className="rounded border border-border/30 p-3 text-xs">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold">{txn.admin_name || "Admin"} · {txn.transaction_type.replace(/_/g, " ")}</span>
+                        <Badge variant="outline" className={cn("text-[10px] font-bold", txn.status === "COMPLETED" ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" : txn.status === "FAILED" ? "bg-red-500/10 text-red-700 border-red-500/20" : "bg-amber-500/10 text-amber-700 border-amber-500/20")}>{txn.status}</Badge>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-3">
+                        <p className="text-muted-foreground">{txn.recipient_phone || "No phone"} · {formatDate(txn.created_at)}</p>
+                        <span className="font-bold">{money(txn.amount)}</span>
+                      </div>
+                      {txn.failure_reason && <p className="mt-1 text-red-600">{txn.failure_reason}</p>}
+                      {txn.status !== "COMPLETED" && txn.status !== "FAILED" && (
+                        <Button variant="outline" size="sm" className="mt-2 h-7 text-[11px]" onClick={() => checkSmsPayoutStatus.mutate(txn.id)} disabled={checkSmsPayoutStatus.isPending}>
+                          {checkSmsPayoutStatus.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />} Check status
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>

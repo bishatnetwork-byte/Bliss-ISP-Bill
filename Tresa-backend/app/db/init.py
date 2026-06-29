@@ -92,6 +92,7 @@ def init_db() -> None:
     _ensure_branch_wallet_columns()
     _ensure_branch_wallet_transaction_columns()
     _ensure_sms_wallet_transaction_columns()
+    _ensure_platform_sms_transaction_columns()
     _ensure_telegram_connection_columns()
     _ensure_captive_portal_columns()
     _bootstrap_platform_admins()
@@ -390,4 +391,27 @@ def _ensure_sms_wallet_transaction_columns() -> None:
         conn.execute(sa.text(
             "CREATE INDEX IF NOT EXISTS ix_smswallettransaction_gateway_reference "
             "ON smswallettransaction (gateway_reference)"
+        ))
+
+
+def _ensure_platform_sms_transaction_columns() -> None:
+    inspector = sa.inspect(engine)
+    if not inspector.has_table("platformsmstransaction"):
+        return
+    columns = {column["name"] for column in inspector.get_columns("platformsmstransaction")}
+    column_types = {
+        "recipient_phone": "VARCHAR",
+        "gateway_reference": "VARCHAR",
+        "gateway_status": "VARCHAR",
+        "failure_reason": "VARCHAR",
+        "last_checked_at": "TIMESTAMP",
+        "completed_at": "TIMESTAMP",
+    }
+    with engine.begin() as conn:
+        for name, sql_type in column_types.items():
+            if name not in columns:
+                conn.execute(sa.text(f"ALTER TABLE platformsmstransaction ADD COLUMN {name} {sql_type}"))
+        conn.execute(sa.text(
+            "CREATE INDEX IF NOT EXISTS ix_platformsmstransaction_gateway_reference "
+            "ON platformsmstransaction (gateway_reference)"
         ))

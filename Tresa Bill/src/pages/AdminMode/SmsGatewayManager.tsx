@@ -51,6 +51,7 @@ export function SmsGatewayManagerContent() {
   const [balanceResult, setBalanceResult] = useState<Record<string, unknown>>({});
   const [smsCost, setSmsCost] = useState("");
   const [payoutAmount, setPayoutAmount] = useState("");
+  const [payoutPhone, setPayoutPhone] = useState("");
   const [payoutReference, setPayoutReference] = useState("");
   const [payoutNote, setPayoutNote] = useState("");
 
@@ -131,17 +132,27 @@ export function SmsGatewayManagerContent() {
   const createPayout = useMutation({
     mutationFn: () => renultApi.platformAdmin.createSmsProviderPayout({
       amount: Number(payoutAmount.replace(/\D/g, "")),
+      recipient_phone: payoutPhone,
       reference: payoutReference || null,
       note: payoutNote || null,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platformAdmin", "smsFinance"] });
       setPayoutAmount("");
+      setPayoutPhone("");
       setPayoutReference("");
       setPayoutNote("");
-      toast.success("SMS provider payout recorded.");
+      toast.success("SMS payout sent for processing.");
     },
     onError: (error) => toast.error(errorMessage(error, "Could not record SMS payout.")),
+  });
+  const checkPayoutStatus = useMutation({
+    mutationFn: renultApi.platformAdmin.smsProviderPayoutStatus,
+    onSuccess: (txn) => {
+      queryClient.invalidateQueries({ queryKey: ["platformAdmin", "smsFinance"] });
+      toast.success(`SMS payout status: ${txn.status}`);
+    },
+    onError: (error) => toast.error(errorMessage(error, "Could not check SMS payout status.")),
   });
 
   const updateDraft = (provider: string, field: string, value: string) => {
@@ -237,24 +248,36 @@ export function SmsGatewayManagerContent() {
               <Field label="Amount paid to SMS provider">
                 <Input inputMode="numeric" value={payoutAmount} onChange={(event) => setPayoutAmount(event.target.value.replace(/\D/g, ""))} placeholder="50000" />
               </Field>
+              <Field label="Admin/staff phone number">
+                <Input inputMode="tel" value={payoutPhone} onChange={(event) => setPayoutPhone(event.target.value)} placeholder="0700000000 or +256700000000" />
+              </Field>
               <Field label="Reference">
                 <Input value={payoutReference} onChange={(event) => setPayoutReference(event.target.value)} placeholder="Provider receipt or cash ref" />
               </Field>
               <Field label="Note">
                 <Textarea value={payoutNote} onChange={(event) => setPayoutNote(event.target.value)} placeholder="Cash paid, bank transfer, staff name..." />
               </Field>
-              <Button className="w-full gap-2" onClick={() => createPayout.mutate()} disabled={createPayout.isPending || !Number(payoutAmount)}>
+              <Button className="w-full gap-2" onClick={() => createPayout.mutate()} disabled={createPayout.isPending || !Number(payoutAmount) || !payoutPhone.trim()}>
                 {createPayout.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
-                Record SMS payout
+                Withdraw SMS payout
               </Button>
               <div className="space-y-2">
                 {(finance?.admin_transactions || []).map((txn) => (
                   <div key={txn.id} className="rounded border p-3 text-xs">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="font-semibold">{txn.transaction_type.replace(/_/g, " ")}</span>
+                      <span className="font-semibold">{txn.admin_name || "Admin"} · {txn.transaction_type.replace(/_/g, " ")}</span>
+                      <Badge variant="outline">{txn.status}</Badge>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <p className="text-muted-foreground">{txn.recipient_phone || "No phone"} · {new Date(txn.created_at).toLocaleString()}</p>
                       <span className="font-bold">UGX {txn.amount.toLocaleString()}</span>
                     </div>
-                    <p className="mt-1 text-muted-foreground">{txn.reference || "No reference"} · {new Date(txn.created_at).toLocaleString()}</p>
+                    {txn.failure_reason && <p className="mt-1 text-red-600">{txn.failure_reason}</p>}
+                    {txn.status !== "COMPLETED" && txn.status !== "FAILED" && (
+                      <Button variant="outline" size="sm" className="mt-2 h-7 text-[11px]" onClick={() => checkPayoutStatus.mutate(txn.id)} disabled={checkPayoutStatus.isPending}>
+                        {checkPayoutStatus.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />} Check status
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>

@@ -98,6 +98,7 @@ from app.services.dns_provider import (
     provider_name as dns_provider_name,
 )
 from app.services.email import send_email
+from app.services import renult_pay
 from app.services.messaging import (
     SMS_GATEWAY_DEFINITIONS,
     check_sms_gateway_balance,
@@ -115,7 +116,7 @@ from app.services.platform_admin import (
     set_settings,
     settings_snapshot,
 )
-from app.services.portal import normalize_router_name, push_captive_files_to_mikrotik
+from app.services.portal import gateway_phone, normalize_router_name, push_captive_files_to_mikrotik
 from app.services.routers.concentrator import delete_router_from_chr
 from app.services.routers.credentials import encrypt_secret
 from app.services.routers.routeros import (
@@ -1057,7 +1058,7 @@ def sms_gateway_balance(
 def sms_finance(
     session: SessionDep,
     limit: int = Query(default=100, ge=1, le=500),
-    admin: User = _admin("sms_gateways"),
+    admin: User = Depends(platform_admin_any("finance", "sms_gateways")),
 ) -> PlatformSmsFinanceResponse:
     del admin
     sms_cost = int(get_setting(session, "sms_cost_ugx", settings.sms_notification_cost))
@@ -1069,21 +1070,24 @@ def sms_finance(
         .limit(limit)
     ).all()
     all_sms_txns = session.exec(select(SmsWalletTransaction)).all()
-    admin_txns = session.exec(
-        select(PlatformSmsTransaction)
+    admin_rows = session.exec(
+        select(PlatformSmsTransaction, User)
+        .join(User, PlatformSmsTransaction.admin_id == User.id, isouter=True)
         .order_by(PlatformSmsTransaction.created_at.desc())
         .limit(limit)
     ).all()
+    admin_txns = [txn for txn, _ in admin_rows]
     total_topups = sum(txn.amount for txn in all_sms_txns if txn.status == "COMPLETED" and txn.transaction_type in {"MOBILE_MONEY_TOPUP", "TRANSFER_IN"})
     total_sms_revenue = sum(txn.amount for txn in all_sms_txns if txn.transaction_type == "SMS_CHARGE")
     provider_payouts = sum(txn.amount for txn in admin_txns if txn.status == "COMPLETED" and txn.transaction_type == "PROVIDER_PAYOUT")
+    reserved_payouts = sum(txn.amount for txn in admin_txns if txn.status in {"PENDING", "PROCESSING"} and txn.transaction_type == "PROVIDER_PAYOUT")
     total_sms_sent = total_sms_revenue // max(1, sms_cost)
     return PlatformSmsFinanceResponse(
         sms_cost_ugx=sms_cost,
         total_topups=total_topups,
         total_sms_revenue=total_sms_revenue,
         provider_payouts=provider_payouts,
-        available_sms_balance=max(0, total_sms_revenue - provider_payouts),
+        available_sms_balance=max(0, total_topups - provider_payouts - reserved_payouts),
         total_sms_sent=total_sms_sent,
         estimated_provider_cost=provider_payouts,
         estimated_profit=max(0, total_sms_revenue - provider_payouts),
@@ -1103,16 +1107,8 @@ def sms_finance(
             for txn, branch, user in wallet_rows
         ],
         admin_transactions=[
-            PlatformSmsTransactionResponse(
-                id=txn.id,
-                amount=txn.amount,
-                transaction_type=txn.transaction_type.lower(),
-                reference=txn.reference,
-                note=txn.note,
-                status=txn.status,
-                created_at=txn.created_at,
-            )
-            for txn in admin_txns
+            _platform_sms_txn_response(txn, admin_user)
+            for txn, admin_user in admin_rows
         ],
     )
 
@@ -1121,7 +1117,7 @@ def sms_finance(
 def create_sms_provider_payout(
     payload: PlatformSmsWithdrawalRequest,
     session: SessionDep,
-    admin: User = _admin("sms_gateways"),
+    admin: User = Depends(platform_admin_any("finance", "sms_gateways")),
 ) -> PlatformSmsTransactionResponse:
     summary = sms_finance(session, admin=admin)
     if payload.amount > summary.available_sms_balance:
@@ -1132,18 +1128,108 @@ def create_sms_provider_payout(
         transaction_type="PROVIDER_PAYOUT",
         reference=payload.reference,
         note=payload.note,
+        recipient_phone=payload.recipient_phone,
+        status="PENDING",
     )
     session.add(txn)
     session.commit()
     session.refresh(txn)
-    audit(session, admin, "sms_provider_payout_recorded", "platform_sms", str(txn.id), {"amount": payload.amount, "reference": payload.reference})
+
+    try:
+        gateway_response = renult_pay.send_money(
+            amount=payload.amount,
+            phone_number=gateway_phone(payload.recipient_phone),
+            reference=txn.id,
+            description="SMS provider/admin payout"[:255],
+        )
+    except renult_pay.RenultPayError as exc:
+        txn.status = "FAILED"
+        txn.failure_reason = str(exc)
+        txn.last_checked_at = datetime.utcnow()
+        session.add(txn)
+        session.commit()
+        session.refresh(txn)
+        audit(session, admin, "sms_provider_payout_failed", "platform_sms", str(txn.id), {"amount": payload.amount, "phone": payload.recipient_phone, "error": str(exc)})
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Payment could not be sent: {exc}") from exc
+
+    gateway_status = renult_pay.extract_status(gateway_response)
+    normalized_status = renult_pay.normalize_status(gateway_status)
+    gateway_reference = renult_pay.extract_collection_uuid(gateway_response) or str(txn.id)
+    now = datetime.utcnow()
+
+    txn.gateway_reference = gateway_reference
+    txn.gateway_status = gateway_status
+    txn.last_checked_at = now
+    if normalized_status == "FAILED":
+        txn.status = "FAILED"
+        txn.failure_reason = "The payment gateway reported this SMS payout failed."
+    elif normalized_status == "SUCCESS":
+        txn.status = "COMPLETED"
+        txn.completed_at = now
+    else:
+        txn.status = "PROCESSING"
+    session.add(txn)
+    session.commit()
+    session.refresh(txn)
+    audit(session, admin, "sms_provider_payout_requested", "platform_sms", str(txn.id), {"amount": payload.amount, "phone": payload.recipient_phone, "status": txn.status})
+    return _platform_sms_txn_response(txn, admin)
+
+
+@router.get("/sms-finance/withdrawals/{transaction_id}/status", response_model=PlatformSmsTransactionResponse)
+def sms_provider_payout_status(
+    transaction_id: UUID,
+    session: SessionDep,
+    admin: User = Depends(platform_admin_any("finance", "sms_gateways")),
+) -> PlatformSmsTransactionResponse:
+    txn = session.get(PlatformSmsTransaction, transaction_id)
+    if not txn or txn.transaction_type != "PROVIDER_PAYOUT":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "SMS payout not found")
+
+    if txn.status in {"PENDING", "PROCESSING"} and txn.gateway_reference:
+        now = datetime.utcnow()
+        try:
+            gateway_response = renult_pay.get_send_money_status(txn.gateway_reference)
+        except renult_pay.RenultPayError:
+            txn.last_checked_at = now
+            session.add(txn)
+            session.commit()
+            session.refresh(txn)
+        else:
+            gateway_status = renult_pay.extract_status(gateway_response)
+            normalized_status = renult_pay.normalize_status(gateway_status)
+            txn.gateway_status = gateway_status
+            txn.last_checked_at = now
+            if normalized_status == "SUCCESS":
+                txn.status = "COMPLETED"
+                txn.completed_at = now
+            elif normalized_status == "FAILED":
+                txn.status = "FAILED"
+                txn.failure_reason = "The payment gateway reported this SMS payout failed."
+            session.add(txn)
+            session.commit()
+            session.refresh(txn)
+
+    admin_user = session.get(User, txn.admin_id) if txn.admin_id else None
+    audit(session, admin, "sms_provider_payout_status_checked", "platform_sms", str(txn.id), {"status": txn.status})
+    return _platform_sms_txn_response(txn, admin_user)
+
+
+def _platform_sms_txn_response(txn: PlatformSmsTransaction, admin_user: User | None = None) -> PlatformSmsTransactionResponse:
     return PlatformSmsTransactionResponse(
         id=txn.id,
+        admin_id=txn.admin_id,
+        admin_name=admin_user.full_name if admin_user else None,
         amount=txn.amount,
         transaction_type=txn.transaction_type.lower(),
         reference=txn.reference,
         note=txn.note,
+        recipient_phone=txn.recipient_phone,
+        gateway_reference=txn.gateway_reference,
+        gateway_status=txn.gateway_status,
+        failure_reason=txn.failure_reason,
         status=txn.status,
+        last_checked_at=txn.last_checked_at,
+        completed_at=txn.completed_at,
         created_at=txn.created_at,
     )
 

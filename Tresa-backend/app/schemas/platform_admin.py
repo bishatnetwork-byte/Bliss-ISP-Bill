@@ -182,11 +182,19 @@ class SmsGatewayBalanceResponse(BaseModel):
 
 class PlatformSmsTransactionResponse(BaseModel):
     id: UUID
+    admin_id: Optional[UUID] = None
+    admin_name: Optional[str] = None
     amount: int
     transaction_type: str
     reference: Optional[str] = None
     note: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    gateway_reference: Optional[str] = None
+    gateway_status: Optional[str] = None
+    failure_reason: Optional[str] = None
     status: str
+    last_checked_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     created_at: datetime
 
 
@@ -218,6 +226,7 @@ class PlatformSmsFinanceResponse(BaseModel):
 
 class PlatformSmsWithdrawalRequest(BaseModel):
     amount: int = Field(gt=0, le=100_000_000)
+    recipient_phone: str = Field(min_length=9, max_length=30)
     reference: Optional[str] = Field(default=None, max_length=120)
     note: Optional[str] = Field(default=None, max_length=300)
 

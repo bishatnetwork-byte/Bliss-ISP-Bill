@@ -1265,11 +1265,19 @@ export interface SmsWalletMutationResponse {
 
 export interface PlatformSmsTransactionResponse {
   id: string;
+  admin_id?: string | null;
+  admin_name?: string | null;
   amount: number;
   transaction_type: string;
   reference: string | null;
   note: string | null;
+  recipient_phone?: string | null;
+  gateway_reference?: string | null;
+  gateway_status?: string | null;
+  failure_reason?: string | null;
   status: string;
+  last_checked_at?: string | null;
+  completed_at?: string | null;
   created_at: string;
 }
 
@@ -1913,8 +1921,10 @@ export const renultApi = {
       apiRequest<SmsGatewayBalanceResponse>(`/platform-admin/sms-gateways/${provider}/balance`),
     smsFinance: () =>
       apiRequest<PlatformSmsFinanceResponse>("/platform-admin/sms-finance"),
-    createSmsProviderPayout: (payload: { amount: number; reference?: string | null; note?: string | null }) =>
+    createSmsProviderPayout: (payload: { amount: number; recipient_phone: string; reference?: string | null; note?: string | null }) =>
       apiRequest<PlatformSmsTransactionResponse>("/platform-admin/sms-finance/withdrawals", { method: "POST", body: JSON.stringify(payload) }),
+    smsProviderPayoutStatus: (transactionId: string) =>
+      apiRequest<PlatformSmsTransactionResponse>(`/platform-admin/sms-finance/withdrawals/${transactionId}/status`),
     audit: () => apiRequest<PlatformAuditResponse[]>("/platform-admin/audit", { query: { limit: 500 } }),
     storage: (prefix = "") =>
       apiRequest<PlatformStorageObjectResponse[]>("/platform-admin/storage", { query: { prefix } }),
