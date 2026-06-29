@@ -1069,28 +1069,22 @@ def sms_finance(
         .order_by(SmsWalletTransaction.created_at.desc())
         .limit(limit)
     ).all()
-    all_sms_txns = session.exec(select(SmsWalletTransaction)).all()
     admin_rows = session.exec(
         select(PlatformSmsTransaction, User)
         .join(User, PlatformSmsTransaction.admin_id == User.id, isouter=True)
         .order_by(PlatformSmsTransaction.created_at.desc())
         .limit(limit)
     ).all()
-    admin_txns = [txn for txn, _ in admin_rows]
-    total_topups = sum(txn.amount for txn in all_sms_txns if txn.status == "COMPLETED" and txn.transaction_type in {"MOBILE_MONEY_TOPUP", "TRANSFER_IN"})
-    total_sms_revenue = sum(txn.amount for txn in all_sms_txns if txn.transaction_type == "SMS_CHARGE")
-    provider_payouts = sum(txn.amount for txn in admin_txns if txn.status == "COMPLETED" and txn.transaction_type == "PROVIDER_PAYOUT")
-    reserved_payouts = sum(txn.amount for txn in admin_txns if txn.status in {"PENDING", "PROCESSING"} and txn.transaction_type == "PROVIDER_PAYOUT")
-    total_sms_sent = total_sms_revenue // max(1, sms_cost)
+    totals = _sms_finance_totals(session, sms_cost)
     return PlatformSmsFinanceResponse(
         sms_cost_ugx=sms_cost,
-        total_topups=total_topups,
-        total_sms_revenue=total_sms_revenue,
-        provider_payouts=provider_payouts,
-        available_sms_balance=max(0, total_topups - provider_payouts - reserved_payouts),
-        total_sms_sent=total_sms_sent,
-        estimated_provider_cost=provider_payouts,
-        estimated_profit=max(0, total_sms_revenue - provider_payouts),
+        total_topups=totals["total_topups"],
+        total_sms_revenue=totals["total_sms_revenue"],
+        provider_payouts=totals["provider_payouts"],
+        available_sms_balance=totals["available_sms_balance"],
+        total_sms_sent=totals["total_sms_sent"],
+        estimated_provider_cost=totals["provider_payouts"],
+        estimated_profit=max(0, totals["total_sms_revenue"] - totals["provider_payouts"]),
         wallet_transactions=[
             PlatformSmsWalletTransactionResponse(
                 id=txn.id,
@@ -1119,8 +1113,9 @@ def create_sms_provider_payout(
     session: SessionDep,
     admin: User = Depends(platform_admin_any("finance", "sms_gateways")),
 ) -> PlatformSmsTransactionResponse:
-    summary = sms_finance(session, admin=admin)
-    if payload.amount > summary.available_sms_balance:
+    sms_cost = int(get_setting(session, "sms_cost_ugx", settings.sms_notification_cost))
+    totals = _sms_finance_totals(session, sms_cost)
+    if payload.amount > totals["available_sms_balance"]:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "SMS platform balance is too low for this payout")
     txn = PlatformSmsTransaction(
         admin_id=admin.id,
@@ -1212,6 +1207,35 @@ def sms_provider_payout_status(
     admin_user = session.get(User, txn.admin_id) if txn.admin_id else None
     audit(session, admin, "sms_provider_payout_status_checked", "platform_sms", str(txn.id), {"status": txn.status})
     return _platform_sms_txn_response(txn, admin_user)
+
+
+def _sms_finance_totals(session: Session, sms_cost: int) -> dict[str, int]:
+    all_sms_txns = session.exec(select(SmsWalletTransaction)).all()
+    all_admin_txns = session.exec(select(PlatformSmsTransaction)).all()
+    total_topups = sum(
+        txn.amount
+        for txn in all_sms_txns
+        if txn.status == "COMPLETED" and txn.transaction_type in {"MOBILE_MONEY_TOPUP", "TRANSFER_IN"}
+    )
+    total_sms_revenue = sum(txn.amount for txn in all_sms_txns if txn.transaction_type == "SMS_CHARGE")
+    provider_payouts = sum(
+        txn.amount
+        for txn in all_admin_txns
+        if txn.status == "COMPLETED" and txn.transaction_type == "PROVIDER_PAYOUT"
+    )
+    reserved_payouts = sum(
+        txn.amount
+        for txn in all_admin_txns
+        if txn.status in {"PENDING", "PROCESSING"} and txn.transaction_type == "PROVIDER_PAYOUT"
+    )
+    return {
+        "total_topups": total_topups,
+        "total_sms_revenue": total_sms_revenue,
+        "provider_payouts": provider_payouts,
+        "reserved_payouts": reserved_payouts,
+        "available_sms_balance": max(0, total_topups - provider_payouts - reserved_payouts),
+        "total_sms_sent": total_sms_revenue // max(1, sms_cost),
+    }
 
 
 def _platform_sms_txn_response(txn: PlatformSmsTransaction, admin_user: User | None = None) -> PlatformSmsTransactionResponse:

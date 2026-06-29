@@ -83,7 +83,7 @@ export function SmsGatewayManagerContent() {
       Object.entries(draft).forEach(([key, value]) => {
         const trimmed = value.trim();
         if (trimmed) {
-          (payload as Record<string, string | boolean>)[key] = trimmed;
+          (payload as unknown as Record<string, string | boolean>)[key] = trimmed;
         }
       });
       return renultApi.platformAdmin.updateSmsGateway(gateway.id, payload);
@@ -166,7 +166,7 @@ export function SmsGatewayManagerContent() {
   };
 
   return (
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6">
+      <div className="mx-auto flex w-full max-w-full flex-col gap-5 px-4 py-6 sm:px-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-xl font-semibold text-foreground">SMS Finance & Gateway Manager</h1>
