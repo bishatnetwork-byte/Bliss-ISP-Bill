@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from sqlalchemy import or_
 from sqlmodel import select
 
 from app.api.deps import CurrentUser
@@ -51,6 +52,11 @@ from app.services.security import (
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+AUTH_FAILURE_WINDOW_MINUTES = 15
+AUTH_EMAIL_FAILURE_LIMIT = 5
+AUTH_IP_FAILURE_LIMIT = 25
+AUTH_LOCKOUT_MINUTES = 15
+
 
 def _request_ip_and_agent(request: Request) -> tuple[str | None, str | None]:
     return request.client.host if request.client else None, request.headers.get("user-agent")
@@ -74,6 +80,53 @@ def _record_login_attempt(
         failure_reason=reason,
     ))
     session.commit()
+
+
+def _too_many_attempts_message(minutes: int = AUTH_LOCKOUT_MINUTES) -> str:
+    return f"Too many sign-in attempts. Please wait {minutes} minutes and try again."
+
+
+def _enforce_login_rate_limit(
+    session: SessionDep,
+    email: str,
+    ip_address: str | None,
+    user: User | None,
+) -> None:
+    now = datetime.utcnow()
+    if user and user.blocked_until and user.blocked_until > now:
+        remaining_seconds = max(1, int((user.blocked_until - now).total_seconds()))
+        remaining_minutes = max(1, (remaining_seconds + 59) // 60)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=_too_many_attempts_message(remaining_minutes),
+        )
+
+    cutoff = now - timedelta(minutes=AUTH_FAILURE_WINDOW_MINUTES)
+    filters = [LoginAttempt.email == email]
+    if ip_address:
+        filters.append(LoginAttempt.ip_address == ip_address)
+
+    recent_failures = session.exec(
+        select(LoginAttempt)
+        .where(LoginAttempt.success.is_(False))
+        .where(LoginAttempt.created_at >= cutoff)
+        .where(or_(*filters))
+    ).all()
+
+    email_failures = sum(1 for attempt in recent_failures if attempt.email == email)
+    ip_failures = sum(1 for attempt in recent_failures if ip_address and attempt.ip_address == ip_address)
+    if email_failures < AUTH_EMAIL_FAILURE_LIMIT and ip_failures < AUTH_IP_FAILURE_LIMIT:
+        return
+
+    if user:
+        user.blocked_until = now + timedelta(minutes=AUTH_LOCKOUT_MINUTES)
+        session.add(user)
+        session.commit()
+
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=_too_many_attempts_message(),
+    )
 
 
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
@@ -138,24 +191,24 @@ def login(payload: LoginRequest, request: Request, session: SessionDep) -> AuthR
     ip_address, user_agent = _request_ip_and_agent(request)
 
     user = session.exec(select(User).where(User.email == email)).first()
+    _enforce_login_rate_limit(session, email, ip_address, user)
     if not user or not verify_password(payload.password, user.password_hash):
         _record_login_attempt(session, email, False, user.id if user else None, ip_address, user_agent, "Invalid email or password")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     if not user.is_active:
         _record_login_attempt(session, email, False, user.id, ip_address, user_agent, "Account suspended")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is suspended")
-    if user.blocked_until and user.blocked_until > datetime.utcnow():
-        _record_login_attempt(session, email, False, user.id, ip_address, user_agent, "Account blocked")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Account is blocked until {user.blocked_until.isoformat()}",
-        )
     if not user.is_verified:
         code = create_verification_code(session, email)
         send_verification_email(email, user.full_name, code)
         _record_login_attempt(session, email, False, user.id, ip_address, user_agent, "Email not verified")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email not verified. A new code has been sent.")
 
+    if user.blocked_until:
+        user.blocked_until = None
+        session.add(user)
+        session.commit()
+        session.refresh(user)
     _record_login_attempt(session, email, True, user.id, ip_address, user_agent)
     notify_login(session, user.id)
     return auth_response(user, session, ip_address=ip_address, user_agent=user_agent)

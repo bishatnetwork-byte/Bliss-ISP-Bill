@@ -128,7 +128,6 @@ function VoucherTableSkeleton({ rows = 10 }: { rows?: number }) {
           <TableCell className="text-center py-3.5">
             <Skeleton className="mx-auto h-4 w-4 rounded" />
           </TableCell>
-          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
           <TableCell><Skeleton className="h-4 w-32" /></TableCell>
           <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
           <TableCell><Skeleton className="h-4 w-24" /></TableCell>
@@ -1041,8 +1040,7 @@ export default function Vouchers() {
                       className="rounded border-border text-primary focus:ring-primary bg-background w-4 h-4 cursor-pointer"
                     />
                   </TableHead>
-                  <TableHead className="py-3">{showBatchBundles ? "Batch / Voucher" : "Username (Code)"}</TableHead>
-                  <TableHead className="py-3">Package</TableHead>
+                  <TableHead className="py-3">{showBatchBundles ? "Batch / Voucher / Package" : "Voucher / Package"}</TableHead>
                   <TableHead className="py-3">Status</TableHead>
                   {showBatchBundles ? (
                     <>
@@ -1068,7 +1066,7 @@ export default function Vouchers() {
                   <VoucherTableSkeleton rows={rowsPerPage} />
                 ) : filteredVouchers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="py-12 text-center text-muted-foreground font-medium">
+                    <TableCell colSpan={9} className="py-12 text-center text-muted-foreground font-medium">
                       <Info className="w-6 h-6 mx-auto mb-2 opacity-50 text-primary" />
                       No access vouchers match the current filters.
                     </TableCell>
@@ -1096,10 +1094,10 @@ export default function Vouchers() {
                         <TableCell>
                           <div className="space-y-1">
                             <div className="font-mono font-bold text-foreground tracking-wider">{row.title}</div>
+                            <div className="text-[10px] font-semibold text-primary">{row.packageName}</div>
                             <div className="text-[10px] text-muted-foreground">{row.routerName}</div>
                           </div>
                         </TableCell>
-                        <TableCell className="font-medium">{row.packageName}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             {statusCounts.map(([status, count]) => (
@@ -1180,11 +1178,11 @@ export default function Vouchers() {
                             className="rounded border-border text-primary focus:ring-primary bg-background w-4 h-4 cursor-pointer"
                           />
                         </TableCell>
-                        <TableCell className="font-mono font-bold text-foreground tracking-wider">
-                          {voucher.id}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {voucher.packageName}
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-mono font-bold text-foreground tracking-wider">{voucher.id}</div>
+                            <div className="text-[10px] font-semibold text-primary">{voucher.packageName}</div>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge

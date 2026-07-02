@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
     Activity,
@@ -59,15 +59,16 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useBranchVouchers, useRouterActiveUsers, useRouters } from "@/hooks/useRouters";
-import { voucherUiStatus } from "@/lib/voucherStatus";
+import {
+    isAdminGeneratedVoucher,
+    isSystemGeneratedVoucher,
+    isVoucherRevenueSale,
+    voucherPaymentMethod,
+    voucherPaymentMode,
+    voucherRevenueDate,
+    voucherSalesStatus,
+} from "@/lib/voucherSales";
 import { usePhoneVerifed } from "@/hooks/usePhoneVerifed";
-
-function voucherSoldAt(
-    voucher: { activated_at?: string | null; created_at: string },
-) {
-    if (voucher.activated_at) return voucher.activated_at;
-    return voucher.created_at;
-}
 
 // ── Ugandan Phone Normalization & Verification Component ───────
 function normalizeUgandanPhone(phone: string): string | null {
@@ -205,6 +206,7 @@ export default function SalesIndex() {
     useEffect(() => {
         if (vouchersData?.vouchers) {
             const mappedSales: SalesRecord[] = vouchersData.vouchers
+              .filter(isVoucherRevenueSale)
               .map((voucher) => ({
                 id: voucher.id,
                 router: voucher.router_name,
@@ -213,19 +215,33 @@ export default function SalesIndex() {
                 amount: voucher.amount,
                 activatedAt: voucher.activated_at?.replace("T", " ").substring(0, 19) || "N/A",
                 expiresAt: voucher.expires_at?.replace("T", " ").substring(0, 19) || "N/A",
-                status: voucherUiStatus(voucher.status),
-                paymentMode: voucher.phone_number === "BULK" || voucher.payment_reference?.startsWith("BAT-") ? "Voucher Printing" : "Online Payment",
-                paymentMethod: voucher.phone_number === "BULK" || voucher.payment_reference?.startsWith("BAT-") ? "Cash" : "MTN Mobile Money",
+                status: voucherSalesStatus(voucher),
+                paymentMode: voucherPaymentMode(voucher),
+                paymentMethod: voucherPaymentMethod(voucher),
                 buyerName: voucher.phone_number === "BULK" ? "Bulk Generated" : `Customer ${voucher.phone_number}`,
                 phone: voucher.phone_number === "BULK" ? "" : voucher.phone_number,
                 email: "",
                 transactionId: voucher.payment_reference || voucher.id.slice(0, 10).toUpperCase(),
                 deviceMac: "N/A",
                 bytesUsed: voucher.data || "N/A",
-                createdDate: voucherSoldAt(voucher).slice(0, 10),
+                createdDate: voucherRevenueDate(voucher).slice(0, 10),
             }));
             setSales(mappedSales);
         }
+    }, [vouchersData]);
+
+    const salesBasis = React.useMemo(() => {
+        const vouchers = vouchersData?.vouchers || [];
+        const sold = vouchers.filter(isVoucherRevenueSale);
+        const systemPaid = sold.filter(isSystemGeneratedVoucher);
+        const adminActivated = sold.filter(isAdminGeneratedVoucher);
+        const adminGeneratedUnsold = vouchers.filter((voucher) => isAdminGeneratedVoucher(voucher) && !isVoucherRevenueSale(voucher));
+
+        return {
+            systemPaid: systemPaid.length,
+            adminActivated: adminActivated.length,
+            adminGeneratedUnsold: adminGeneratedUnsold.length,
+        };
     }, [vouchersData]);
 
     useEffect(() => {
@@ -563,23 +579,36 @@ export default function SalesIndex() {
             <SEO title="WiFi Sales Records" />
             <AppHeader />
 
-            <main className=" mx-auto px-4 sm:px-6 py-6">
+            <main className="mx-auto w-full max-w-[1440px] px-3 py-4 sm:px-5 lg:px-6">
                 {/* Page Title & Tab Toggles */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4  pb-4 ">
-                    <div>
+                <div className="mb-4 flex flex-col gap-3 border-b border-border/60 pb-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                        <h1 className="text-lg font-black tracking-tight text-foreground">Sales</h1>
                         <p className="text-sm text-muted-foreground mt-1">
                             Monitor day-to-day sales, generate vouchers, and track router activation sessions.
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full sm:w-auto">
+                            <TabsList className="grid h-9 w-full grid-cols-2 rounded border border-border bg-card p-1 sm:w-[280px]">
+                                <TabsTrigger value="sales" className="gap-1.5 rounded text-xs font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                    <CircleDollarSign className="h-3.5 w-3.5" />
+                                    Sales
+                                </TabsTrigger>
+                                <TabsTrigger value="activation" className="gap-1.5 rounded text-xs font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                    <Activity className="h-3.5 w-3.5" />
+                                    Activations
+                                </TabsTrigger>
+                            </TabsList>
+                        </Tabs>
                         <button
                             onClick={() => {
                                 refetchVouchers();
                                 if (firstRouterId) refetchActiveUsers();
                             }}
                             disabled={vouchersRefreshing}
-                            className="bg-primary text-primary-foreground font-semibold text-xs sm:text-sm px-4 py-2 rounded shadow hover:bg-primary/95 flex items-center gap-2 transition-all"
+                            className="flex h-9 items-center justify-center gap-2 rounded bg-primary px-4 text-xs font-semibold text-primary-foreground shadow transition-all hover:bg-primary/95 disabled:opacity-60"
                         >
                             <RefreshCcw className={cn("w-4 h-4", vouchersRefreshing && "animate-spin")} />
                             Refresh Sales
@@ -691,6 +720,26 @@ export default function SalesIndex() {
                                 </CardContent>
                             </Card>
                         </div>
+
+                        <Card className="rounded border border-border/60 bg-card shadow-none">
+                            <CardContent className="grid gap-3 p-3 sm:grid-cols-3">
+                                <div className="rounded bg-muted/30 px-3 py-2">
+                                    <p className="text-[11px] font-bold uppercase text-muted-foreground">Portal paid</p>
+                                    <p className="mt-1 text-lg font-black text-foreground">{salesBasis.systemPaid.toLocaleString()}</p>
+                                    <p className="text-[11px] text-muted-foreground">System generated counted as sales</p>
+                                </div>
+                                <div className="rounded bg-muted/30 px-3 py-2">
+                                    <p className="text-[11px] font-bold uppercase text-muted-foreground">Admin activated</p>
+                                    <p className="mt-1 text-lg font-black text-foreground">{salesBasis.adminActivated.toLocaleString()}</p>
+                                    <p className="text-[11px] text-muted-foreground">Activated or expired counted as sales</p>
+                                </div>
+                                <div className="rounded bg-muted/30 px-3 py-2">
+                                    <p className="text-[11px] font-bold uppercase text-muted-foreground">Generated stock</p>
+                                    <p className="mt-1 text-lg font-black text-foreground">{salesBasis.adminGeneratedUnsold.toLocaleString()}</p>
+                                    <p className="text-[11px] text-muted-foreground">Admin vouchers waiting activation</p>
+                                </div>
+                            </CardContent>
+                        </Card>
 
                         {/* Filters & Search Panel */}
                         <Card className="rounded-none border border-border/40 shadow-none  bg-card">

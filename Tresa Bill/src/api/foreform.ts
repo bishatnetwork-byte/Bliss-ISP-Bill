@@ -1360,6 +1360,16 @@ type RequestOptions = RequestInit & {
   query?: Record<string, string | number | boolean | null | undefined>;
 };
 
+export class ApiError extends Error {
+  status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 function getStoredToken() {
   return localStorage.getItem(AUTH_TOKEN_KEY);
 }
@@ -1400,15 +1410,27 @@ async function apiRequest<T>(path: string, options: RequestOptions = {}): Promis
   const { auth = true, baseUrl, query, headers, body, ...init } = options;
   const token = getStoredToken();
   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
-  const res = await fetch(buildUrl(path, query, baseUrl), {
-    ...init,
-    headers: {
-      ...(body && !isFormData ? { "Content-Type": "application/json" } : {}),
-      ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-    body,
-  });
+  let res: Response;
+
+  try {
+    res = await fetch(buildUrl(path, query, baseUrl), {
+      ...init,
+      headers: {
+        ...(body && !isFormData ? { "Content-Type": "application/json" } : {}),
+        ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+      body,
+    });
+  } catch {
+    const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+    throw new ApiError(
+      offline
+        ? "You are offline. Check your internet connection and try again."
+        : "We could not reach the server. Check your connection and try again.",
+      0,
+    );
+  }
 
   const contentType = res.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await res.json() : await res.text();
@@ -1419,7 +1441,7 @@ async function apiRequest<T>(path: string, options: RequestOptions = {}): Promis
       ? detail.map((item: any) => item.msg).filter(Boolean).join(", ")
       : detail || data?.message || data || "Request failed";
     if (res.status === 401) clearAuth();
-    throw new Error(message);
+    throw new ApiError(message, res.status);
   }
 
   return data as T;

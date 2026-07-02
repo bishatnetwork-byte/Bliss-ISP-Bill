@@ -9,7 +9,7 @@ export function AuthInput(props: React.ComponentProps<typeof Input>) {
     <Input
       {...props}
       className={cn(
-        "bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-primary/20",
+        "bg-card border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/20",
         props.className,
       )}
     />
@@ -28,7 +28,7 @@ export function PasswordInput({
       <button
         type="button"
         onClick={onToggle}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
         aria-label={show ? "Hide password" : "Show password"}
       >
         {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -48,9 +48,9 @@ export function SubmitButton({ children, isLoading }: { children: React.ReactNod
 export function Divider() {
   return (
     <div className="w-full flex items-center my-6">
-      <div className="flex-1 h-px bg-slate-200" />
-      <span className="px-3 text-[11px] text-slate-300 font-medium uppercase">or</span>
-      <div className="flex-1 h-px bg-slate-200" />
+      <div className="flex-1 h-px bg-border" />
+      <span className="px-3 text-[11px] text-muted-foreground font-medium uppercase">or</span>
+      <div className="flex-1 h-px bg-border" />
     </div>
   );
 }

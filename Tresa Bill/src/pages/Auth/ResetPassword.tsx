@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { authErrorMessage } from "./auth-errors";
 import AuthShell from "./AuthShell";
 import { AuthInput, PasswordInput, SubmitButton } from "./auth-ui";
 
@@ -41,8 +42,8 @@ export default function ResetPassword() {
       if (!await redirectToAccountSubdomain(auth)) {
         navigate("/", { replace: true });
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to reset password");
+    } catch (err: unknown) {
+      toast.error(authErrorMessage(err, "Failed to reset password"));
     } finally {
       setIsLoading(false);
     }
@@ -60,7 +61,7 @@ export default function ResetPassword() {
           Reset Password
         </SubmitButton>
       </form>
-      <Link to="/login" className="mt-8 text-[13px] text-slate-900 hover:underline font-medium black-ops-one-regular">Back to login</Link>
+      <Link to="/login" className="mt-8 text-[13px] text-foreground hover:text-primary hover:underline font-medium black-ops-one-regular">Back to login</Link>
     </AuthShell>
   );
 }

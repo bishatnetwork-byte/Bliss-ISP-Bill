@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import React, { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { authErrorMessage } from "./auth-errors";
 import AuthShell from "./AuthShell";
 import { PasswordInput, SubmitButton } from "./auth-ui";
 
@@ -42,8 +43,8 @@ export default function SetPassword() {
       await refreshUser();
       toast.success("Password set");
       navigate(from, { replace: true });
-    } catch (err: any) {
-      toast.error(err.message || "Failed to set password");
+    } catch (err: unknown) {
+      toast.error(authErrorMessage(err, "Failed to set password"));
     } finally {
       setIsLoading(false);
     }

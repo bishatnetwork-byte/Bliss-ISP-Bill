@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { authErrorMessage } from "./auth-errors";
 import { clearGoogleRedirectUri, readGoogleRedirectUri } from "./google-auth";
 
 export default function GoogleCallback() {
@@ -34,14 +35,14 @@ export default function GoogleCallback() {
           navigate(target, { replace: true });
         }
       })
-      .catch((err: any) => {
-        toast.error(err.message || "Google sign in failed");
+      .catch((err: unknown) => {
+        toast.error(authErrorMessage(err, "Google sign in failed"));
         navigate("/login", { replace: true });
       });
   }, [params, navigate, login]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white text-sm text-slate-600">
+    <div className="min-h-screen flex items-center justify-center bg-background text-sm text-muted-foreground">
       <Loader2 className="w-4 h-4 animate-spin mr-2" />
       Finishing Google sign in...
     </div>

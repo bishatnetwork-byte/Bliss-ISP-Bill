@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { authErrorMessage } from "./auth-errors";
 import AuthShell from "./AuthShell";
 import { AuthInput, SubmitButton } from "./auth-ui";
 
@@ -19,8 +20,8 @@ export default function ForgotPassword() {
       await renultApi.auth.forgotPassword({ email });
       toast.success("Reset code sent");
       navigate(`/reset-password?email=${encodeURIComponent(email)}`);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to send reset code");
+    } catch (err: unknown) {
+      toast.error(authErrorMessage(err, "Failed to send reset code"));
     } finally {
       setIsLoading(false);
     }
@@ -35,7 +36,7 @@ export default function ForgotPassword() {
           Send Code
         </SubmitButton>
       </form>
-      <Link to="/login" className="mt-8 text-[13px] text-slate-900 hover:underline font-medium black-ops-one-regular">Back to login</Link>
+      <Link to="/login" className="mt-8 text-[13px] text-foreground hover:text-primary hover:underline font-medium black-ops-one-regular">Back to login</Link>
     </AuthShell>
   );
 }

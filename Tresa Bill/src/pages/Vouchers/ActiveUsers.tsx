@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useBranchActiveUsers, useKickActiveUser, useRouters } from "@/hooks/useRouters";
+import { useBranchActiveUsers, useBranchVouchers, useKickActiveUser, useRouters } from "@/hooks/useRouters";
 import { cn } from "@/lib/utils";
 import { Loader2, RefreshCw, UserX, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -21,9 +21,14 @@ interface ActiveSession {
   ip: string;
   mac: string;
   user: string;
+  packageName: string;
   uptime: string;
   uploaded: string;
   downloaded: string;
+}
+
+function normalizedVoucherCode(value: unknown) {
+  return String(value || "").trim().toUpperCase();
 }
 
 function parseRouterBytes(value: unknown): number {
@@ -93,6 +98,16 @@ export default function ActiveUsers() {
   }, []);
 
   const { data: routers = [] } = useRouters(branchId);
+  const { data: branchVouchersResponse } = useBranchVouchers(
+    branchId,
+    { limit: 1000 },
+    {
+      staleTime: 2 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+      refetchInterval: false,
+      refetchOnWindowFocus: false,
+    },
+  );
 
   const activeUsersQueries = useBranchActiveUsers(routers);
   const kickActiveUser = useKickActiveUser();
@@ -100,12 +115,23 @@ export default function ActiveUsers() {
     routers.length > 0 && activeUsersQueries.some((q) => q.isLoading);
   const activeUsersRefreshing = activeUsersQueries.some((q) => q.isFetching);
 
+  const voucherPackageByCode = useMemo(() => {
+    const packages = new Map<string, string>();
+    (branchVouchersResponse?.vouchers || []).forEach((voucher) => {
+      const code = normalizedVoucherCode(voucher.voucher_code);
+      if (!code) return;
+      packages.set(code, `${voucher.speed_type} ${voucher.profile}`.trim());
+    });
+    return packages;
+  }, [branchVouchersResponse]);
+
   const activeUsers: ActiveSession[] = useMemo(() => {
     return activeUsersQueries.flatMap((query, index) => {
       const router = routers[index];
       const items = query.data?.active_users || [];
       return items.map((item, itemIndex) => {
         const activeId = String(item[".id"] || item.id || itemIndex);
+        const user = String(item.user || item.name || "N/A");
         return {
           id: `${router.id}-${activeId}`,
           activeId,
@@ -114,14 +140,15 @@ export default function ActiveUsers() {
           device: getDeviceName(item),
           ip: String(item.address || "N/A"),
           mac: String(item["mac-address"] || "N/A"),
-          user: String(item.user || item.name || "N/A"),
+          user,
+          packageName: voucherPackageByCode.get(normalizedVoucherCode(user)) || "Package not synced",
           uptime: String(item.uptime || "N/A"),
           uploaded: formatDataUsage(item["bytes-in"]),
           downloaded: formatDataUsage(item["bytes-out"]),
         };
       });
     });
-  }, [activeUsersQueries, routers]);
+  }, [activeUsersQueries, routers, voucherPackageByCode]);
 
   const handleRefresh = () => {
     activeUsersQueries.forEach((query) => query.refetch());
@@ -205,7 +232,7 @@ export default function ActiveUsers() {
                     <TableHead className="font-bold text-xs  text-foreground">Router</TableHead>
                     <TableHead className="font-bold text-xs  text-foreground">Device / IP</TableHead>
                     <TableHead className="font-bold text-xs  text-foreground">MAC Address</TableHead>
-                    <TableHead className="font-bold text-xs  text-foreground">Voucher Code</TableHead>
+                    <TableHead className="font-bold text-xs  text-foreground">Voucher / Package</TableHead>
                     <TableHead className="font-bold text-xs  text-foreground">TX / RX</TableHead>
                     <TableHead className="font-bold text-xs  text-foreground text-right">Uptime</TableHead>
                     <TableHead className="font-bold text-xs  text-foreground text-right">Action</TableHead>
@@ -248,8 +275,11 @@ export default function ActiveUsers() {
                         <TableCell className="font-mono text-xs font-medium text-muted-foreground">
                           {session.mac}
                         </TableCell>
-                        <TableCell className="font-mono text-xs font-semibold text-primary">
-                          {session.user}
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-mono text-xs font-semibold text-primary">{session.user}</span>
+                            <span className="text-[10px] font-semibold text-muted-foreground">{session.packageName}</span>
+                          </div>
                         </TableCell>
                         <TableCell className="text-xs text-foreground/80">
                           <span className="font-bold text-emerald-500">↑ {session.uploaded}</span>
@@ -317,6 +347,7 @@ export default function ActiveUsers() {
                         <div className="min-w-0">
                           <p className="text-[10px] font-semibold text-muted-foreground">Voucher</p>
                           <p className="font-mono font-semibold text-primary truncate">{session.user}</p>
+                          <p className="text-[10px] font-semibold text-muted-foreground truncate">{session.packageName}</p>
                         </div>
                         <div className="min-w-0 text-right">
                           <p className="text-[10px] font-semibold text-muted-foreground">Uptime</p>

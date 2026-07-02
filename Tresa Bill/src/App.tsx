@@ -216,7 +216,7 @@ function App() {
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ""}>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem storageKey="renult-theme">
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem storageKey="renult-theme">
           <Router future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
             <AuthProvider>
               <AccountLoadingProgress />

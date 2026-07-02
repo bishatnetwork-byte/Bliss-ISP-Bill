@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { authErrorMessage } from "./auth-errors";
 import AuthShell from "./AuthShell";
 import { AuthInput, Divider, GoogleButtonContainer, PasswordInput, SubmitButton } from "./auth-ui";
 
@@ -32,8 +33,8 @@ export default function Login() {
     try {
       const auth = await renultApi.auth.login({ email, password });
       await finishLogin(auth);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to log in");
+    } catch (err: unknown) {
+      toast.error(authErrorMessage(err, "Failed to log in"));
     } finally {
       setIsLoading(false);
     }
@@ -52,8 +53,8 @@ export default function Login() {
       } else {
         await finishLogin(auth);
       }
-    } catch (err: any) {
-      toast.error(err.message || "Google sign in failed");
+    } catch (err: unknown) {
+      toast.error(authErrorMessage(err, "Google sign in failed"));
     } finally {
       setIsGoogleLoading(false);
     }
@@ -76,7 +77,7 @@ export default function Login() {
           )}
         </GoogleButtonContainer>
         {isGoogleLoading && (
-          <div className="mt-2 flex items-center justify-center gap-2 text-[12px] text-slate-500">
+          <div className="mt-2 flex items-center justify-center gap-2 text-[12px] text-muted-foreground">
             <Loader2 className="w-3.5 h-3.5 animate-spin" /> Signing you in...
           </div>
         )}
@@ -84,7 +85,7 @@ export default function Login() {
         <form className="space-y-2" onSubmit={handleSubmit}>
           <AuthInput type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="youremail@mail.host" autoComplete="email" autoFocus />
           <PasswordInput show={showPassword} onToggle={() => setShowPassword((next) => !next)} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" autoComplete="current-password" />
-          <Link to="/forgot-password" className="block pt-1 text-[13px] text-slate-900 hover:underline font-medium text-right">
+          <Link to="/forgot-password" className="block pt-1 text-[13px] text-foreground hover:text-primary hover:underline font-medium text-right">
             Forgot password?
           </Link>
           <SubmitButton isLoading={isLoading}>
@@ -94,8 +95,8 @@ export default function Login() {
         </form>
       </div>
       <div className="mt-8 text-center">
-        <p className="text-[13px] text-slate-600 font-medium black-ops-one-regular">
-          New to Bliss ISP? <Link to="/signup" className="text-slate-900 hover:underline">Create an account</Link>
+        <p className="text-[13px] text-muted-foreground font-medium black-ops-one-regular">
+          New to Bliss ISP? <Link to="/signup" className="text-foreground hover:text-primary hover:underline">Create an account</Link>
         </p>
       </div>
     </AuthShell>

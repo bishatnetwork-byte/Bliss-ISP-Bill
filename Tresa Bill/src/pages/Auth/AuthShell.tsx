@@ -1,5 +1,4 @@
 import SEO from "@/components/SEO";
-import { Activity, Radio, Ticket } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 
@@ -20,20 +19,20 @@ interface AuthShellProps {
 
 export default function AuthShell({ title, subtitle, seoTitle, path, children, footer }: AuthShellProps) {
   return (
-    <div className="min-h-screen flex bg-white font-sans">
+    <div className="min-h-screen flex bg-background font-sans text-foreground">
       <Helmet>
         <link rel="preload" as="image" href="/bg/cover.jpeg" />
       </Helmet>
       <SEO title={seoTitle} path={path} />
 
       {/* Left branding panel */}
-      <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-primary/30 p-12 text-white">
+      <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between overflow-hidden bg-[#1b1b1b] p-12 text-white">
         <img
           src="/bg/cover.jpeg"
           alt=""
           className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/60 to-slate-900/30" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-[#1b1b1b]/70 to-[#1b1b1b]/35" />
 
         <div className="relative z-10">
           <Link to="/" className="inline-flex items-center ">
@@ -50,13 +49,13 @@ export default function AuthShell({ title, subtitle, seoTitle, path, children, f
           </p>
         </div> */}
 
-        <div className="relative z-10 text-[14px] text-slate-400 font-medium black-ops-one-regular">
+        <div className="relative z-10 text-[14px] text-white/55 font-medium black-ops-one-regular">
           Bliss ISP © {new Date().getFullYear()}
         </div>
       </div>
 
       {/* Right form panel */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 relative overflow-hidden bg-background">
         <img
           src="/bg/bg.png"
           alt=""
@@ -68,14 +67,14 @@ export default function AuthShell({ title, subtitle, seoTitle, path, children, f
             <img src="/icons/mini.png" alt="Renult" className="w-10 h-10 object-contain" />
           </Link>
           <div className="text-center mb-6">
-            <h1 className="text-[22px] font-bold text-slate-800 mb-1 black-ops-one-regular">{title}</h1>
-            <p className="text-[13px] text-slate-500 orbitron-400">{subtitle}</p>
+            <h1 className="text-[22px] font-bold text-foreground mb-1 black-ops-one-regular">{title}</h1>
+            <p className="text-[13px] text-muted-foreground orbitron-400">{subtitle}</p>
           </div>
           {children}
           {footer}
         </div>
 
-        <div className="absolute bottom-6 flex flex-wrap items-center  justify-center gap-6 text-[10px] text-slate-500 font-bold w-full px-4 lg:hidden">
+        <div className="absolute bottom-6 flex flex-wrap items-center  justify-center gap-6 text-[10px] text-muted-foreground font-bold w-full px-4 lg:hidden">
           <span className="black-ops-one-regular">Renult © {new Date().getFullYear()}</span>
         </div>
       </div>

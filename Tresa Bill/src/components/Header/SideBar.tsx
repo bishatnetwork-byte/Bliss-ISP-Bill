@@ -103,7 +103,7 @@ const supportNavItems: NavItem[] = [
     path: "/withdrawals",
   },
   {
-    label: "Help Desk",
+    label: "Voucher Search",
     icon: <HelpDeskIcon className="w-5 h-5 " />,
     path: "/voucher-support",
   },

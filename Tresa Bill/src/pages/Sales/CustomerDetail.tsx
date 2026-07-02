@@ -4,7 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { voucherUiStatus } from "@/lib/voucherStatus";
+import {
+    isVoucherRevenueSale,
+    voucherPaymentMethod,
+    voucherPaymentMode,
+    voucherRevenueDate,
+    voucherSalesStatus,
+} from "@/lib/voucherSales";
 import { useBranchVouchers, useRouters } from "@/hooks/useRouters";
 import {
     ArrowLeft,
@@ -119,7 +125,7 @@ export default function CustomerDetail() {
         return vouchersData.vouchers
             .filter((v) => {
                 const ph = v.phone_number === "BULK" ? "" : v.phone_number;
-                return ph === phone;
+                return ph === phone && isVoucherRevenueSale(v);
             })
             .map((v) => ({
                 id: v.id,
@@ -127,22 +133,18 @@ export default function CustomerDetail() {
                 voucherCode: v.voucher_code,
                 profile: `${v.speed_type} ${v.profile}`,
                 amount: v.amount,
-                activatedAt: v.status === "ACTIVE" ? v.created_at : "N/A",
-                expiresAt: ["EXPIRED", "ROUTER_MISSING"].includes(v.status) ? v.created_at : "N/A",
-                status: voucherUiStatus(v.status),
-                paymentMode: (v.phone_number === "BULK" || v.payment_reference?.startsWith("BAT-")
-                    ? "Voucher Printing"
-                    : "Online Payment") as SalesRecord["paymentMode"],
-                paymentMethod: v.phone_number === "BULK" || v.payment_reference?.startsWith("BAT-")
-                    ? "Cash"
-                    : "MTN Mobile Money",
+                activatedAt: v.activated_at?.replace("T", " ").substring(0, 19) || "N/A",
+                expiresAt: v.expires_at?.replace("T", " ").substring(0, 19) || "N/A",
+                status: voucherSalesStatus(v),
+                paymentMode: voucherPaymentMode(v) as SalesRecord["paymentMode"],
+                paymentMethod: voucherPaymentMethod(v),
                 buyerName: `Customer ${v.phone_number}`,
                 phone: v.phone_number,
                 email: "",
                 transactionId: v.payment_reference || v.id.slice(0, 10).toUpperCase(),
                 deviceMac: "N/A",
                 bytesUsed: v.data || "N/A",
-                createdDate: v.created_at.slice(0, 10),
+                createdDate: voucherRevenueDate(v).slice(0, 10),
             }))
             .sort((a, b) => b.createdDate.localeCompare(a.createdDate));
     }, [vouchersData, phone]);

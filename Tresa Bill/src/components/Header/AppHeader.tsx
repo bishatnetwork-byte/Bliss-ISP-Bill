@@ -17,10 +17,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/lib/auth";
 import { renultApi, RouterMonitorSummary } from "@/api/foreform";
-import { Loader2, Menu, PanelLeft, RadioTower, RefreshCw, User } from "lucide-react";
+import { Loader2, LockKeyhole, Menu, Monitor, Moon, PanelLeft, RadioTower, RefreshCw, Sun, User } from "lucide-react";
+import { useTheme } from "next-themes";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -45,6 +45,7 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [monitoring, setMonitoring] = useState<RouterMonitorSummary | null>(null);
   const [enablingRouterId, setEnablingRouterId] = useState<string | null>(null);
   const [pingStatuses, setPingStatuses] = useState<Record<string, PingStatus>>({});
@@ -321,8 +322,6 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
 
           {/* Right section: actions */}
           <div className="flex items-center gap-2 sm:gap-3">
-            <ThemeToggle />
-
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -475,9 +474,9 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  className="w-9 h-9 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center
-                    text-sm font-bold tracking-tight hover:ring-2 hover:ring-primary/30 transition-all
-                    focus:outline-none focus:ring-2 focus:ring-primary/40 shrink-0"
+                  className="w-9 h-9 rounded-full border-0 bg-[#ed9a22] text-white shadow-none flex items-center justify-center
+                    text-xs font-bold tracking-tight hover:bg-[#f0a33a] hover:ring-2 hover:ring-[#ed9a22]/30 transition-all
+                    focus:outline-none focus:ring-2 focus:ring-[#ed9a22]/40 shrink-0"
                   aria-label="Account menu"
                 >
                   {user?.full_name?.[0]?.toUpperCase() || "U"}
@@ -485,43 +484,88 @@ export default function AppHeader({ onCreateForm }: AppHeaderProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="w-56 rounded p-2 border-border/60 shadow-xl backdrop-blur-md bg-card/95"
+                className="w-60 rounded border-border/80 bg-card p-0 text-card-foreground shadow-xl"
               >
-                <DropdownMenuLabel className="px-3 py-2">
-                  <div className="flex flex-col space-y-0.5">
-                    <p className="text-sm font-bold truncate">{user?.full_name || "My Account"}</p>
-                    {user?.email && (
-                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                    )}
+                <DropdownMenuLabel className="px-3 py-2.5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#ed9a22] text-xs font-bold text-white">
+                      {user?.full_name?.[0]?.toUpperCase() || "U"}
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <p className="truncate text-sm font-bold leading-tight">{user?.full_name || "My Account"}</p>
+                      {user?.email && (
+                        <p className="truncate text-xs font-medium text-muted-foreground">{user.email}</p>
+                      )}
+                    </div>
                   </div>
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-border/40 my-1" />
-                {user?.account_type !== "staff" ? (
+                <DropdownMenuSeparator className="m-0 bg-border/70" />
+                <div className="px-1 py-2">
+                  <div className="grid grid-cols-3 gap-1 rounded border border-border/70 bg-muted/35 p-1">
+                    {[
+                      { value: "light", label: "Light", icon: Sun },
+                      { value: "dark", label: "Dark", icon: Moon },
+                      { value: "system", label: "System", icon: Monitor },
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      const isActive = (theme || "system") === item.value;
+                      return (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => setTheme(item.value)}
+                          className={`flex h-7 items-center justify-center gap-1 rounded text-[11px] font-medium transition-colors ${isActive
+                            ? "border border-[#ed9a22]/70 bg-[#ed9a22]/10 text-[#ed9a22]"
+                            : "border border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+                            }`}
+                        >
+                          <Icon className="h-3 w-3" />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <DropdownMenuSeparator className="m-0 bg-border/70" />
+                <div className="px-2 py-2">
+                  <p className="px-1.5 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Account
+                  </p>
+                  {user?.account_type !== "staff" ? (
+                    <DropdownMenuItem
+                      onClick={() => navigate("/settings")}
+                      className="cursor-pointer gap-3 rounded px-2 py-2 text-sm focus:bg-muted/70 focus:text-foreground"
+                    >
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <span>Profile</span>
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      onClick={() => navigate("/profile")}
+                      className="cursor-pointer gap-3 rounded px-2 py-2 text-sm focus:bg-muted/70 focus:text-foreground"
+                    >
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <span>Profile</span>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
-                    onClick={() => navigate("/settings")}
-                    className="rounded px-3 py-2 cursor-pointer focus:bg-primary/10 focus:text-primary transition-all gap-3"
+                    onClick={() => navigate("/settings/password")}
+                    className="cursor-pointer gap-3 rounded px-2 py-2 text-sm focus:bg-muted/70 focus:text-foreground"
                   >
-                    <User className="w-4 h-4" />
-                    <span className="font-semibold text-sm">View Profile</span>
+                    <LockKeyhole className="h-4 w-4 text-muted-foreground" />
+                    <span>Password &amp; security</span>
                   </DropdownMenuItem>
-                ) : (
+                  <DropdownMenuSeparator className="my-2 bg-border/70" />
                   <DropdownMenuItem
-                    onClick={() => navigate("/profile")}
-                    className="rounded px-3 py-2 cursor-pointer focus:bg-primary/10 focus:text-primary transition-all gap-3"
+                    onClick={() => {
+                      logout();
+                      navigate("/login", { replace: true });
+                    }}
+                    className="cursor-pointer gap-3 rounded px-2 py-2 text-sm text-muted-foreground focus:bg-muted/70 focus:text-foreground"
                   >
-                    <User className="w-4 h-4" />
-                    <span className="font-semibold text-sm">My Profile</span>
+                    <span>Logout</span>
                   </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  onClick={() => {
-                    logout();
-                    navigate("/login", { replace: true });
-                  }}
-                  className="rounded px-3 py-2 cursor-pointer focus:bg-primary/10 focus:text-primary transition-all gap-3"
-                >
-                  <span className="font-semibold text-sm">Logout</span>
-                </DropdownMenuItem>
+                </div>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

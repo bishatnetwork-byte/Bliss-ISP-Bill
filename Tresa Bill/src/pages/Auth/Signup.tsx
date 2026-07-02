@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { authErrorMessage } from "./auth-errors";
 import AuthShell from "./AuthShell";
 import { AuthInput, Divider, GoogleButtonContainer, PasswordInput, SubmitButton } from "./auth-ui";
 
@@ -54,8 +55,8 @@ export default function Signup() {
       });
       toast.success("Account created. Enter the verification code sent to your email.");
       setStep("verify");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create account");
+    } catch (err: unknown) {
+      toast.error(authErrorMessage(err, "Failed to create account"));
     } finally {
       setIsLoading(false);
     }
@@ -74,8 +75,8 @@ export default function Signup() {
       if (!await redirectToAccountSubdomain(auth)) {
         navigate("/", { replace: true });
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to verify account");
+    } catch (err: unknown) {
+      toast.error(authErrorMessage(err, "Failed to verify account"));
     } finally {
       setIsLoading(false);
     }
@@ -100,8 +101,8 @@ export default function Signup() {
       if (!await redirectToAccountSubdomain(auth, target)) {
         navigate(target, { replace: true });
       }
-    } catch (err: any) {
-      toast.error(err.message || "Google sign up failed");
+    } catch (err: unknown) {
+      toast.error(authErrorMessage(err, "Google sign up failed"));
     } finally {
       setIsGoogleLoading(false);
     }
@@ -131,7 +132,7 @@ export default function Signup() {
               )}
             </GoogleButtonContainer>
             {isGoogleLoading && (
-              <div className="mt-2 flex items-center justify-center gap-2 text-[12px] text-slate-500">
+              <div className="mt-2 flex items-center justify-center gap-2 text-[12px] text-muted-foreground">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating your account...
               </div>
             )}
@@ -159,11 +160,11 @@ export default function Signup() {
                   try {
                     await renultApi.auth.resendCode({ email });
                     toast.success("Verification code sent");
-                  } catch (err: any) {
-                    toast.error(err.message || "Failed to resend code");
+                  } catch (err: unknown) {
+                    toast.error(authErrorMessage(err, "Failed to resend code"));
                   }
                 }}
-                className="text-[12px] text-slate-900 hover:underline font-medium"
+                className="text-[12px] text-foreground hover:text-primary hover:underline font-medium"
               >
                 Resend code
               </button>
@@ -176,8 +177,8 @@ export default function Signup() {
         </form>
       </div>
       <div className="mt-8 text-center">
-        <p className="text-[13px] text-slate-600 font-medium black-ops-one-regular">
-          Already have an account? <Link to="/login" className="text-slate-900 hover:underline">Sign in</Link>
+        <p className="text-[13px] text-muted-foreground font-medium black-ops-one-regular">
+          Already have an account? <Link to="/login" className="text-foreground hover:text-primary hover:underline">Sign in</Link>
         </p>
       </div>
     </AuthShell>

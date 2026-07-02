@@ -8,7 +8,8 @@ const config: Config = {
 	theme: {
 		extend: {
 			fontFamily: {
-				inter: ['var(--font-inter)']
+				inter: ['var(--font-inter)'],
+				barlow: ['var(--font-barlow)']
 			},
 			borderRadius: {
 				lg: 'var(--radius)',

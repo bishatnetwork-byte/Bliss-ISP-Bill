@@ -33,7 +33,12 @@ import { useEffect, useMemo, useState } from "react";
 import type { DateRange } from "react-day-picker";
 import { useNavigate } from "react-router-dom";
 import { useRouters, useRouterStatus, useBranchVouchers, useBranchActiveUsers, useBranchRouterStatus } from "@/hooks/useRouters";
-import { voucherUiStatus } from "@/lib/voucherStatus";
+import {
+  isVoucherRevenueSale,
+  voucherPaymentMode,
+  voucherRevenueDate,
+  voucherSalesStatus,
+} from "@/lib/voucherSales";
 
 import {
   Popover,
@@ -83,11 +88,20 @@ function LiveBadge() {
   );
 }
 
+const chartColors = {
+  cash: "#20c997",
+  cashSoft: "#8af0c6",
+  mobile: "#6865f2",
+  mobileSoft: "#a7a5ff",
+  grid: "hsl(var(--border))",
+  axis: "hsl(var(--muted-foreground))",
+  cursor: "hsl(var(--muted))",
+};
+
 function voucherSoldAt(
-  voucher: { activated_at?: string | null; created_at: string },
+  voucher: Parameters<typeof voucherRevenueDate>[0],
 ) {
-  if (voucher.activated_at) return voucher.activated_at;
-  return voucher.created_at;
+  return voucherRevenueDate(voucher);
 }
 
 function startOfDay(date: Date) {
@@ -267,7 +281,9 @@ export default function Dashboard() {
   const isDataUsageLoading = isRoutersLoading || routerStatusQueries.some((query) => query.isLoading);
 
   const rangedVouchers = useMemo(() => {
-    return (vouchersData?.vouchers || []).filter((voucher) => dateInRange(voucherSoldAt(voucher), dateRange));
+    return (vouchersData?.vouchers || [])
+      .filter(isVoucherRevenueSale)
+      .filter((voucher) => dateInRange(voucherSoldAt(voucher), dateRange));
   }, [dateRange, vouchersData]);
 
   const chartData = useMemo(() => {
@@ -290,6 +306,7 @@ export default function Dashboard() {
   const todayVoucherSales = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     return (vouchersData?.vouchers || [])
+      .filter(isVoucherRevenueSale)
       .filter((voucher) => voucherSoldAt(voucher).slice(0, 10) === today)
       .reduce((sum, voucher) => sum + voucher.amount, 0);
   }, [vouchersData]);
@@ -307,8 +324,8 @@ export default function Dashboard() {
       packageName: `${v.speed_type} ${v.profile}`,
       pricePaid: v.amount,
       purchaseTime: voucherSoldAt(v),
-      status: voucherUiStatus(v.status),
-      paymentMethod: (v.payment_reference?.startsWith("BAT-") ? "Cash" : "Mobile Money") as any,
+      status: voucherSalesStatus(v),
+      paymentMethod: (voucherPaymentMode(v) === "Voucher Printing" ? "Cash" : "Mobile Money") as any,
     }));
   }, [rangedVouchers]);
 
@@ -388,14 +405,15 @@ export default function Dashboard() {
 
     return rows.map((row) => {
       const vouchers = (vouchersData?.vouchers || []).filter((voucher) => {
+        if (!isVoucherRevenueSale(voucher)) return false;
         const soldAt = new Date(voucherSoldAt(voucher));
         return soldAt >= row.start && soldAt < row.end;
       });
       const cash = vouchers
-        .filter((voucher) => !voucher.payment_reference || voucher.payment_reference.startsWith("BAT-"))
+        .filter((voucher) => voucherPaymentMode(voucher) === "Voucher Printing")
         .reduce((sum, voucher) => sum + voucher.amount, 0);
       const mobileMoney = vouchers
-        .filter((voucher) => voucher.payment_reference && !voucher.payment_reference.startsWith("BAT-"))
+        .filter((voucher) => voucherPaymentMode(voucher) === "Online Payment")
         .reduce((sum, voucher) => sum + voucher.amount, 0);
       const total = cash + mobileMoney;
 
@@ -405,8 +423,8 @@ export default function Dashboard() {
         mobileMoney,
         total,
         totalItems: vouchers.length,
-        cashItems: vouchers.filter((voucher) => !voucher.payment_reference || voucher.payment_reference.startsWith("BAT-")).length,
-        mobileItems: vouchers.filter((voucher) => voucher.payment_reference && !voucher.payment_reference.startsWith("BAT-")).length,
+        cashItems: vouchers.filter((voucher) => voucherPaymentMode(voucher) === "Voucher Printing").length,
+        mobileItems: vouchers.filter((voucher) => voucherPaymentMode(voucher) === "Online Payment").length,
       };
     });
   }, [vouchersData]);
@@ -420,7 +438,7 @@ export default function Dashboard() {
       const date = createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
       if (!grouped[date]) grouped[date] = { date, sortKey, cash: 0, mobileMoney: 0, total: 0, tans: 0 };
       const amount = voucher.amount ?? 0;
-      if (!voucher.payment_reference || voucher.payment_reference.startsWith("BAT-")) {
+      if (voucherPaymentMode(voucher) === "Voucher Printing") {
         grouped[date].cash += amount;
       } else {
         grouped[date].mobileMoney += amount;
@@ -439,7 +457,7 @@ export default function Dashboard() {
   const updatedAt = new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
   return (
-    <div className={`min-h-screen bg-[#f8fafc] text-slate-950 transition-all duration-300 dark:bg-background dark:text-foreground ${sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[280px]"}`}>
+    <div className={`min-h-screen bg-background text-foreground transition-all duration-300 ${sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[280px]"}`}>
       <SEO title="Dashboard" />
       <AppHeader />
 
@@ -458,43 +476,57 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <section className="mb-5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
-          <MetricTile
-            title="Today's Revenue"
-            value={isVouchersLoading ? "..." : todaysRevenue.toLocaleString()}
-            subtitle={`${todaysTransactions} transactions`}
-            accent="emerald"
-            icon={<TrendingUp className="h-4 w-4" />}
-            onClick={() => navigate("/withdraw")}
-          />
-          <MetricTile
-            title="Today's Sales"
-            value={isVouchersLoading ? "..." : todaysTransactions.toLocaleString()}
-            subtitle="vouchers sold"
-            accent="indigo"
-            icon={<BarChart3 className="h-4 w-4" />}
-          />
-          <MetricTile
-            title="Active Users"
-            value={isActiveUsersLoading ? "..." : onlineUsersCount.toLocaleString()}
-            subtitle={`${offlineWithSession} waiting session`}
-            accent="cyan"
-            icon={<User className="h-4 w-4" />}
-          />
-          <MetricTile
-            title="This Month"
-            value={isVouchersLoading ? "..." : monthRevenue.toLocaleString()}
-            subtitle="total revenue"
-            accent="violet"
-            icon={<Coins className="h-4 w-4" />}
-          />
+        <section className="mb-5 overflow-hidden rounded border border-border bg-card shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-border/70 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-black tracking-tight text-foreground">Revenue Overview</h2>
+              <p className="text-[12px] text-muted-foreground">Only paid portal vouchers and activated admin vouchers are counted.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="rounded border border-border bg-background px-2 py-1 text-[11px] font-bold text-muted-foreground">
+                {rangedVouchers.length} events
+              </span>
+              <LiveBadge />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 divide-y divide-border/70 sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+            <MetricTile
+              title="Today's Revenue"
+              value={isVouchersLoading ? "..." : todaysRevenue.toLocaleString()}
+              subtitle={`${todaysTransactions} transactions`}
+              accent="emerald"
+              icon={<TrendingUp className="h-4 w-4" />}
+              onClick={() => navigate("/withdraw")}
+            />
+            <MetricTile
+              title="Today's Sales"
+              value={isVouchersLoading ? "..." : todaysTransactions.toLocaleString()}
+              subtitle="vouchers sold"
+              accent="indigo"
+              icon={<BarChart3 className="h-4 w-4" />}
+            />
+            <MetricTile
+              title="Active Users"
+              value={isActiveUsersLoading ? "..." : onlineUsersCount.toLocaleString()}
+              subtitle={`${offlineWithSession} waiting session`}
+              accent="cyan"
+              icon={<User className="h-4 w-4" />}
+            />
+            <MetricTile
+              title="This Month"
+              value={isVouchersLoading ? "..." : monthRevenue.toLocaleString()}
+              subtitle="total revenue"
+              accent="violet"
+              icon={<Coins className="h-4 w-4" />}
+            />
+          </div>
         </section>
 
         <section className="mb-5">
           <div className="mb-2 flex items-center justify-between">
             <div>
               <h2 className="text-base font-black tracking-tight">Analytics</h2>
-              <p className="text-[12px] text-slate-500">{formatDateRangeLabel(dateRange)} · {rangedVouchers.length} vouchers</p>
+              <p className="text-[12px] text-muted-foreground">{formatDateRangeLabel(dateRange)} · {rangedVouchers.length} revenue vouchers</p>
             </div>
             <div className="flex items-center gap-2">
               <Popover>
@@ -548,11 +580,11 @@ export default function Dashboard() {
               </Button>
             </div>
           </div>
-          <div className="rounded border border-border bg-card p-3">
+          <div className="rounded border border-border bg-card p-3 shadow-sm">
             <div className="mb-3 flex items-start justify-between">
               <div>
                 <h3 className="text-sm font-black">Payment Trends</h3>
-                <p className="text-[12px] text-slate-500">Grouped by day</p>
+                <p className="text-[12px] text-muted-foreground">Revenue grouped by day</p>
               </div>
               <button
                 onClick={() => setChartType((prev) => (prev === "area" ? "bar" : "area"))}
@@ -568,30 +600,48 @@ export default function Dashboard() {
               <SummaryPill label="Mobile" value={paymentChartData.reduce((sum, row) => sum + row.mobileMoney, 0)} color="indigo" />
               <SummaryPill label="Trans" value={paymentChartData.reduce((sum, row) => sum + row.tans, 0)} color="slate" />
             </div>
-            <div className="h-[280px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                {chartType === "area" ? (
-                  <AreaChart data={paymentChartData} margin={{ top: 10, right: 6, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#94a3b8" }} />
-                    <YAxis tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#94a3b8" }} />
-                    <Tooltip content={<DashboardTooltip />} />
-                    <Area type="monotone" dataKey="cash" stroke="#20c997" fill="#dffaf0" strokeWidth={2} />
-                    <Area type="monotone" dataKey="mobileMoney" stroke="#6865f2" fill="#e9ecff" strokeWidth={2} />
-                  </AreaChart>
-                ) : (
-                  <BarChart data={paymentChartData} margin={{ top: 10, right: 6, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#94a3b8" }} />
-                    <YAxis tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#94a3b8" }} />
-                    <Tooltip content={<DashboardTooltip />} />
-                    <Bar dataKey="cash" fill="#20c997" radius={[4, 4, 0, 0]} barSize={14} />
-                    <Bar dataKey="mobileMoney" fill="#6865f2" radius={[4, 4, 0, 0]} barSize={14} />
-                  </BarChart>
-                )}
-              </ResponsiveContainer>
+            <div className="h-[300px] w-full rounded border border-border/60 bg-background/45 px-2 pb-2 pt-4">
+              {paymentChartData.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
+                  <BarChart3 className="mb-2 h-7 w-7 opacity-50" />
+                  <p className="text-sm font-bold">No revenue in this range</p>
+                  <p className="text-[12px]">Activated admin vouchers and paid portal vouchers will appear here.</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  {chartType === "area" ? (
+                    <AreaChart data={paymentChartData} margin={{ top: 8, right: 10, left: -14, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="cashTrend" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={chartColors.cash} stopOpacity={0.34} />
+                          <stop offset="95%" stopColor={chartColors.cash} stopOpacity={0.03} />
+                        </linearGradient>
+                        <linearGradient id="mobileTrend" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={chartColors.mobile} stopOpacity={0.32} />
+                          <stop offset="95%" stopColor={chartColors.mobile} stopOpacity={0.03} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={chartColors.grid} opacity={0.7} />
+                      <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: chartColors.axis, fontWeight: 700 }} dy={8} />
+                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: chartColors.axis, fontWeight: 700 }} tickFormatter={(value) => Number(value).toLocaleString()} width={54} />
+                      <Tooltip content={<DashboardTooltip />} cursor={{ stroke: chartColors.axis, strokeOpacity: 0.22, strokeWidth: 1 }} />
+                      <Area type="monotone" dataKey="cash" stroke={chartColors.cash} fill="url(#cashTrend)" strokeWidth={2.5} activeDot={{ r: 4, strokeWidth: 0, fill: chartColors.cashSoft }} />
+                      <Area type="monotone" dataKey="mobileMoney" stroke={chartColors.mobile} fill="url(#mobileTrend)" strokeWidth={2.5} activeDot={{ r: 4, strokeWidth: 0, fill: chartColors.mobileSoft }} />
+                    </AreaChart>
+                  ) : (
+                    <BarChart data={paymentChartData} margin={{ top: 8, right: 10, left: -14, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={chartColors.grid} opacity={0.7} />
+                      <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: chartColors.axis, fontWeight: 700 }} dy={8} />
+                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: chartColors.axis, fontWeight: 700 }} tickFormatter={(value) => Number(value).toLocaleString()} width={54} />
+                      <Tooltip content={<DashboardTooltip />} cursor={{ fill: chartColors.cursor, opacity: 0.42 }} />
+                      <Bar dataKey="cash" fill={chartColors.cash} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                      <Bar dataKey="mobileMoney" fill={chartColors.mobile} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                    </BarChart>
+                  )}
+                </ResponsiveContainer>
+              )}
             </div>
-            <div className="mt-1 flex items-center justify-center gap-4 text-[12px] font-bold text-slate-500">
+            <div className="mt-2 flex items-center justify-center gap-4 text-[12px] font-bold text-muted-foreground">
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#20c997]" />Cash</span>
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#6865f2]" />Mobile Money</span>
             </div>
@@ -599,27 +649,27 @@ export default function Dashboard() {
         </section>
 
         <section className="mb-5 grid gap-3 lg:grid-cols-[1fr_320px]">
-          <div className="rounded border border-border bg-card p-3">
-            <div className="mb-3 flex items-start justify-between">
+          <div className="overflow-hidden rounded border border-border bg-card shadow-sm">
+            <div className="flex items-start justify-between border-b border-border/70 px-3 py-3">
               <div>
                 <h3 className="text-sm font-black">Period Summary</h3>
-                <p className="text-[12px] text-slate-500">Updated {updatedAt}</p>
+                <p className="text-[12px] text-muted-foreground">Updated {updatedAt}</p>
               </div>
               <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefreshing} className="h-8 w-8 rounded border-border bg-card">
                 <RotateCw className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <div className="space-y-3">
+            <div className="divide-y divide-border/70">
               {periodSummary.map((period) => (
-                <div key={period.label} className="rounded bg-card px-1 py-1">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                <div key={period.label} className="grid gap-3 bg-card px-3 py-3 transition hover:bg-muted/20 lg:grid-cols-[minmax(150px,0.9fr)_1.4fr] lg:items-center">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
                       <span className={cn("h-2 w-2 rounded-full", period.dot)} />
-                      <span className="text-[12px] font-black text-slate-700 dark:text-foreground">{period.label}</span>
+                      <span className="truncate text-[12px] font-black text-foreground">{period.label}</span>
                     </div>
-                    <div className="text-right text-xs font-black">
-                      {period.total.toLocaleString()}
-                      <span className="ml-1 text-[12px] font-semibold text-slate-400">({period.totalItems} tans)</span>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-black text-foreground">{period.total.toLocaleString()}</p>
+                      <p className="text-[11px] font-semibold text-muted-foreground">{period.totalItems} tans</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -689,6 +739,39 @@ export default function Dashboard() {
                 <p className="mt-4 text-xs text-slate-500">No bills saved yet.</p>
               )}
             </button>
+
+            <div className="hidden rounded border border-border bg-card p-4 shadow-sm lg:block">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black text-foreground">Revenue Activity</p>
+                  <p className="text-[12px] text-muted-foreground">Last 84 days</p>
+                </div>
+                <span className="rounded border border-border bg-background px-2 py-1 text-[11px] font-bold text-muted-foreground">
+                  {heatmapData.reduce((sum, cell) => sum + cell.count, 0)} events
+                </span>
+              </div>
+              <div
+                className="grid grid-flow-col gap-1 overflow-hidden"
+                style={{ gridTemplateRows: "repeat(7, minmax(0, 1fr))" }}
+              >
+                {heatmapData.map((cell) => (
+                  <span
+                    key={cell.dateStr}
+                    title={`${cell.dateStr}: ${cell.count} revenue event${cell.count === 1 ? "" : "s"}`}
+                    className={cn("h-3 rounded-sm border border-border/40", heatmapLevelClass(cell.level))}
+                  />
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
+                <span>Less</span>
+                <div className="flex items-center gap-1">
+                  {[0, 1, 2, 3, 4].map((level) => (
+                    <span key={level} className={cn("h-2.5 w-2.5 rounded-sm border border-border/40", heatmapLevelClass(level))} />
+                  ))}
+                </div>
+                <span>More</span>
+              </div>
+            </div>
           </div>
         </section>
       </main>
@@ -713,28 +796,30 @@ function MetricTile({
   onClick?: () => void;
 }) {
   const accentClasses = {
-    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300",
-    indigo: "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300",
-    cyan: "bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-300",
-    violet: "bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300",
+    emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
+    indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-300",
+    cyan: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-300",
+    violet: "bg-violet-500/10 text-violet-600 dark:text-violet-300",
   };
   const Component = onClick ? "button" : "div";
 
   return (
     <Component
       onClick={onClick}
-      className="min-h-[104px] rounded border border-border bg-card p-3 text-left transition hover:border-[#6c5ce7]"
+      className="group min-h-[126px] bg-card p-3 text-left transition hover:bg-muted/25"
     >
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[12px] font-bold text-slate-500">{title}</p>
-          <p className="mt-2 break-words text-xl font-black leading-tight text-foreground">{value}</p>
+      <div className="flex h-full flex-col justify-between rounded border border-border/70 bg-background/45 p-3 transition group-hover:border-primary/35">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[12px] font-bold text-muted-foreground">{title}</p>
+            <p className="mt-2 break-words text-2xl font-black leading-tight text-foreground">{value}</p>
+          </div>
+          <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded border border-current/10", accentClasses[accent])}>
+            {icon}
+          </span>
         </div>
-        <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded", accentClasses[accent])}>
-          {icon}
-        </span>
+        <p className="mt-3 text-[12px] font-semibold text-muted-foreground">{subtitle}</p>
       </div>
-      <p className="mt-2 text-[12px] font-medium text-slate-500">{subtitle}</p>
     </Component>
   );
 }
@@ -742,13 +827,13 @@ function MetricTile({
 function SummaryPill({ label, value, color }: { label: string; value: number; color: "slate" | "emerald" | "indigo" }) {
   const colors = {
     slate: "text-foreground",
-    emerald: "text-emerald-600",
-    indigo: "text-indigo-600",
+    emerald: "text-emerald-600 dark:text-emerald-300",
+    indigo: "text-indigo-600 dark:text-indigo-300",
   };
 
   return (
-    <div className="rounded bg-muted px-3 py-2 text-center">
-      <p className="text-[12px] font-bold text-slate-500">{label}</p>
+    <div className="rounded border border-border/50 bg-background/55 px-3 py-2 text-center">
+      <p className="text-[12px] font-bold text-muted-foreground">{label}</p>
       <p className={cn("mt-1 text-xs font-black", colors[color])}>{value.toLocaleString()}</p>
     </div>
   );
@@ -766,16 +851,24 @@ function PaymentBreakdown({
   tone: "emerald" | "indigo";
 }) {
   const toneClass = tone === "emerald"
-    ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300"
-    : "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300";
+    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
+    : "border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300";
 
   return (
-    <div className={cn("rounded px-3 py-2", toneClass)}>
+    <div className={cn("rounded border px-3 py-2", toneClass)}>
       <p className="text-[12px] font-bold">{label}</p>
       <p className="mt-1 text-xs font-black">{value.toLocaleString()}</p>
       <p className="mt-0.5 text-[12px] opacity-75">{transactions} tans</p>
     </div>
   );
+}
+
+function heatmapLevelClass(level: number) {
+  if (level >= 4) return "bg-emerald-500";
+  if (level === 3) return "bg-emerald-500/75";
+  if (level === 2) return "bg-emerald-500/45";
+  if (level === 1) return "bg-emerald-500/20";
+  return "bg-muted/55";
 }
 
 function InsightStat({ icon, value, label }: { icon: React.ReactNode; value: React.ReactNode; label: string }) {
@@ -796,9 +889,10 @@ function DashboardTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const cash = payload.find((item: any) => item.dataKey === "cash")?.value ?? 0;
   const mobileMoney = payload.find((item: any) => item.dataKey === "mobileMoney")?.value ?? 0;
+  const total = Number(cash) + Number(mobileMoney);
 
   return (
-    <div className="rounded border border-border bg-card px-3 py-2 text-xs">
+    <div className="rounded border border-border bg-card/95 px-3 py-2 text-xs shadow-xl backdrop-blur">
       <p className="mb-2 font-black text-foreground">{label}</p>
       <p className="flex items-center gap-2 font-bold text-emerald-600">
         <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -807,6 +901,9 @@ function DashboardTooltip({ active, payload, label }: any) {
       <p className="mt-1 flex items-center gap-2 font-bold text-indigo-600">
         <span className="h-2 w-2 rounded-full bg-indigo-500" />
         Mobile {Number(mobileMoney).toLocaleString()}
+      </p>
+      <p className="mt-2 border-t border-border/70 pt-2 font-black text-foreground">
+        Total {total.toLocaleString()}
       </p>
     </div>
   );

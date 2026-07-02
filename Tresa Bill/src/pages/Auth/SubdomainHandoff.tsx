@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { authErrorMessage } from "./auth-errors";
 
 export default function SubdomainHandoff() {
   const { login } = useAuth();
@@ -31,14 +32,14 @@ export default function SubdomainHandoff() {
         login(auth);
         navigate(next.startsWith("/") ? next : "/", { replace: true });
       })
-      .catch((error) => {
-        toast.error(error instanceof Error ? error.message : "Account login failed.");
+      .catch((error: unknown) => {
+        toast.error(authErrorMessage(error, "Account login failed."));
         navigate("/login", { replace: true });
       });
   }, [login, navigate]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white text-sm text-slate-600">
+    <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       Opening your account...
     </div>
